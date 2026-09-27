@@ -191,18 +191,14 @@ public class ColonyLinkRedirectorScreen extends AbstractContainerScreen<ColonyLi
             }
         }
 
-        // Header line 2 — clipboard linked/unlinked status.
+        // Header line 2 — clipboard linked/unlinked status. ClipboardFinder also
+        // sees a wand equipped in a Curios slot (CurseForge issue #3).
         boolean wandLinked = false;
         if (Minecraft.getInstance().player != null)
         {
-            for (ItemStack stack : Minecraft.getInstance().player.getInventory().items)
-            {
-                if (stack.getItem() instanceof ColonyLinkWand)
-                {
-                    wandLinked = ColonyLinkWandLinkableHandler.isLinked(stack);
-                    break;
-                }
-            }
+            ItemStack stack = ClipboardFinder.find(Minecraft.getInstance().player);
+            if (!stack.isEmpty())
+                wandLinked = ColonyLinkWandLinkableHandler.isLinked(stack);
         }
         String wandText = ChatFormatting.stripFormatting(Component.translatable(
                 wandLinked ? "colonylink.redir.clipboard_linked"

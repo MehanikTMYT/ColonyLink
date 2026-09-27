@@ -1132,18 +1132,14 @@ public class ColonyLinkServerTicker
      * Finds the ColonyLink Wand in the player's inventory or, if Curios is
      * installed, also in curio slots. Inventory takes priority (checked first).
      * Returns null if not found anywhere.
+     *
+     * Delegates to {@link ClipboardFinder#find} so the server handlers and the
+     * client screens always resolve the same stack (CurseForge issue #3).
      */
     static ItemStack findWandInInventory(ServerPlayer player)
     {
-        // 1. Standard inventory (hotbar + main)
-        for (ItemStack stack : player.getInventory().items)
-            if (stack.getItem() instanceof ColonyLinkWand) return stack;
-
-        // 2. Curio slots (optional — no-op if Curios not installed)
-        ItemStack curio = ColonyLinkCuriosCompat.findWandInCurioSlots(player);
-        if (!curio.isEmpty()) return curio;
-
-        return null;
+        ItemStack wand = ClipboardFinder.find(player);
+        return wand.isEmpty() ? null : wand;
     }
 
     private static IWirelessAccessPoint getWap(ItemStack wandStack, ServerLevel level)

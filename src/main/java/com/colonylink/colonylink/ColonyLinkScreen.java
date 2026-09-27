@@ -342,18 +342,16 @@ public class ColonyLinkScreen extends Screen
         if (!entries.isEmpty() && !entries.get(0).redirectorPos().equals(BlockPos.ZERO))
             this.redirectorPos = entries.get(0).redirectorPos();
         // Fallback : lire depuis la wand NBT côté client si entries vide (ex. tab Citizens)
+        // ClipboardFinder.findAll also covers Curios slots (CurseForge issue #3).
         if (this.redirectorPos.equals(BlockPos.ZERO) && this.minecraft != null && this.minecraft.player != null)
         {
-            for (net.minecraft.world.item.ItemStack s : this.minecraft.player.getInventory().items)
+            for (net.minecraft.world.item.ItemStack s : ClipboardFinder.findAll(this.minecraft.player))
             {
-                if (s.getItem() instanceof ColonyLinkWand)
+                BlockPos wandRedir = ColonyLinkWandLinkableHandler.getActiveRedirectorPos(s);
+                if (wandRedir != null && !wandRedir.equals(BlockPos.ZERO))
                 {
-                    BlockPos wandRedir = ColonyLinkWandLinkableHandler.getActiveRedirectorPos(s);
-                    if (wandRedir != null && !wandRedir.equals(BlockPos.ZERO))
-                    {
-                        this.redirectorPos = wandRedir;
-                        break;
-                    }
+                    this.redirectorPos = wandRedir;
+                    break;
                 }
             }
         }
@@ -431,9 +429,8 @@ public class ColonyLinkScreen extends Screen
     private net.minecraft.world.item.ItemStack getClientWand()
     {
         if (this.minecraft == null || this.minecraft.player == null) return net.minecraft.world.item.ItemStack.EMPTY;
-        for (net.minecraft.world.item.ItemStack s : this.minecraft.player.getInventory().items)
-            if (s.getItem() instanceof ColonyLinkWand) return s;
-        return net.minecraft.world.item.ItemStack.EMPTY;
+        // Same search order as the server (inventory, then Curios) — CurseForge issue #3.
+        return ClipboardFinder.find(this.minecraft.player);
     }
 
     private static String stripItemName(String name)
