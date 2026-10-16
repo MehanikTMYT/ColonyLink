@@ -14,7 +14,7 @@ import java.util.List;
  * which is guarded by ModList.isLoaded("curios")).
  *
  * Search order (explicit, unchanged for the locations covered before the Curios fix):
- *   1. player.getInventory().items, in index order (hotbar 0-8, then main 9-35).
+ *   1. player.getInventory().getNonEquipmentItems(), in index order (hotbar 0-8, then main 9-35).
  *      The main hand is part of this list (selected hotbar slot), so it is NOT
  *      given a separate, higher priority — that would change which wand wins when
  *      several are carried.
@@ -34,7 +34,7 @@ public final class ClipboardFinder
     {
         if (player == null) return ItemStack.EMPTY;
 
-        for (ItemStack stack : player.getInventory().items)
+        for (ItemStack stack : player.getInventory().getNonEquipmentItems())
             if (stack.getItem() instanceof ColonyLinkWand) return stack;
 
         return ColonyLinkCuriosCompat.findWandInCurioSlots(player);
@@ -46,7 +46,7 @@ public final class ClipboardFinder
         List<ItemStack> result = new ArrayList<>();
         if (player == null) return result;
 
-        for (ItemStack stack : player.getInventory().items)
+        for (ItemStack stack : player.getInventory().getNonEquipmentItems())
             if (stack.getItem() instanceof ColonyLinkWand) result.add(stack);
 
         result.addAll(ColonyLinkCuriosCompat.findAllWandsInCurioSlots(player));

@@ -12,12 +12,17 @@ import net.minecraft.world.level.Level;
 public class ClearNbtRecipe extends CustomRecipe
 {
     public final Item targetItem;
+    private final CraftingBookCategory category;
 
     public ClearNbtRecipe(CraftingBookCategory category, Item targetItem)
     {
-        super(category);
+        // PORT(26.1): CustomRecipe no longer stores the category; it is kept here for the codec.
+        this.category = category;
         this.targetItem = targetItem;
     }
+
+    @Override
+    public CraftingBookCategory category() { return category; }
 
     @Override
     public boolean matches(CraftingInput input, Level level)
@@ -39,7 +44,7 @@ public class ClearNbtRecipe extends CustomRecipe
      * (link AE2, builder entries, tab active).
      */
     @Override
-    public ItemStack assemble(CraftingInput input, HolderLookup.Provider provider)
+    public ItemStack assemble(CraftingInput input)
     {
         for (int i = 0; i < input.size(); i++)
         {
@@ -63,10 +68,7 @@ public class ClearNbtRecipe extends CustomRecipe
     }
 
     @Override
-    public boolean canCraftInDimensions(int width, int height) { return width * height >= 1; }
-
-    @Override
-    public RecipeSerializer<?> getSerializer()
+    public RecipeSerializer<ClearNbtRecipe> getSerializer()
     {
         return ColonyLinkRecipes.CLEAR_NBT_SERIALIZER.get();
     }

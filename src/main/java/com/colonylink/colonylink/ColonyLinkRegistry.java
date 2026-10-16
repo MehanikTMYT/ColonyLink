@@ -24,15 +24,14 @@ public class ColonyLinkRegistry
     // ── AE2 Redirector ────────────────────────────────────────────────────────
 
     public static final DeferredBlock<ColonyLinkRedirectorBlock> REDIRECTOR_BLOCK =
-            BLOCKS.register("colony_link_redirector", ColonyLinkRedirectorBlock::new);
+            BLOCKS.registerBlock("colony_link_redirector", ColonyLinkRedirectorBlock::new);
 
     public static final DeferredHolder<Item, ColonyLinkRedirectorItem> REDIRECTOR_BLOCK_ITEM =
-            BLOCK_ITEMS.register("colony_link_redirector", ColonyLinkRedirectorItem::new);
+            BLOCK_ITEMS.registerItem("colony_link_redirector", ColonyLinkRedirectorItem::new);
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<ColonyLinkRedirectorBlockEntity>>
             REDIRECTOR_BLOCK_ENTITY = BLOCK_ENTITIES.register("colony_link_redirector",
-            () -> BlockEntityType.Builder.of(ColonyLinkRedirectorBlockEntity::new,
-                    REDIRECTOR_BLOCK.get()).build(null));
+            () -> new BlockEntityType<>(ColonyLinkRedirectorBlockEntity::new, REDIRECTOR_BLOCK.get()));
 
     public static final DeferredHolder<MenuType<?>, MenuType<ColonyLinkRedirectorMenu>>
             REDIRECTOR_MENU_TYPE = MENUS.register("colony_link_redirector",
@@ -41,7 +40,7 @@ public class ColonyLinkRegistry
     // ── Warehouse Link Terminal Part ──────────────────────────────────────────
 
     public static final DeferredHolder<Item, WarehouseLinkTerminalItem>
-            WAREHOUSE_LINK_TERMINAL_ITEM = BLOCK_ITEMS.register("warehouse_link_terminal",
+            WAREHOUSE_LINK_TERMINAL_ITEM = BLOCK_ITEMS.registerItem("warehouse_link_terminal",
             WarehouseLinkTerminalItem::new);
 
     public static final DeferredHolder<MenuType<?>, MenuType<WarehouseLinkTerminalMenu>>
@@ -56,7 +55,7 @@ public class ColonyLinkRegistry
     // AE2 ne peut pas confondre ce type avec ses propres patterns.
 
     public static final DeferredHolder<Item, DomumPatternItem>
-            DOMUM_PATTERN_ITEM = BLOCK_ITEMS.register("domum_pattern",
+            DOMUM_PATTERN_ITEM = BLOCK_ITEMS.registerItem("domum_pattern",
             DomumPatternItem::new);
 
     // ── Capabilities ──────────────────────────────────────────────────────────
@@ -71,8 +70,8 @@ public class ColonyLinkRegistry
 
         // IEnergyStorage — wand AE2
         event.registerItem(
-                Capabilities.EnergyStorage.ITEM,
-                (stack, context) -> new WandEnergyStorage(stack),
+                Capabilities.Energy.ITEM,
+                (stack, access) -> new WandEnergyHandler(access),
                 ColonyLink.COLONY_LINK_WAND.get());
     }
 }

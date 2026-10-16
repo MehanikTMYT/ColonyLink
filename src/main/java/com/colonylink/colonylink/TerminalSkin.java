@@ -1,6 +1,6 @@
 package com.colonylink.colonylink;
 
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import java.util.Base64;
 
 /**
@@ -36,7 +36,7 @@ public final class TerminalSkin {
     }
 
     /** Draw a skin with its top-left corner at (ox, oy), in GUI coordinates. */
-    public static void draw(GuiGraphics g, Skin s, int ox, int oy) {
+    public static void draw(GuiGraphicsExtractor g, Skin s, int ox, int oy) {
         for (int i = 0; i < s.rx.length; i++) {
             int x = ox + s.rx[i], y = oy + s.ry[i];
             g.fill(x, y, x + s.rw[i], y + s.rh[i], s.pal[s.rc[i]]);
@@ -51,7 +51,7 @@ public final class TerminalSkin {
      * Les rectangles qui chevauchent la coupe sont scindes proprement. Avec
      * dy = 0 (cutTop == cutBot) le rendu est strictement identique a draw().
      */
-    public static void drawCut(GuiGraphics g, Skin s, int ox, int oy,
+    public static void drawCut(GuiGraphicsExtractor g, Skin s, int ox, int oy,
                                int cutTop, int cutBot, int dy) {
         for (int i = 0; i < s.rx.length; i++) {
             int x1 = ox + s.rx[i];

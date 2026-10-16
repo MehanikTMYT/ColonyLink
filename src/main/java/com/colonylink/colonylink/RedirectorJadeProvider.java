@@ -2,13 +2,12 @@ package com.colonylink.colonylink;
 
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import snownee.jade.api.BlockAccessor;
 import snownee.jade.api.IBlockComponentProvider;
 import snownee.jade.api.IServerDataProvider;
 import snownee.jade.api.ITooltip;
 import snownee.jade.api.config.IPluginConfig;
-import snownee.jade.api.ui.IElementHelper;
 
 /**
  * Provider Jade pour le Colony Link Redirector.
@@ -28,7 +27,7 @@ public class RedirectorJadeProvider implements
 {
     public static final RedirectorJadeProvider INSTANCE = new RedirectorJadeProvider();
 
-    public static final ResourceLocation UID = ResourceLocation.fromNamespaceAndPath(
+    public static final Identifier UID = Identifier.fromNamespaceAndPath(
             ColonyLink.MODID, "redirector");
 
     // Clés NBT pour le transfert serveur → client
@@ -115,10 +114,8 @@ public class RedirectorJadeProvider implements
         CompoundTag data = accessor.getServerData();
         if (data.isEmpty()) return;
 
-        IElementHelper helper = IElementHelper.get();
-
         // ── État AE2 ─────────────────────────────────────────────────────────
-        boolean ae2Active = data.getBoolean(KEY_AE2_ACTIVE);
+        boolean ae2Active = data.getBooleanOr(KEY_AE2_ACTIVE, false);
         String ae2Text = (ae2Active ? Component.translatable("colonylink.jade.ae2_connected").getString() : Component.translatable("colonylink.jade.ae2_disconnected").getString());
         tooltip.add(Component.literal(ae2Text));
 
@@ -129,7 +126,7 @@ public class RedirectorJadeProvider implements
         }
 
         // ── État du redirector ────────────────────────────────────────────────
-        String stateName = data.getString(KEY_STATE);
+        String stateName = data.getStringOr(KEY_STATE, "");
         ColonyLinkRedirectorBlockEntity.RedirectorState state;
         try { state = ColonyLinkRedirectorBlockEntity.RedirectorState.valueOf(stateName); }
         catch (Exception e) { state = ColonyLinkRedirectorBlockEntity.RedirectorState.NO_CONTROLLER; }
@@ -163,11 +160,11 @@ public class RedirectorJadeProvider implements
 
         // ── Warehouse Link Card ───────────────────────────────────────────────
         tooltip.add(Component.literal("§8──────────────────"));
-        boolean hasCard = data.getBoolean(KEY_HAS_CARD);
+        boolean hasCard = data.getBooleanOr(KEY_HAS_CARD, false);
         if (hasCard)
         {
             tooltip.add(Component.translatable("colonylink.jade.card_inserted"));
-            boolean whPriority = data.getBoolean(KEY_WH_PRIORITY);
+            boolean whPriority = data.getBooleanOr(KEY_WH_PRIORITY, false);
             tooltip.add(Component.translatable(whPriority ? "colonylink.jade.priority_wh" : "colonylink.jade.priority_ae2"));
         }
         else
@@ -178,10 +175,10 @@ public class RedirectorJadeProvider implements
         }
 
         // ── Buffer ────────────────────────────────────────────────────────────
-        int bufUsed     = data.getInt(KEY_BUFFER_USED);
-        int bufMax      = data.getInt(KEY_BUFFER_MAX);
-        int domumCount  = data.getInt(KEY_DOMUM_PATTERNS);
-        String domumInfo = data.getString(KEY_DOMUM_INFO);
+        int bufUsed     = data.getIntOr(KEY_BUFFER_USED, 0);
+        int bufMax      = data.getIntOr(KEY_BUFFER_MAX, 0);
+        int domumCount  = data.getIntOr(KEY_DOMUM_PATTERNS, 0);
+        String domumInfo = data.getStringOr(KEY_DOMUM_INFO, "");
         tooltip.add(Component.literal("§8──────────────────"));
         if (bufUsed > 0)
         {
@@ -189,7 +186,7 @@ public class RedirectorJadeProvider implements
 
             // Détail des DomumPatterns (nom + variant) — shift only
             if (domumCount > 0 && !domumInfo.isEmpty()
-                    && net.minecraft.client.gui.screens.Screen.hasShiftDown())
+                    && net.minecraft.client.Minecraft.getInstance().hasShiftDown())
             {
                 for (String entry : domumInfo.split(";"))
                 {
@@ -214,13 +211,13 @@ public class RedirectorJadeProvider implements
     {
         if (data.contains(KEY_BUILDER_X))
         {
-            int bx = data.getInt(KEY_BUILDER_X);
-            int by = data.getInt(KEY_BUILDER_Y);
-            int bz = data.getInt(KEY_BUILDER_Z);
+            int bx = data.getIntOr(KEY_BUILDER_X, 0);
+            int by = data.getIntOr(KEY_BUILDER_Y, 0);
+            int bz = data.getIntOr(KEY_BUILDER_Z, 0);
             tooltip.add(Component.translatable("colonylink.jade.builder_pos", bx, by, bz));
         }
     }
 
     @Override
-    public ResourceLocation getUid() { return UID; }
+    public Identifier getUid() { return UID; }
 }

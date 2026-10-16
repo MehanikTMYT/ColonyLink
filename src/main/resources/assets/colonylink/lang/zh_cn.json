@@ -253,8 +253,8 @@
   "colonylink.term.click_select": "\n§8点击以选择 — 然后点击编码",
   "colonylink.term.missing_material": "§c缺少所需材料！",
   "colonylink.term.search": "搜索...",
-  "colonylink.term.jei_wh": "JEI优先级：仓库优先",
-  "colonylink.term.jei_me": "JEI优先级：ME优先",
+  "colonylink.term.jei_wh": "EMI优先级：仓库优先",
+  "colonylink.term.jei_me": "EMI优先级：ME优先",
   "colonylink.term.ae2_offline": "AE2 离线",
   "colonylink.term.label_warehouse": "仓库",
   "colonylink.term.label_applied": "ME网络",
@@ -459,5 +459,6 @@
   "colonylink.craft_all.diag": "§7 （可见空闲CPU：%s，合成提交上限：%s，已安装AdvancedAE：%s，网络中有量子计算机：%s，AdvancedAE兼容：%s）",
   "colonylink.craft_all.active": "已激活",
   "colonylink.craft_all.inactive": "未激活",
-  "colonylink.wh2me.transfer": "§7[WH→ME] %sx %s"
+  "colonylink.wh2me.transfer": "§7[WH→ME] %sx %s",
+  "key.category.colonylink.colonylink": "殖民地链接"
 }

@@ -70,7 +70,7 @@ public class CraftHandler
             return;
         }
 
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = player.level();
         IWirelessAccessPoint wap = getWap(wandStack, level);
         if (wap == null) { player.sendSystemMessage(Component.translatable("colonylink.handler.no_wap")); return; }
 
@@ -249,7 +249,7 @@ public class CraftHandler
     {
         ItemStack wandStack = findWandInInventory(player);
         if (wandStack == null || !ColonyLinkWandLinkableHandler.isLinked(wandStack)) return -1;
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = player.level();
         IWirelessAccessPoint wap = getWap(wandStack, level);
         if (wap == null) return -1;
         IGrid grid = wap.getGrid();
@@ -303,27 +303,27 @@ public class CraftHandler
             try
             {
                 Future<ICraftingPlan> future = cs.beginCraftingCalculation(
-                        player.serverLevel(), simReq, aeKey, count, CalculationStrategy.CRAFT_LESS);
+                        player.level(), simReq, aeKey, count, CalculationStrategy.CRAFT_LESS);
                 ICraftingPlan plan = future.get(10, TimeUnit.SECONDS);
                 if (plan == null)
                 {
-                    player.serverLevel().getServer().execute(() ->
+                    player.level().getServer().execute(() ->
                             player.sendSystemMessage(Component.translatable("colonylink.ch.terminal_plan_failed", aeKey.toStack(1).getDisplayName())));
                     return;
                 }
 
                 CompletableFuture<Boolean> done = new CompletableFuture<>();
-                player.serverLevel().getServer().execute(() ->
+                player.level().getServer().execute(() ->
                         done.complete(cs.submitJob(plan, null, null, false, actionSource).successful()));
 
                 boolean ok = done.get(5, TimeUnit.SECONDS);
-                player.serverLevel().getServer().execute(() ->
+                player.level().getServer().execute(() ->
                         player.sendSystemMessage((ok ? Component.translatable("colonylink.ch.terminal_autocraft_started", count, aeKey.toStack(1).getDisplayName()) : Component.translatable("colonylink.ch.terminal_autocraft_failed"))));
             }
             catch (Exception e)
             {
                 ColonyLink.LOGGER.error("[Terminal] Autocraft error", e);
-                player.serverLevel().getServer().execute(() ->
+                player.level().getServer().execute(() ->
                         player.sendSystemMessage(Component.translatable("colonylink.ch.terminal_autocraft_error", e.getMessage())));
             }
         });

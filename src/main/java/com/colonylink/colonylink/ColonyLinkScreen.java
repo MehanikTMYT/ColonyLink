@@ -1,11 +1,12 @@
 package com.colonylink.colonylink;
 
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import com.colonylink.colonylink.AeGuiBlits.AeBtnVis;
 import com.mojang.blaze3d.systems.RenderSystem;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -53,14 +54,14 @@ public class ColonyLinkScreen extends Screen
 
     // ── MineColonies theme — parchment background (layer 1) ───────────────────
     // colonist_paper.png is a MineColonies GPL-3.0 asset, referenced by
-    // ResourceLocation at runtime ONLY and NEVER copied into this repo. MineColonies
+    // Identifier at runtime ONLY and NEVER copied into this repo. MineColonies
     // is a required (transitive, via BlockUI) dependency of ColonyLink so the asset is
     // guaranteed present, but the internal path can change between MC versions; we probe
     // once at init() and fall back silently to a procedural parchment fill otherwise.
     // The texture is 190x244; it is stretched over the whole Clipboard body (276x320),
     // exactly as MineColonies stretches its own fixed-size window paper.
-    private static final ResourceLocation MC_PAPER =
-            ResourceLocation.fromNamespaceAndPath("minecolonies", "textures/gui/citizen/colonist_paper.png");
+    private static final Identifier MC_PAPER =
+            Identifier.fromNamespaceAndPath("minecolonies", "textures/gui/citizen/colonist_paper.png");
     private static final int MC_PAPER_TEX_W  = 190;        // colonist_paper.png width
     private static final int MC_PAPER_TEX_H  = 244;        // colonist_paper.png height
     // Internal decorative margin of colonist_paper.png (transparent edge + torn border →
@@ -77,23 +78,23 @@ public class ColonyLinkScreen extends Screen
     private boolean mcPaperPresent = false;   // probed once in init(), not per frame
 
     // ── MineColonies theme — button textures (layer: buttons) ─────────────────
-    // builderhut/* GPL-3.0 assets, referenced by ResourceLocation at runtime ONLY and
+    // builderhut/* GPL-3.0 assets, referenced by Identifier at runtime ONLY and
     // NEVER copied into this repo. Blitted (stretched) to our existing button sizes; only
     // the 4 sizes the validated mapping uses are referenced (large/medium/very_small are
     // unused). Each has a dedicated _disabled variant. No hover sprite exists in MC → hover
     // feedback is carried by DARKENING the texture (see MC_HOVER_DARKEN), label stays black.
-    private static ResourceLocation mcGui(String sub)
-    { return ResourceLocation.fromNamespaceAndPath("minecolonies", "textures/gui/" + sub); }
-    private static final ResourceLocation MC_BTN_ML     = mcGui("builderhut/builder_button_medium_large.png");          // 129x17
-    private static final ResourceLocation MC_BTN_ML_D   = mcGui("builderhut/builder_button_medium_large_disabled.png");
-    private static final ResourceLocation MC_BTN_S      = mcGui("builderhut/builder_button_small.png");                 // 64x17
-    private static final ResourceLocation MC_BTN_S_D    = mcGui("builderhut/builder_button_small_disabled.png");
-    private static final ResourceLocation MC_BTN_QS     = mcGui("builderhut/builder_button_quite_small.png");           // 44x16
-    private static final ResourceLocation MC_BTN_QS_D   = mcGui("builderhut/builder_button_quite_small_disabled.png");
-    private static final ResourceLocation MC_BTN_MINI   = mcGui("builderhut/builder_button_mini.png");                  // 14x15
-    private static final ResourceLocation MC_BTN_MINI_D = mcGui("builderhut/builder_button_mini_disabled.png");
+    private static Identifier mcGui(String sub)
+    { return Identifier.fromNamespaceAndPath("minecolonies", "textures/gui/" + sub); }
+    private static final Identifier MC_BTN_ML     = mcGui("builderhut/builder_button_medium_large.png");          // 129x17
+    private static final Identifier MC_BTN_ML_D   = mcGui("builderhut/builder_button_medium_large_disabled.png");
+    private static final Identifier MC_BTN_S      = mcGui("builderhut/builder_button_small.png");                 // 64x17
+    private static final Identifier MC_BTN_S_D    = mcGui("builderhut/builder_button_small_disabled.png");
+    private static final Identifier MC_BTN_QS     = mcGui("builderhut/builder_button_quite_small.png");           // 44x16
+    private static final Identifier MC_BTN_QS_D   = mcGui("builderhut/builder_button_quite_small_disabled.png");
+    private static final Identifier MC_BTN_MINI   = mcGui("builderhut/builder_button_mini.png");                  // 14x15
+    private static final Identifier MC_BTN_MINI_D = mcGui("builderhut/builder_button_mini_disabled.png");
     // Pivot probe: one texture stands in for the whole builder-button set (same jar/dir).
-    private static final ResourceLocation MC_BTN_PROBE  = MC_BTN_ML;
+    private static final Identifier MC_BTN_PROBE  = MC_BTN_ML;
     private boolean mcButtonPresent = false;  // probed once in init(), not per frame
 
     // MineColonies button label colours (MC-style: black, no shadow; disabled = grey). The
@@ -115,10 +116,10 @@ public class ColonyLinkScreen extends Screen
     // 12px would tuck under the panel in MineColonies) → 1:1 horizontally, no mirror. States are
     // done by tint: active = full brightness, inactive = slightly dimmed, hover = darker, and a
     // translucent colour overlay for unread (blue) / unlinked (brown).
-    private static final ResourceLocation MC_TAB1 = mcGui("modules/tab_left_side1.png");
-    private static final ResourceLocation MC_TAB2 = mcGui("modules/tab_left_side2.png");
-    private static final ResourceLocation MC_TAB3 = mcGui("modules/tab_left_side3.png");
-    private static final ResourceLocation MC_TAB_PROBE = MC_TAB1;
+    private static final Identifier MC_TAB1 = mcGui("modules/tab_left_side1.png");
+    private static final Identifier MC_TAB2 = mcGui("modules/tab_left_side2.png");
+    private static final Identifier MC_TAB3 = mcGui("modules/tab_left_side3.png");
+    private static final Identifier MC_TAB_PROBE = MC_TAB1;
     private boolean mcTabPresent = false;  // probed once in init(), not per frame
     private static final float MC_TAB_INACTIVE_DIM = 0.90f;   // inactive tabs slightly dimmed
     // State is shown on the tab ICON (not a background overlay, which clashed with the torn paper
@@ -563,7 +564,7 @@ public class ColonyLinkScreen extends Screen
     {
         super.init();
         int serverTabIndex = (activeTabIndex == CITIZENS_TAB_INDEX) ? 0 : activeTabIndex;
-        PacketDistributor.sendToServer(new GuiStatePacket(true, builderPos, serverTabIndex));
+        ClientPacketDistributor.sendToServer(new GuiStatePacket(true, builderPos, serverTabIndex));
         // Lire le count packages + sent keys depuis la wand NBT côté client (read-only)
         net.minecraft.world.item.ItemStack initWand = getClientWand();
         if (!initWand.isEmpty())
@@ -639,7 +640,7 @@ public class ColonyLinkScreen extends Screen
     @Override
     public void onClose()
     {
-        PacketDistributor.sendToServer(new GuiStatePacket(false, builderPos, activeTabIndex));
+        ClientPacketDistributor.sendToServer(new GuiStatePacket(false, builderPos, activeTabIndex));
         super.onClose();
     }
 
@@ -891,7 +892,7 @@ public class ColonyLinkScreen extends Screen
     }
 
     /** Cycle tab_left_side1/2/3 by index for visual variety (matches MineColonies). */
-    private static ResourceLocation mcTabTex(int i)
+    private static Identifier mcTabTex(int i)
     {
         return switch (Math.floorMod(i, 3)) { case 0 -> MC_TAB1; case 1 -> MC_TAB2; default -> MC_TAB3; };
     }
@@ -904,7 +905,7 @@ public class ColonyLinkScreen extends Screen
      * the caller). Priority for brightness: active(1.0) > unlinked/unread(0.90, tab stays neutral)
      * > hover(0.82) > inactive(0.90). Blend/tint reset by the blit helper.
      */
-    private void drawMcTab(GuiGraphics g, int tx, int ty, int tw, int th, int variantIndex,
+    private void drawMcTab(GuiGraphicsExtractor g, int tx, int ty, int tw, int th, int variantIndex,
                            boolean active, boolean hover, boolean unlinked, boolean unread)
     {
         ColonyLinkGuiConfig c = ColonyLinkGuiConfig.get();
@@ -921,7 +922,7 @@ public class ColonyLinkScreen extends Screen
                 0f, 0f, 20, 26, 32, 26, bright, alpha);
     }
 
-    private void drawTabs(GuiGraphics g, int mx, int my, List<Component> tip)
+    private void drawTabs(GuiGraphicsExtractor g, int mx, int my, List<Component> tip)
     {
         for (int i = 0; i < tabMetas.size(); i++)
         {
@@ -1133,7 +1134,7 @@ public class ColonyLinkScreen extends Screen
     }
 
     /** Dessine le bouton config — intégré dans la barre de titre, fond cohérent. */
-    private void drawCfgButton(GuiGraphics g, int mx, int my, List<Component> tip)
+    private void drawCfgButton(GuiGraphicsExtractor g, int mx, int my, List<Component> tip)
     {
         ColonyLinkGuiConfig _c = ColonyLinkGuiConfig.get();
         boolean ae = _c.isAe();
@@ -1191,7 +1192,7 @@ public class ColonyLinkScreen extends Screen
         }
     }
 
-    private void drawGearIcon(GuiGraphics g, int ox, int oy, boolean active, boolean hasRedir, int mcCol)
+    private void drawGearIcon(GuiGraphicsExtractor g, int ox, int oy, boolean active, boolean hasRedir, int mcCol)
     {
         ColonyLinkGuiConfig _c = ColonyLinkGuiConfig.get();
         boolean ae = _c.isAe();
@@ -1222,7 +1223,7 @@ public class ColonyLinkScreen extends Screen
     }
 
     // ── Info panel ────────────────────────────────────────────────────────────
-    private void drawInfoPanel(GuiGraphics g, int x, int y, int mx, int my)
+    private void drawInfoPanel(GuiGraphicsExtractor g, int x, int y, int mx, int my)
     {
         ColonyLinkGuiConfig _c = ColonyLinkGuiConfig.get();
         int panelH = 58;
@@ -1255,7 +1256,7 @@ public class ColonyLinkScreen extends Screen
 
             String sl = Component.translatable("colonylink.screen.info.status").getString();
             drawInfoLine(g, x + 10, y + 46, sl);
-            g.drawString(this.font, translateStatus(workerStatus),
+            GuiCompat.drawString(g, this.font, translateStatus(workerStatus),
                     x + 10 + this.font.width(sl), y + 46, getWorkerStatusColor(), false);
 
             // v1.1.3 — Raison IDLE sous le statut
@@ -1265,7 +1266,7 @@ public class ColonyLinkScreen extends Screen
                 String reasonDisplay = workerIdleReason.length() > 40
                         ? workerIdleReason.substring(0, 38) + "…"
                         : workerIdleReason;
-                g.drawString(this.font, reasonDisplay, x + 10, y + 56, _c.bodyText(), false);
+                GuiCompat.drawString(g, this.font, reasonDisplay, x + 10, y + 56, _c.bodyText(), false);
             }
 
             int cpuY = workerIdleReason.isEmpty() ? 58 : 66;
@@ -1286,21 +1287,21 @@ public class ColonyLinkScreen extends Screen
             };
             String rl = Component.translatable("colonylink.screen.info.redirector").getString();
             drawInfoLine(g, x + 100, y + cpuY, rl);
-            g.drawString(this.font, rDisplay, x + 100 + this.font.width(rl), y + cpuY, rColor, false);
+            GuiCompat.drawString(g, this.font, rDisplay, x + 100 + this.font.width(rl), y + cpuY, rColor, false);
         }
         else
         {
             // Out of Power
             int cx = x + GUI_WIDTH / 2;
             boolean _aeP = _c.isLightBody();
-            g.drawCenteredString(this.font, Component.translatable("colonylink.screen.power.title").getString(),          cx, y + 30, _aeP ? _c.semRed() : 0xFF4444);
-            g.drawCenteredString(this.font, Component.translatable("colonylink.screen.power.charge").getString(), cx, y + 42, _aeP ? _c.mutedText() : 0xAAAAAA);
-            g.drawCenteredString(this.font, Component.translatable("colonylink.screen.power.mods").getString(),  cx, y + 52, _aeP ? _c.mutedText() : 0xAAAAAA);
+            GuiCompat.drawCenteredString(g, this.font, Component.translatable("colonylink.screen.power.title").getString(),          cx, y + 30, _aeP ? _c.semRed() : 0xFF4444);
+            GuiCompat.drawCenteredString(g, this.font, Component.translatable("colonylink.screen.power.charge").getString(), cx, y + 42, _aeP ? _c.mutedText() : 0xAAAAAA);
+            GuiCompat.drawCenteredString(g, this.font, Component.translatable("colonylink.screen.power.mods").getString(),  cx, y + 52, _aeP ? _c.mutedText() : 0xAAAAAA);
         }
     }
 
     // ── Request panel ─────────────────────────────────────────────────────────
-    private void drawRequestPanel(GuiGraphics g, int x, int y, int mx, int my,
+    private void drawRequestPanel(GuiGraphicsExtractor g, int x, int y, int mx, int my,
                                   List<Component> pendingTooltipOut)
     {
         ColonyLinkGuiConfig _cr = ColonyLinkGuiConfig.get();
@@ -1315,20 +1316,20 @@ public class ColonyLinkScreen extends Screen
             g.fill(x + GUI_WIDTH - 7, pY, x + GUI_WIDTH - 6, pY + pH, _cr.applyOpacity(_cr.reqDark()));
         }
         g.fill(x + 7, pY + 11, x + GUI_WIDTH - 7, pY + 12, _cr.applyOpacity(_cr.isAe() ? 0xFF878FA5 : 0xFF3A3A6A));
-        g.drawString(this.font, Component.translatable("colonylink.screen.req.title").getString(), x + 10, pY + 3, _cr.isAe() ? _cr.semBlue() : 0xAAAAFF, false);
+        GuiCompat.drawString(g, this.font, Component.translatable("colonylink.screen.req.title").getString(), x + 10, pY + 3, _cr.isAe() ? _cr.semBlue() : 0xAAAAFF, false);
 
         boolean hasReq = builderRequest != null && !builderRequest.stack().isEmpty()
                 && builderRequest.count() > 0;
 
         if (!hasReq || isOutOfPower())
         {
-            g.drawString(this.font, isOutOfPower() ? Component.translatable("colonylink.screen.req.no_power").getString() : Component.translatable("colonylink.screen.req.none").getString(),
+            GuiCompat.drawString(g, this.font, isOutOfPower() ? Component.translatable("colonylink.screen.req.no_power").getString() : Component.translatable("colonylink.screen.req.none").getString(),
                     x + 10, pY + 14, _cr.isAe() ? _cr.mutedText() : 0x666666, false);
             return;
         }
 
-        g.renderItem(builderRequest.stack(), x + 10, pY + 12);
-        g.drawString(this.font, builderRequest.count() + "x "
+        g.item(builderRequest.stack(), x + 10, pY + 12);
+        GuiCompat.drawString(g, this.font, builderRequest.count() + "x "
                 + builderRequest.stack().getDisplayName().getString(), x + 28, pY + 17, _cr.bodyText(), false);
 
         int rbX = getReqBtnX(), rbY = getReqBtnY(), rbW = getReqBtnW(), rbH = getReqBtnH();
@@ -1350,7 +1351,7 @@ public class ColonyLinkScreen extends Screen
             g.fill(rbX, rbY, rbX + 1, rbY + rbH, _cr.applyControl(_cr.btnBevelLight()));
             g.fill(rbX, rbY + rbH - 1, rbX + rbW, rbY + rbH, _cr.applyControl(_cr.btnBevelDark()));
             g.fill(rbX + rbW - 1, rbY, rbX + rbW, rbY + rbH, _cr.applyControl(_cr.btnBevelDark()));
-            g.drawCenteredString(this.font, getRequestButtonText(rs), rbX + rbW / 2, rbY + 4, getButtonTextColor(rs));
+            GuiCompat.drawCenteredString(g, this.font, getRequestButtonText(rs), rbX + rbW / 2, rbY + 4, getButtonTextColor(rs));
         }
 
         // Tooltip survol bouton ou ligne item — affiche les infos de substitution si présentes
@@ -1395,7 +1396,7 @@ public class ColonyLinkScreen extends Screen
             g.fill(cbX, cbY, cbX + 1, cbY + cbH, _cr.btnBevelLight());
             g.fill(cbX, cbY + cbH - 1, cbX + cbW, cbY + cbH, _cr.btnBevelDark());
             g.fill(cbX + cbW - 1, cbY, cbX + cbW, cbY + cbH, _cr.btnBevelDark());
-            g.drawCenteredString(this.font, "×", cbX + cbW / 2, cbY + 1, cCancellable ? 0xFFFFFFFF : 0xFF999999);
+            GuiCompat.drawCenteredString(g, this.font, "×", cbX + cbW / 2, cbY + 1, cCancellable ? 0xFFFFFFFF : 0xFF999999);
         }
         if (cHov)
         {
@@ -1416,7 +1417,7 @@ public class ColonyLinkScreen extends Screen
      * Honours the control alpha; blend + tint are reset on exit so nothing later is
      * tinted. Background only — the caller draws the label on top.
      */
-    private void drawAeButtonBg(GuiGraphics g, int x, int y, int w, int h, AeBtnVis vis, float alpha)
+    private void drawAeButtonBg(GuiGraphicsExtractor g, int x, int y, int w, int h, AeBtnVis vis, float alpha)
     {
         // UI passe 1: body moved verbatim to AeGuiBlits — facade kept so call-sites
         // are untouched (zero visual change).
@@ -1437,12 +1438,12 @@ public class ColonyLinkScreen extends Screen
      * division) and same y baseline, only the shadow flag flips to false. AE only —
      * DEFAULT keeps drawCenteredString (shadow) untouched.
      */
-    private void drawCenteredNoShadow(GuiGraphics g, String text, int cx, int y, int color)
+    private void drawCenteredNoShadow(GuiGraphicsExtractor g, String text, int cx, int y, int color)
     {
-        g.drawString(this.font, text, cx - this.font.width(text) / 2, y, color, false);
+        GuiCompat.drawString(g, this.font, text, cx - this.font.width(text) / 2, y, color, false);
     }
 
-    private void drawAeButton(GuiGraphics g, int x, int y, int w, int h,
+    private void drawAeButton(GuiGraphicsExtractor g, int x, int y, int w, int h,
                               boolean hovered, boolean enabled, String label, int aeLabelColor)
     {
         ColonyLinkGuiConfig c = ColonyLinkGuiConfig.get();
@@ -1467,8 +1468,8 @@ public class ColonyLinkScreen extends Screen
      * (MineColonies has no hover sprite); the label is drawn black (no shadow), grey when
      * disabled, always opaque. Sense colour is intentionally dropped (the text says it).
      */
-    private void drawMcButton(GuiGraphics g, int x, int y, int w, int h,
-                              ResourceLocation tex, ResourceLocation texDisabled, int srcW, int srcH,
+    private void drawMcButton(GuiGraphicsExtractor g, int x, int y, int w, int h,
+                              Identifier tex, Identifier texDisabled, int srcW, int srcH,
                               String label, boolean enabled, boolean hovered, float alpha)
     {
         // Hover = darken the enabled wood texture (~18%); label stays black. Disabled uses its
@@ -1488,11 +1489,11 @@ public class ColonyLinkScreen extends Screen
      * native size for correct UV) and draw at the floored control alpha. Buckets reproduce the
      * validated mapping (≥100→medium_large, ≥50→small, ≥30→quite_small, else mini).
      */
-    private void drawMcButtonAuto(GuiGraphics g, int x, int y, int w, int h,
+    private void drawMcButtonAuto(GuiGraphicsExtractor g, int x, int y, int w, int h,
                                   String label, boolean enabled, boolean hovered)
     {
         float a = ColonyLinkGuiConfig.get().alphaControl();
-        ResourceLocation te, td; int sw, sh;
+        Identifier te, td; int sw, sh;
         if (w >= 100)     { te = MC_BTN_ML;   td = MC_BTN_ML_D;   sw = 129; sh = 17; } // Check WH / Craft All / Send All
         else if (w >= 50) { te = MC_BTN_S;    td = MC_BTN_S_D;    sw = 64;  sh = 17; } // Req / Restart
         else if (w >= 30) { te = MC_BTN_QS;   td = MC_BTN_QS_D;   sw = 44;  sh = 16; } // Unlink / Locate / line buttons
@@ -1507,24 +1508,24 @@ public class ColonyLinkScreen extends Screen
      * (bodyText) + the value in the dark muted tint. Lines with no "§f" (label-only, e.g.
      * "§7Status: " whose value is drawn separately in a semantic colour) are drawn black.
      */
-    private void drawInfoLine(GuiGraphics g, int x, int y, String full)
+    private void drawInfoLine(GuiGraphicsExtractor g, int x, int y, String full)
     {
         ColonyLinkGuiConfig c = ColonyLinkGuiConfig.get();
         if (!c.isMineColonies())
         {
-            g.drawString(this.font, full, x, y, c.bodyText(), false);
+            GuiCompat.drawString(g, this.font, full, x, y, c.bodyText(), false);
             return;
         }
         int sep = full.indexOf("§f");
         if (sep < 0)
         {
-            g.drawString(this.font, full.replaceAll("§.", ""), x, y, c.bodyText(), false);
+            GuiCompat.drawString(g, this.font, full.replaceAll("§.", ""), x, y, c.bodyText(), false);
             return;
         }
         String label = full.substring(0, sep).replaceAll("§.", "");
         String value = full.substring(sep + 2).replaceAll("§.", "");
-        g.drawString(this.font, label, x, y, c.bodyText(), false);
-        g.drawString(this.font, value, x + this.font.width(label), y, c.mutedText(), false);
+        GuiCompat.drawString(g, this.font, label, x, y, c.bodyText(), false);
+        GuiCompat.drawString(g, this.font, value, x + this.font.width(label), y, c.mutedText(), false);
     }
 
     /** AE-mode label color for a resource-request status (semantic tints). */
@@ -1541,7 +1542,7 @@ public class ColonyLinkScreen extends Screen
         };
     }
 
-    private void drawButton(GuiGraphics g, int bx, int by, int bw, int bh,
+    private void drawButton(GuiGraphicsExtractor g, int bx, int by, int bw, int bh,
                             int bg, String label, int tc,
                             boolean hovered, boolean enabled, int aeLabel)
     {
@@ -1566,10 +1567,10 @@ public class ColonyLinkScreen extends Screen
         g.fill(bx, by, bx + 1, by + bh, _c.applyControl(_c.btnBevelLight()));
         g.fill(bx, by + bh - 1, bx + bw, by + bh, _c.applyControl(_c.btnBevelDark()));
         g.fill(bx + bw - 1, by, bx + bw, by + bh, _c.applyControl(_c.btnBevelDark()));
-        g.drawCenteredString(this.font, label, bx + bw / 2, by + 3, tc);
+        GuiCompat.drawCenteredString(g, this.font, label, bx + bw / 2, by + 3, tc);
     }
 
-    private void drawPrioritySwitch(GuiGraphics g, int mx, int my)
+    private void drawPrioritySwitch(GuiGraphicsExtractor g, int mx, int my)
     {
         if (!hasWarehouseCard || isOutOfPower()) return;
         int sw = 110, sh = 14, sx = getGuiX() + GUI_WIDTH - sw - 8, sy = getWareCheckBtnY();
@@ -1654,11 +1655,11 @@ public class ColonyLinkScreen extends Screen
         }
         g.fill(sx + half, sy + 2, sx + half + 1, sy + sh - 2, _cSw.applyControl(0xFF444444));
         String networkLabel = "AE2";
-        g.drawCenteredString(this.font, Component.translatable("colonylink.screen.toggle.wh").getString(),          sx + half / 2,        sy + 3, warehousePriority ? 0x00FF88 : 0x556655);
-        g.drawCenteredString(this.font, networkLabel,  sx + half + half / 2, sy + 3, warehousePriority ? 0x334466 : 0x4488FF);
+        GuiCompat.drawCenteredString(g, this.font, Component.translatable("colonylink.screen.toggle.wh").getString(),          sx + half / 2,        sy + 3, warehousePriority ? 0x00FF88 : 0x556655);
+        GuiCompat.drawCenteredString(g, this.font, networkLabel,  sx + half + half / 2, sy + 3, warehousePriority ? 0x334466 : 0x4488FF);
     }
 
-    private void drawWareCheckButton(GuiGraphics g, int mx, int my)
+    private void drawWareCheckButton(GuiGraphicsExtractor g, int mx, int my)
     {
         if (!hasWarehouseCard || isOutOfPower()) return;
         int bx = getWareCheckBtnX(), by = getWareCheckBtnY(), bw = getWareCheckBtnW(), bh = getWareCheckBtnH();
@@ -1695,12 +1696,12 @@ public class ColonyLinkScreen extends Screen
             g.fill(bx, by, bx + 1, by + bh, _cw.applyControl(_cw.btnBevelLight()));
             g.fill(bx, by + bh - 1, bx + bw, by + bh, _cw.applyControl(_cw.btnBevelDark()));
             g.fill(bx + bw - 1, by, bx + bw, by + bh, _cw.applyControl(_cw.btnBevelDark()));
-            g.drawCenteredString(this.font, label, bx + bw / 2, by + 3, tc);
+            GuiCompat.drawCenteredString(g, this.font, label, bx + bw / 2, by + 3, tc);
         }
     }
 
     @Override
-    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {}
+    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {}
 
     /**
      * Cadre AE fin — réplique pixel-perfect de la bordure extérieure du Warehouse
@@ -1711,7 +1712,7 @@ public class ColonyLinkScreen extends Screen
      * coins nets (pas l'anti-aliasing alpha de la skin — limite connue).
      * Mode AE uniquement ; DEFAULT continue via {@link ColonyLinkGuiConfig#drawBorders}.
      */
-    private void drawAeFrame(GuiGraphics g, ColonyLinkGuiConfig cfg, int x, int y, int w, int h)
+    private void drawAeFrame(GuiGraphicsExtractor g, ColonyLinkGuiConfig cfg, int x, int y, int w, int h)
     {
         int[] top = cfg.aeFrameTop(), bot = cfg.aeFrameBottom();
         int[] left = cfg.aeFrameLeft(), right = cfg.aeFrameRight();
@@ -1740,7 +1741,7 @@ public class ColonyLinkScreen extends Screen
 
     /**
      * Layer 1 — AE2 frame drawn by blitting AE2's own background.png as a nine-slice,
-     * re-implemented here with GuiGraphics (AE2's BackgroundGenerator/Blitter are
+     * re-implemented here with GuiGraphicsExtractor (AE2's BackgroundGenerator/Blitter are
      * internal, unpublished API and are NOT called). BORDER=4px corners at native
      * size; edges tiled 1:1 in {@code AE_BG_TILE}-wide chunks (no scaling, so a
      * non-integer GUI scale magnifies with nearest-neighbour, not blur).
@@ -1754,7 +1755,7 @@ public class ColonyLinkScreen extends Screen
      * {@code alpha} is the effective opacity (config opacity multiplied over the
      * texture's own alpha). The tint is reset to opaque on every exit path.
      */
-    private static void drawAeNineSlice(GuiGraphics g, int x, int y, int w, int h, float alpha, boolean withCenter)
+    private static void drawAeNineSlice(GuiGraphicsExtractor g, int x, int y, int w, int h, float alpha, boolean withCenter)
     {
         // UI passe 1: body moved verbatim to AeGuiBlits — facade kept so call-sites
         // are untouched (zero visual change).
@@ -1762,15 +1763,15 @@ public class ColonyLinkScreen extends Screen
     }
 
     /**
-     * Tinted texture blit that actually honours alpha. GuiGraphics' raw-ResourceLocation
+     * Tinted texture blit that actually honours alpha. GuiGraphicsExtractor' raw-Identifier
      * blit routes to a no-blend, no-colour innerBlit (POSITION_TEX shader), so setColor's
      * alpha is written but never composited — the blit stays opaque. We reproduce MC's own
      * tinted-blit discipline (enableBlend -> shader colour -> blit -> disableBlend, cf. the
-     * per-vertex-colour GuiGraphics.innerBlit) around the raw blit. Blend + shader colour are
+     * per-vertex-colour GuiGraphicsExtractor.innerBlit) around the raw blit. Blend + shader colour are
      * reset on exit so no later render is tinted. Reusable by AE theme layers 3-5 (tabs and
      * buttons as textures).
      */
-    private static void blitTinted(GuiGraphics g, ResourceLocation tex, int x, int y,
+    private static void blitTinted(GuiGraphicsExtractor g, Identifier tex, int x, int y,
                                    int u, int v, int w, int h, int texW, int texH, float alpha)
     {
         // UI passe 1: body moved verbatim to AeGuiBlits — facade kept (zero visual change).
@@ -1782,7 +1783,7 @@ public class ColonyLinkScreen extends Screen
      * texW×texH texture) to the destination rect (w×h). Used to blit the MineColonies
      * parchment (190×244) over the Clipboard body (276×320). Honours opacity/blend.
      */
-    private static void blitTintedStretched(GuiGraphics g, ResourceLocation tex, int x, int y,
+    private static void blitTintedStretched(GuiGraphicsExtractor g, Identifier tex, int x, int y,
                                             int w, int h, float u, float v, int sw, int sh,
                                             int texW, int texH, float alpha)
     {
@@ -1795,7 +1796,7 @@ public class ColonyLinkScreen extends Screen
      * &lt;1.0 = darker). Used for the MineColonies button hover (no hover sprite exists, so we
      * darken the wood texture instead). Blend + tint are reset on all paths.
      */
-    private static void blitTintedStretched(GuiGraphics g, ResourceLocation tex, int x, int y,
+    private static void blitTintedStretched(GuiGraphicsExtractor g, Identifier tex, int x, int y,
                                             int w, int h, float u, float v, int sw, int sh,
                                             int texW, int texH, float bright, float alpha)
     {
@@ -1805,17 +1806,17 @@ public class ColonyLinkScreen extends Screen
 
     // ── render() ──────────────────────────────────────────────────────────────
     @Override
-    public void render(GuiGraphics g, int rawMx, int rawMy, float pt)
+    public void extractRenderState(GuiGraphicsExtractor g, int rawMx, int rawMy, float pt)
     {
         // ── Scale config ──────────────────────────────────────────────────────
         float _scale = ColonyLinkGuiConfig.get().scale;
         if (_scale != 1.0f)
         {
             float cx = this.width / 2f, cy = this.height / 2f;
-            g.pose().pushPose();
-            g.pose().translate(cx, cy, 0);
-            g.pose().scale(_scale, _scale, 1f);
-            g.pose().translate(-cx, -cy, 0);
+            g.pose().pushMatrix();
+            g.pose().translate(cx, cy);
+            g.pose().scale(_scale, _scale);
+            g.pose().translate(-cx, -cy);
         }
         // Transformer mx/my dans l'espace du GUI scalé pour les hover effects
         int mx = toGuiX(rawMx), my = toGuiY(rawMy);
@@ -1879,7 +1880,7 @@ public class ColonyLinkScreen extends Screen
             // directly on the paper in black, with a thin brown rule under the title zone to
             // separate it from the content. Buttons (Unlink/Restart) and the drag handle keep
             // their exact positions — nothing is moved or masked.
-            g.drawString(this.font, this.title, x + 58, y + 7, _cfg.bodyText(), false);
+            GuiCompat.drawString(g, this.font, this.title, x + 58, y + 7, _cfg.bodyText(), false);
             g.fill(x + _bw, y + 21, x + GUI_WIDTH - _bw, y + 22, _cfg.applyBackground(MC_PAPER_BORDER));
         }
         else
@@ -1890,7 +1891,7 @@ public class ColonyLinkScreen extends Screen
             int _tc2 = _cfg.applyOpacity(_cfg.titleHi());
             g.fill(x + _bw, y + _bw,
                     x + GUI_WIDTH - _bw, y + _bw + 2, _tc2);
-            g.drawString(this.font, this.title, x + 58, y + 7, _cfg.titleText(), false);
+            GuiCompat.drawString(g, this.font, this.title, x + 58, y + 7, _cfg.titleText(), false);
         }
 
         // ── Curseur handle drag ✥ — centré entre Unlink et Restart ──────────
@@ -1940,15 +1941,15 @@ public class ColonyLinkScreen extends Screen
             // Light-body themes (AE + MineColonies) use the dark muted tint; DEFAULT keeps its
             // light-grey literal on the dark body.
             boolean _aeC = _c.isLightBody();
-            g.drawCenteredString(this.font, Component.translatable("colonylink.screen.cit.header").getString(), x + GUI_WIDTH / 2 - 12, y + 30, _c.bodyText());
+            GuiCompat.drawCenteredString(g, this.font, Component.translatable("colonylink.screen.cit.header").getString(), x + GUI_WIDTH / 2 - 12, y + 30, _c.bodyText());
             String countStr = citizensLoading ? Component.translatable("colonylink.screen.cit.loading").getString()
                     : citizenEntries.isEmpty() ? Component.translatable("colonylink.screen.cit.no_requests").getString()
                       : Component.translatable("colonylink.screen.cit.open_requests", citizenEntries.size()).getString();
-            g.drawCenteredString(this.font, countStr, x + GUI_WIDTH / 2 - 12, y + 44, _aeC ? _c.mutedText() : 0xAAAAAA);
+            GuiCompat.drawCenteredString(g, this.font, countStr, x + GUI_WIDTH / 2 - 12, y + 44, _aeC ? _c.mutedText() : 0xAAAAAA);
             String pkgDesc = citizenPackageCount > 0
                     ? Component.translatable("colonylink.screen.cit.packages_loaded", citizenPackageCount).getString()
                     : Component.translatable("colonylink.screen.cit.no_packages").getString();
-            g.drawCenteredString(this.font, pkgDesc, x + GUI_WIDTH / 2 - 12, y + 57, _aeC ? _c.mutedText() : 0x888888);
+            GuiCompat.drawCenteredString(g, this.font, pkgDesc, x + GUI_WIDTH / 2 - 12, y + 57, _aeC ? _c.mutedText() : 0x888888);
 
             // ── Slot Package (haut droite du header) ─────────────────────────
             int pkgSlotX = x + GUI_WIDTH - 26, pkgSlotY = y + 26;
@@ -1962,15 +1963,15 @@ public class ColonyLinkScreen extends Screen
             if (citizenPackageCount > 0)
             {
                 net.minecraft.world.item.ItemStack pkgDisplayStack = new net.minecraft.world.item.ItemStack(ColonyLink.COLONY_LINK_PACKAGE.get());
-                g.renderItem(pkgDisplayStack, pkgSlotX + 1, pkgSlotY + 1);
+                g.item(pkgDisplayStack, pkgSlotX + 1, pkgSlotY + 1);
                 // Count badge APRÈS renderItem pour ne pas être recouvert
                 String badge = citizenPackageCount >= 100 ? "99+" : String.valueOf(citizenPackageCount);
-                g.renderItemDecorations(this.font, pkgDisplayStack.copyWithCount(citizenPackageCount), pkgSlotX + 1, pkgSlotY + 1, badge);
+                g.itemDecorations(this.font, pkgDisplayStack.copyWithCount(citizenPackageCount), pkgSlotX + 1, pkgSlotY + 1, badge);
             }
             else
             {
                 // Slot vide : "+" centré pour indiquer qu'il faut charger
-                g.drawCenteredString(this.font, "§8+", pkgSlotX + 9, pkgSlotY + 5, 0x666666);
+                GuiCompat.drawCenteredString(g, this.font, "§8+", pkgSlotX + 9, pkgSlotY + 5, 0x666666);
             }
             // Tooltip slot Package
             if (pkgHov)
@@ -2011,12 +2012,12 @@ public class ColonyLinkScreen extends Screen
         {
             if (citizensLoading)
             {
-                g.drawCenteredString(this.font, Component.translatable("colonylink.screen.cit.loading_citizens").getString(),
+                GuiCompat.drawCenteredString(g, this.font, Component.translatable("colonylink.screen.cit.loading_citizens").getString(),
                         x + GUI_WIDTH / 2, listY + MAX_VISIBLE * ENTRY_HEIGHT / 2 - 4, 0x888888);
             }
             else if (citizenEntries.isEmpty())
             {
-                g.drawCenteredString(this.font, Component.translatable("colonylink.screen.cit.no_requests_citizens").getString(),
+                GuiCompat.drawCenteredString(g, this.font, Component.translatable("colonylink.screen.cit.no_requests_citizens").getString(),
                         x + GUI_WIDTH / 2, listY + MAX_VISIBLE * ENTRY_HEIGHT / 2 - 4, 0x888888);
             }
             else
@@ -2037,7 +2038,7 @@ public class ColonyLinkScreen extends Screen
                     {
                         g.fill(x + 7, ey, x + 7 + listW, ey + ENTRY_HEIGHT, _cl.applyOpacity(MC_ROW_SHADE));
                     }
-                    g.renderItem(ce.stack(), x + 9, ey + 2);
+                    g.item(ce.stack(), x + 9, ey + 2);
 
                     String itemName = ce.stack().getDisplayName().getString();
                     if (itemName.startsWith("[") && itemName.endsWith("]"))
@@ -2060,15 +2061,15 @@ public class ColonyLinkScreen extends Screen
                         truncName = truncName.substring(0, truncName.length() - 1);
 
                     // Drop the §f prefix (it would force white and override bodyText).
-                    g.drawString(this.font, truncName, x + 29, ey + 3, _cl.bodyText(), false);
+                    GuiCompat.drawString(g, this.font, truncName, x + 29, ey + 3, _cl.bodyText(), false);
                     // Sub-line (name · job). The §7/§8 codes force a light grey unreadable on
                     // the parchment, so MineColonies drops them and uses the dark muted tint;
                     // AE and DEFAULT keep the original coloured string.
                     if (_cl.isMineColonies())
-                        g.drawString(this.font, ce.citizenName() + " · " + ce.jobName(),
+                        GuiCompat.drawString(g, this.font, ce.citizenName() + " · " + ce.jobName(),
                                 x + 29, ey + 12, _cl.mutedText(), false);
                     else
-                        g.drawString(this.font, "§7" + ce.citizenName() + " §8· §7" + ce.jobName(),
+                        GuiCompat.drawString(g, this.font, "§7" + ce.citizenName() + " §8· §7" + ce.jobName(),
                                 x + 29, ey + 12, 0xAAAAAA, false);
 
                     boolean alreadySent = isCitizenSentDisplayed(sentKey(ce));
@@ -2094,7 +2095,7 @@ public class ColonyLinkScreen extends Screen
                             g.fill(btnX, btnY, btnX + 1, btnY + btnH, 0xFF555555);
                             g.fill(btnX, btnY + btnH - 1, btnX + btnW, btnY + btnH, 0xFF1A1A1A);
                             g.fill(btnX + btnW - 1, btnY, btnX + btnW, btnY + btnH, 0xFF1A1A1A);
-                            g.drawCenteredString(this.font, Component.translatable("colonylink.screen.cit.sent").getString(), btnX + btnW / 2, btnY + 3, 0x888888);
+                            GuiCompat.drawCenteredString(g, this.font, Component.translatable("colonylink.screen.cit.sent").getString(), btnX + btnW / 2, btnY + 3, 0x888888);
                         }
                     }
                     else if (ceCanSend)
@@ -2115,7 +2116,7 @@ public class ColonyLinkScreen extends Screen
                             g.fill(btnX, btnY, btnX + 1, btnY + btnH, 0xFFFFFFFF);
                             g.fill(btnX, btnY + btnH - 1, btnX + btnW, btnY + btnH, 0xFF222222);
                             g.fill(btnX + btnW - 1, btnY, btnX + btnW, btnY + btnH, 0xFF222222);
-                            g.drawCenteredString(this.font, Component.translatable("colonylink.screen.btn.send").getString(), btnX + btnW / 2, btnY + 3, 0x4488FF);
+                            GuiCompat.drawCenteredString(g, this.font, Component.translatable("colonylink.screen.btn.send").getString(), btnX + btnW / 2, btnY + 3, 0x4488FF);
                         }
                     }
                     else if (ceCanCraft)
@@ -2136,7 +2137,7 @@ public class ColonyLinkScreen extends Screen
                             g.fill(btnX, btnY, btnX + 1, btnY + btnH, 0xFFFFFFFF);
                             g.fill(btnX, btnY + btnH - 1, btnX + btnW, btnY + btnH, 0xFF222222);
                             g.fill(btnX + btnW - 1, btnY, btnX + btnW, btnY + btnH, 0xFF222222);
-                            g.drawCenteredString(this.font, Component.translatable("colonylink.screen.btn.craft").getString(), btnX + btnW / 2, btnY + 3, 0x00FF00);
+                            GuiCompat.drawCenteredString(g, this.font, Component.translatable("colonylink.screen.btn.craft").getString(), btnX + btnW / 2, btnY + 3, 0x00FF00);
                         }
                     }
 
@@ -2172,7 +2173,7 @@ public class ColonyLinkScreen extends Screen
         }
         else if (isOutOfPower())
         {
-            g.drawCenteredString(this.font, Component.translatable("colonylink.screen.power.list").getString(),
+            GuiCompat.drawCenteredString(g, this.font, Component.translatable("colonylink.screen.power.list").getString(),
                     x + GUI_WIDTH / 2, listY + MAX_VISIBLE * ENTRY_HEIGHT / 2 - 4, _cl.isAe() ? _cl.semRed() : 0xFF4444);
         }
         else
@@ -2199,7 +2200,7 @@ public class ColonyLinkScreen extends Screen
                 {
                     g.fill(x + 7, ey, x + 7 + listW, ey + ENTRY_HEIGHT, _cl.applyOpacity(MC_ROW_SHADE));
                 }
-                g.renderItem(stack, x + 9, ey + 2);
+                g.item(stack, x + 9, ey + 2);
 
                 // ── Nom avec défilement si trop long ──────────────────────────────
                 String rawName = stack.getDisplayName().getString();
@@ -2231,16 +2232,16 @@ public class ColonyLinkScreen extends Screen
                     // tombe pile sur la ligne, quel que soit le scale GUI configuré.
                     g.enableScissor(toScreenX(x + 29), toScreenY(ey),
                             toScreenX(x + 29 + nameAreaW), toScreenY(ey + ENTRY_HEIGHT));
-                    g.drawString(this.font, prefix + fullText, x + 29 - offset, ey + 6, _cl.bodyText(), false);
+                    GuiCompat.drawString(g, this.font, prefix + fullText, x + 29 - offset, ey + 6, _cl.bodyText(), false);
                     if (domumTag && _cl.isLightBody())
-                        g.drawString(this.font, "[DO]", x + 29 - offset, ey + 6, _cl.semBlue(), false);
+                        GuiCompat.drawString(g, this.font, "[DO]", x + 29 - offset, ey + 6, _cl.semBlue(), false);
                     g.disableScissor();
                 }
                 else
                 {
-                    g.drawString(this.font, prefix + fullText, x + 29, ey + 6, _cl.bodyText(), false);
+                    GuiCompat.drawString(g, this.font, prefix + fullText, x + 29, ey + 6, _cl.bodyText(), false);
                     if (domumTag && _cl.isLightBody())
-                        g.drawString(this.font, "[DO]", x + 29, ey + 6, _cl.semBlue(), false);
+                        GuiCompat.drawString(g, this.font, "[DO]", x + 29, ey + 6, _cl.semBlue(), false);
                 }
 
                 // ── Zone hover de la ligne (hors bouton) ──────────────────────────
@@ -2259,7 +2260,7 @@ public class ColonyLinkScreen extends Screen
                     if (tot >= rc)     { wt = Component.translatable("colonylink.screen.wh.have", tot).getString();             wc = _whLight ? _cl.semGreen() : 0x00FF88; }
                     else if (tot > 0)  { wt = Component.translatable("colonylink.screen.wh.partial", tot, rc).getString(); wc = _whLight ? _cl.semAmber() : 0xFFCC44; }
                     else               { wt = Component.translatable("colonylink.screen.wh.none").getString();                  wc = _whLight ? _cl.semRed()   : 0xFF4444; }
-                    g.drawString(this.font, wt, x + 29, ey + 13, wc, false);
+                    GuiCompat.drawString(g, this.font, wt, x + 29, ey + 13, wc, false);
 
                     if (lineHov && !we.tooltipLines().isEmpty())
                     {
@@ -2316,7 +2317,7 @@ public class ColonyLinkScreen extends Screen
                     g.fill(bx2, by2, bx2 + 1, by2 + bh2, _cl.applyControl(_cl.btnBevelLight()));
                     g.fill(bx2, by2 + bh2 - 1, bx2 + bw2, by2 + bh2, _cl.applyControl(_cl.btnBevelDark()));
                     g.fill(bx2 + bw2 - 1, by2, bx2 + bw2, by2 + bh2, _cl.applyControl(_cl.btnBevelDark()));
-                    g.drawCenteredString(this.font, getButtonTextWithWarehouse(status, stack),
+                    GuiCompat.drawCenteredString(g, this.font, getButtonTextWithWarehouse(status, stack),
                             bx2 + bw2 / 2, by2 + 4, getButtonTextColor(status));
                 }
             }
@@ -2392,7 +2393,7 @@ public class ColonyLinkScreen extends Screen
                 g.fill(caX, caY, caX + caW, caY + caH, caBg);
                 g.fill(caX, caY, caX + caW, caY + 1, _cBtn.applyControl(_cBtn.btnBevelLight())); g.fill(caX, caY, caX + 1, caY + caH, _cBtn.applyControl(_cBtn.btnBevelLight()));
                 g.fill(caX, caY + caH - 1, caX + caW, caY + caH, _cBtn.applyControl(_cBtn.btnBevelDark())); g.fill(caX + caW - 1, caY, caX + caW, caY + caH, _cBtn.applyControl(_cBtn.btnBevelDark()));
-                g.drawCenteredString(this.font, caLabel, caX + caW / 2, caY + 4, caTextColor);
+                GuiCompat.drawCenteredString(g, this.font, caLabel, caX + caW / 2, caY + 4, caTextColor);
             }
 
             if (caHov)
@@ -2435,7 +2436,7 @@ public class ColonyLinkScreen extends Screen
                 g.fill(saX, saY, saX + saW, saY + saH, _cBtn.applyControl(hasAvail ? (saHov ? 0xFF0066CC : 0xFF004488) : 0xFF333333));
                 g.fill(saX, saY, saX + saW, saY + 1, _cBtn.applyControl(_cBtn.btnBevelLight())); g.fill(saX, saY, saX + 1, saY + saH, _cBtn.applyControl(_cBtn.btnBevelLight()));
                 g.fill(saX, saY + saH - 1, saX + saW, saY + saH, _cBtn.applyControl(_cBtn.btnBevelDark())); g.fill(saX + saW - 1, saY, saX + saW, saY + saH, _cBtn.applyControl(_cBtn.btnBevelDark()));
-                g.drawCenteredString(this.font, Component.translatable("colonylink.screen.btn.send_all").getString(), saX + saW / 2, saY + 4, hasAvail ? 0x4488FF : 0x888888);
+                GuiCompat.drawCenteredString(g, this.font, Component.translatable("colonylink.screen.btn.send_all").getString(), saX + saW / 2, saY + 4, hasAvail ? 0x4488FF : 0x888888);
             }
 
         } // fin du bloc non-Citizens
@@ -2487,9 +2488,9 @@ public class ColonyLinkScreen extends Screen
         }
 
         if (ColonyLinkGuiConfig.get().scale != 1.0f)
-            g.pose().popPose();
+            g.pose().popMatrix();
 
-        super.render(g, rawMx, rawMy, pt);
+        super.extractRenderState(g, rawMx, rawMy, pt);
         if (!tip.isEmpty()) {
             // renderComponentTooltip renders each Component as a single visual line and does
             // not break on '\n' (it would show up as a missing-glyph box). Flatten any
@@ -2505,14 +2506,16 @@ public class ColonyLinkScreen extends Screen
                     flatTip.add(c);
                 }
             }
-            g.renderComponentTooltip(this.font, flatTip, mx, my);
+            g.setComponentTooltipForNextFrame(this.font, flatTip, mx, my);
         }
     }
 
     // ── mouseClicked() ────────────────────────────────────────────────────────
     @Override
-    public boolean mouseClicked(double rawMx, double rawMy, int btn)
+    public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event, boolean doubleClick)
     {
+        final double rawMx = event.x(), rawMy = event.y(); final int btn = event.button(); // PORT(26.1): input events
+
         double mx = toGuiX(rawMx), my = toGuiY(rawMy);
         // ── Bouton config engrenage ───────────────────────────────────────────
         if (btn == 0)
@@ -2561,7 +2564,7 @@ public class ColonyLinkScreen extends Screen
                     unreadTabs.remove(i);
                     lastReadEntryCount.put(i, 0);
                     UNREAD_TAB_COUNT = unreadTabs.size();
-                    PacketDistributor.sendToServer(new GuiStatePacket(true, nb, activeTabIndex));
+                    ClientPacketDistributor.sendToServer(new GuiStatePacket(true, nb, activeTabIndex));
                 }
                 return true;
             }
@@ -2579,7 +2582,7 @@ public class ColonyLinkScreen extends Screen
                     scrollOffset     = 0;
                     citizensLoading  = true;
                     citizenEntries   = new java.util.ArrayList<>();
-                    PacketDistributor.sendToServer(new CitizensRequestPacket());
+                    ClientPacketDistributor.sendToServer(new CitizensRequestPacket());
                     // Rafraîchir le count + sent keys depuis la wand NBT (read-only)
                     net.minecraft.world.item.ItemStack tabWand = getClientWand();
                     if (!tabWand.isEmpty())
@@ -2595,7 +2598,7 @@ public class ColonyLinkScreen extends Screen
             int tx = getGuiX() - TAB_WIDTH, ty = getAddTabY();
             if (mx >= tx && mx <= tx + TAB_WIDTH && my >= ty && my <= ty + TAB_HEIGHT)
             {
-                PacketDistributor.sendToServer(new GuiStatePacket(false, builderPos, -1));
+                ClientPacketDistributor.sendToServer(new GuiStatePacket(false, builderPos, -1));
                 this.minecraft.setScreen(null);
                 return true;
             }
@@ -2604,14 +2607,14 @@ public class ColonyLinkScreen extends Screen
         int dbX = getDeleteBtnX(), dbY = getDeleteBtnY(), dbW = getDeleteBtnW(), dbH = getDeleteBtnH();
         if (!tabMetas.isEmpty() && mx >= dbX && mx <= dbX + dbW && my >= dbY && my <= dbY + dbH)
         {
-            PacketDistributor.sendToServer(new RemoveBuilderPacket(activeTabIndex));
+            ClientPacketDistributor.sendToServer(new RemoveBuilderPacket(activeTabIndex));
             return true;
         }
 
         int rbX = getRestartBtnX(), rbY = getRestartBtnY(), rbW = getRestartBtnW(), rbH = getRestartBtnH();
         if (mx >= rbX && mx <= rbX + rbW && my >= rbY && my <= rbY + rbH)
         {
-            PacketDistributor.sendToServer(new RestartBuilderPacket(builderPos));
+            ClientPacketDistributor.sendToServer(new RestartBuilderPacket(builderPos));
             return true;
         }
 
@@ -2622,19 +2625,19 @@ public class ColonyLinkScreen extends Screen
             int lbY = getGuiY() + 22;
             if (mx >= lbX && mx <= lbX + LOCATE_BTN_W && my >= lbY && my <= lbY + LOCATE_BTN_H)
             {
-                PacketDistributor.sendToServer(new LocateBuilderPacket(builderPos));
+                ClientPacketDistributor.sendToServer(new LocateBuilderPacket(builderPos));
                 return true;
             }
         }
 
-        if (isOutOfPower()) return super.mouseClicked(mx, my, btn);
+        if (isOutOfPower()) return super.mouseClicked(new net.minecraft.client.input.MouseButtonEvent(mx, my, event.buttonInfo()), doubleClick);
 
         if (hasWarehouseCard && !redirectorPos.equals(BlockPos.ZERO))
         {
             int sx = getSwitchX(), sy = getSwitchY(), sw2 = getSwitchW(), sh2 = getSwitchH();
             if (mx >= sx && mx <= sx + sw2 && my >= sy && my <= sy + sh2)
             {
-                PacketDistributor.sendToServer(new WarehousePriorityPacket(redirectorPos));
+                ClientPacketDistributor.sendToServer(new WarehousePriorityPacket(redirectorPos));
                 warehousePriority = !warehousePriority;
                 return true;
             }
@@ -2646,7 +2649,7 @@ public class ColonyLinkScreen extends Screen
             if (mx >= bx && mx <= bx + bw && my >= by && my <= by + bh)
             {
                 wareCheckState = WareCheckState.LOADING;
-                PacketDistributor.sendToServer(new WarehouseCheckPacket(builderPos));
+                ClientPacketDistributor.sendToServer(new WarehouseCheckPacket(builderPos));
                 return true;
             }
         }
@@ -2663,7 +2666,7 @@ public class ColonyLinkScreen extends Screen
             if (builderRequest.cancellable()
                     && mx >= cbX && mx <= cbX + cbW && my >= cbY && my <= cbY + cbH)
             {
-                PacketDistributor.sendToServer(new CancelRequestPacket(builderRequest.redirectorPos()));
+                ClientPacketDistributor.sendToServer(new CancelRequestPacket(builderRequest.redirectorPos()));
                 return true;
             }
 
@@ -2680,7 +2683,7 @@ public class ColonyLinkScreen extends Screen
                 // (the row shows as pending via displayStatus and is not clickable).
                 if (!isWarehouseDeliveryMode() && isDomumFinishedInWarehouse(builderRequest.stack()))
                 {
-                    PacketDistributor.sendToServer(new SendToBuilderPacket(
+                    ClientPacketDistributor.sendToServer(new SendToBuilderPacket(
                             builderRequest.stack(), builderPos, builderRequest.count()));
                     return true;
                 }
@@ -2690,12 +2693,12 @@ public class ColonyLinkScreen extends Screen
                     {
                         if (isWarehouseDeliveryMode())
                         {
-                            PacketDistributor.sendToServer(new SendToWarehousePacket(
+                            ClientPacketDistributor.sendToServer(new SendToWarehousePacket(
                                     builderRequest.stack(), builderPos, builderRequest.count()));
                             markPendingSent(builderRequest.stack());
                         }
                         else
-                            PacketDistributor.sendToServer(new SendToBuilderPacket(
+                            ClientPacketDistributor.sendToServer(new SendToBuilderPacket(
                                     builderRequest.stack(), builderPos, builderRequest.count()));
                     }
                     case CRAFTABLE ->
@@ -2708,23 +2711,23 @@ public class ColonyLinkScreen extends Screen
                         // normal row's stored flag is (DomumCraftHandler.isDomumItem).
                         boolean craftDomum = DomumCraftHandler.isDomumItem(builderRequest.stack());
                         if (hasWarehouseCraft(builderRequest.stack()))
-                            PacketDistributor.sendToServer(new WarehouseCraftPacket(
+                            ClientPacketDistributor.sendToServer(new WarehouseCraftPacket(
                                     builderRequest.stack(), builderRequest.count(), craftDomum, builderRequest.redirectorPos()));
                         else
-                            PacketDistributor.sendToServer(new CraftRequestPacket(
+                            ClientPacketDistributor.sendToServer(new CraftRequestPacket(
                                     builderRequest.stack(), builderRequest.count(), craftDomum,
                                     craftDomum ? builderRequest.redirectorPos() : BlockPos.ZERO, ResourceStatus.CRAFTABLE));
                     }
                     case MISSING ->
                     {
-                        PacketDistributor.sendToServer(new CraftRequestPacket(
+                        ClientPacketDistributor.sendToServer(new CraftRequestPacket(
                                 builderRequest.stack(), builderRequest.count(),
                                 DomumCraftHandler.isDomumItem(builderRequest.stack()), builderRequest.redirectorPos(), ResourceStatus.MISSING));
                     }
                     case NO_PATTERN ->
                     {
                         if (DomumCraftHandler.isDomumItem(builderRequest.stack()))
-                            PacketDistributor.sendToServer(new DomumQueuePacket(
+                            ClientPacketDistributor.sendToServer(new DomumQueuePacket(
                                     builderRequest.redirectorPos(), builderRequest.stack()));
                     }
                     default -> {}
@@ -2762,12 +2765,12 @@ public class ColonyLinkScreen extends Screen
                 else if (entry.status() == ResourceStatus.MISSING)
                 {
                     submitted++;
-                    PacketDistributor.sendToServer(new CraftRequestPacket(
+                    ClientPacketDistributor.sendToServer(new CraftRequestPacket(
                             entry.stack(), entry.realCount(), true, entry.redirectorPos(), ResourceStatus.MISSING));
                 }
             }
             if (!toCraft.isEmpty())
-                PacketDistributor.sendToServer(new CraftAllRequestPacket(toCraft, counts));
+                ClientPacketDistributor.sendToServer(new CraftAllRequestPacket(toCraft, counts));
 
             // Basculer en mode "en cours" si au moins 1 craft envoyé
             if (submitted > 0)
@@ -2794,12 +2797,12 @@ public class ColonyLinkScreen extends Screen
             {
                 if (warehouseAll)
                 {
-                    PacketDistributor.sendToServer(new SendToWarehousePacket(
+                    ClientPacketDistributor.sendToServer(new SendToWarehousePacket(
                             builderRequest.stack(), builderPos, builderRequest.count()));
                     markPendingSent(builderRequest.stack());
                 }
                 else
-                    PacketDistributor.sendToServer(new SendToBuilderPacket(
+                    ClientPacketDistributor.sendToServer(new SendToBuilderPacket(
                             builderRequest.stack(), builderPos, builderRequest.count()));
             }
             for (var entry : entries)
@@ -2816,12 +2819,12 @@ public class ColonyLinkScreen extends Screen
                     continue;
                 if (warehouseAll)
                 {
-                    PacketDistributor.sendToServer(new SendToWarehousePacket(
+                    ClientPacketDistributor.sendToServer(new SendToWarehousePacket(
                             entry.stack(), builderPos, entry.realCount()));
                     markPendingSent(entry.stack());
                 }
                 else
-                    PacketDistributor.sendToServer(new SendToBuilderPacket(
+                    ClientPacketDistributor.sendToServer(new SendToBuilderPacket(
                             entry.stack(), builderPos, entry.realCount()));
             }
             return true;
@@ -2835,7 +2838,7 @@ public class ColonyLinkScreen extends Screen
             if (mx >= pkgSlotX && mx <= pkgSlotX + 18 && my >= pkgSlotY && my <= pkgSlotY + 18)
             {
                 // Charger des packages depuis l'inventaire
-                PacketDistributor.sendToServer(new PackageLoadPacket());
+                ClientPacketDistributor.sendToServer(new PackageLoadPacket());
                 return true;
             }
 
@@ -2875,7 +2878,7 @@ public class ColonyLinkScreen extends Screen
                             // it expires if the server rejected (refund path → no key).
                             optimisticCitizenSentUntil.put(ceKey,
                                     System.currentTimeMillis() + PENDING_HOLD_MS);
-                            PacketDistributor.sendToServer(new PackageTokenPacket(
+                            ClientPacketDistributor.sendToServer(new PackageTokenPacket(
                                     ce.stack(), ce.count(), redirectorPos, !canSend, ce.citizenName()));
                             citizenPackageCount = Math.max(0, citizenPackageCount - 1);
                         }
@@ -2889,10 +2892,10 @@ public class ColonyLinkScreen extends Screen
                                 return true;
                             }
                             // Craft d'abord
-                            PacketDistributor.sendToServer(new PackageTokenPacket(
+                            ClientPacketDistributor.sendToServer(new PackageTokenPacket(
                                     ce.stack(), ce.count(), redirectorPos, true, ce.citizenName()));
                             // Puis send
-                            PacketDistributor.sendToServer(new PackageTokenPacket(
+                            ClientPacketDistributor.sendToServer(new PackageTokenPacket(
                                     ce.stack(), ce.count(), redirectorPos, false, ce.citizenName()));
                             citizenPackageCount = Math.max(0, citizenPackageCount - 2);
                             if (this.minecraft != null && this.minecraft.player != null)
@@ -2921,7 +2924,7 @@ public class ColonyLinkScreen extends Screen
                 // v1.6.0 — BUILDER mode only (in WAREHOUSE mode the courier handles it).
                 if (!isWarehouseDeliveryMode() && isDomumFinishedInWarehouse(entry.stack()))
                 {
-                    PacketDistributor.sendToServer(new SendToBuilderPacket(
+                    ClientPacketDistributor.sendToServer(new SendToBuilderPacket(
                             entry.stack(), builderPos, entry.realCount()));
                     return true;
                 }
@@ -2931,22 +2934,22 @@ public class ColonyLinkScreen extends Screen
                     // → craft virtuel via WarehouseCraftPacket (extrait composants → buffer redirector)
                     // Pas de CraftRequestPacket/RS car il n'y a pas de pattern pour les items DO
                     if (hasWarehouseCraft(entry.stack()))
-                        PacketDistributor.sendToServer(new WarehouseCraftPacket(
+                        ClientPacketDistributor.sendToServer(new WarehouseCraftPacket(
                                 entry.stack(), entry.realCount(), true, entry.redirectorPos()));
                     else
                         // Fallback : composants pas en WH mais en réseau → craft direct
-                        PacketDistributor.sendToServer(new CraftRequestPacket(
+                        ClientPacketDistributor.sendToServer(new CraftRequestPacket(
                                 entry.stack(), entry.realCount(), true, entry.redirectorPos(), ResourceStatus.CRAFTABLE));
                 }
                 else if (ds == ResourceStatus.CRAFTABLE)
                 {
-                    PacketDistributor.sendToServer(hasWarehouseCraft(entry.stack())
+                    ClientPacketDistributor.sendToServer(hasWarehouseCraft(entry.stack())
                             ? new WarehouseCraftPacket(entry.stack(), entry.realCount(), false, entry.redirectorPos())
                             : new CraftRequestPacket(entry.stack(), entry.realCount(), false, BlockPos.ZERO, ResourceStatus.CRAFTABLE));
                 }
                 else if (ds == ResourceStatus.MISSING)
                 {
-                    PacketDistributor.sendToServer(new CraftRequestPacket(
+                    ClientPacketDistributor.sendToServer(new CraftRequestPacket(
                             entry.stack(), entry.realCount(), true, entry.redirectorPos(), ResourceStatus.MISSING));
                 }
                 else if (ds == ResourceStatus.AVAILABLE)
@@ -2954,12 +2957,12 @@ public class ColonyLinkScreen extends Screen
                     // v1.6.0 — delivery target routing (server-decreed mode).
                     if (isWarehouseDeliveryMode())
                     {
-                        PacketDistributor.sendToServer(new SendToWarehousePacket(
+                        ClientPacketDistributor.sendToServer(new SendToWarehousePacket(
                                 entry.stack(), builderPos, entry.realCount()));
                         markPendingSent(entry.stack());
                     }
                     else
-                        PacketDistributor.sendToServer(new SendToBuilderPacket(
+                        ClientPacketDistributor.sendToServer(new SendToBuilderPacket(
                                 entry.stack(), builderPos, entry.realCount()));
                 }
                 else if (ds == ResourceStatus.NO_PATTERN)
@@ -2967,14 +2970,14 @@ public class ColonyLinkScreen extends Screen
                     if (entry.isDomum())
                     {
                         // v1.4.8 — Envoie l'item Domum dans la queue du terminal
-                        PacketDistributor.sendToServer(new DomumQueuePacket(
+                        ClientPacketDistributor.sendToServer(new DomumQueuePacket(
                                 entry.redirectorPos(), entry.stack()));
                     }
                     else
                     {
                         var we = getWarehouseEntry(entry.stack());
                         if (we != null && (we.inWarehouse() > 0 || we.viaCraft() > 0))
-                            PacketDistributor.sendToServer(new WarehouseCraftPacket(
+                            ClientPacketDistributor.sendToServer(new WarehouseCraftPacket(
                                     entry.stack(), entry.realCount(), entry.isDomum(), entry.redirectorPos()));
                     }
                 }
@@ -2992,20 +2995,24 @@ public class ColonyLinkScreen extends Screen
             }
         }
 
-        return super.mouseClicked(mx, my, btn);
+        return super.mouseClicked(new net.minecraft.client.input.MouseButtonEvent(mx, my, event.buttonInfo()), doubleClick);
     }
 
     @Override
-    public boolean mouseReleased(double rawMx, double rawMy, int btn)
+    public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent event)
     {
+        final double rawMx = event.x(), rawMy = event.y(); final int btn = event.button(); // PORT(26.1): input events
+
         if (isDraggingGui) { isDraggingGui = false; return true; }
         isDraggingScrollbar = false;
-        return super.mouseReleased(rawMx, rawMy, btn);
+        return super.mouseReleased(new net.minecraft.client.input.MouseButtonEvent(rawMx, rawMy, event.buttonInfo()));
     }
 
     @Override
-    public boolean mouseDragged(double rawMx, double rawMy, int btn, double dx, double dy)
+    public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent event, double dx, double dy)
     {
+        final double rawMx = event.x(), rawMy = event.y(); final int btn = event.button(); // PORT(26.1): input events
+
         double mx = toGuiX(rawMx), my = toGuiY(rawMy);
         if (isDraggingGui)
         {
@@ -3027,7 +3034,7 @@ public class ColonyLinkScreen extends Screen
                     (int)(dragStartOffset + (my - dragStartY) / (getScrollbarHeight() - getThumbHeight()) * max)));
             return true;
         }
-        return super.mouseDragged(rawMx, rawMy, btn, dx, dy);
+        return super.mouseDragged(new net.minecraft.client.input.MouseButtonEvent(rawMx, rawMy, event.buttonInfo()), dx, dy);
     }
 
     @Override
@@ -3047,17 +3054,19 @@ public class ColonyLinkScreen extends Screen
      * La touche E ferme le GUI (comportement standard).
      */
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers)
+    public boolean keyPressed(net.minecraft.client.input.KeyEvent event)
     {
+        final int keyCode = event.key(), scanCode = event.scancode(), modifiers = event.modifiers(); // PORT(26.1): input events
+
         // Touches hotbar 1-9 (GLFW : 49-57)
         if (keyCode >= 49 && keyCode <= 57)
         {
             if (this.minecraft != null && this.minecraft.player != null)
-                this.minecraft.player.getInventory().selected = keyCode - 49;
+                this.minecraft.player.getInventory().setSelectedSlot(keyCode - 49);
             return true;
         }
         // Déléguer le reste (Escape ferme, etc.)
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 
     @Override

@@ -41,7 +41,7 @@ public class WandEnergyStorage implements IEnergyStorage
         CustomData data = stack.get(DataComponents.CUSTOM_DATA);
         if (data == null) return 0L;
         var tag = data.copyTag();
-        return tag.contains(NBT_KEY) ? tag.getLong(NBT_KEY) : 0L;
+        return tag.contains(NBT_KEY) ? tag.getLongOr(NBT_KEY, 0L) : 0L;
     }
 
     public static void setStoredRF(ItemStack stack, long rf)

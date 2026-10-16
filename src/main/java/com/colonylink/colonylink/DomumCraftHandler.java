@@ -90,7 +90,7 @@ public class DomumCraftHandler
 
         for (IMateriallyTexturedBlockComponent component : texturedBlock.getComponents())
         {
-            Block materialBlock = textureData.getTexturedComponents().get(component.getId());
+            Block materialBlock = textureData.components().get(component.getId());
             if (materialBlock == null)
             {
                 if (!component.isOptional()) anyUnknown = true;
@@ -138,7 +138,7 @@ public class DomumCraftHandler
             return;
         }
 
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = player.level();
         IWirelessAccessPoint wap = getWap(wandStack, level);
         if (wap == null) return;
 
@@ -161,7 +161,7 @@ public class DomumCraftHandler
 
         for (IMateriallyTexturedBlockComponent component : texturedBlock.getComponents())
         {
-            Block materialBlock = textureData.getTexturedComponents().get(component.getId());
+            Block materialBlock = textureData.components().get(component.getId());
             if (materialBlock == null) continue;
 
             AEItemKey aeKey = AEItemKey.of(new ItemStack(materialBlock));

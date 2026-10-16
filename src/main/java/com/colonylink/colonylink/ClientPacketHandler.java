@@ -15,7 +15,6 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
  * Dans registerPayloads(), les playToClient utilisent des lambdas qui appellent
  * ces méthodes. La classe n'est chargée qu'à l'exécution du lambda (côté client).
  */
-@OnlyIn(Dist.CLIENT)
 public class ClientPacketHandler
 {
     public static void handleColonyLink(ColonyLinkPacket packet, IPayloadContext ctx)

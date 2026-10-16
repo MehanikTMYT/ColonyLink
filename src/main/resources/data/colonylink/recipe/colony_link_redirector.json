@@ -6,10 +6,10 @@
     "IFI"
   ],
   "key": {
-    "I": { "item": "minecraft:iron_ingot" },
-    "F": { "item": "ae2:fluix_crystal" },
-    "P": { "item": "ae2:pattern_provider" },
-    "A": { "item": "domum_ornamentum:architectscutter" }
+    "I": "minecraft:iron_ingot",
+    "F": "ae2:fluix_crystal",
+    "P": "ae2:pattern_provider",
+    "A": "domum_ornamentum:architectscutter"
   },
   "result": {
     "id": "colonylink:colony_link_redirector",

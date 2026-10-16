@@ -10,7 +10,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -38,9 +38,9 @@ public class DomumPatternItem extends Item
     private static final String NBT_TARGET = "domum_target";
     private static final String NBT_COUNT  = "output_count";
 
-    public DomumPatternItem()
+    public DomumPatternItem(Item.Properties properties)
     {
-        super(new Item.Properties().stacksTo(1));
+        super(properties.stacksTo(1));
     }
 
     // ── Encodage / Décodage ───────────────────────────────────────────────────
@@ -89,7 +89,7 @@ public class DomumPatternItem extends Item
         CustomData data = patternStack.get(DataComponents.CUSTOM_DATA);
         if (data == null) return 1;
         CompoundTag tag = data.copyTag();
-        return tag.contains(NBT_COUNT) ? Math.max(1, tag.getInt(NBT_COUNT)) : 1;
+        return tag.contains(NBT_COUNT) ? Math.max(1, tag.getIntOr(NBT_COUNT, 0)) : 1;
     }
 
     /**
@@ -107,7 +107,7 @@ public class DomumPatternItem extends Item
         CompoundTag root = customData.copyTag();
         if (!root.contains(NBT_TARGET)) return ItemStack.EMPTY;
 
-        CompoundTag targetTag = root.getCompound(NBT_TARGET);
+        CompoundTag targetTag = root.getCompoundOrEmpty(NBT_TARGET);
         return ItemStack.CODEC
                 .parse(provider.createSerializationContext(NbtOps.INSTANCE), targetTag)
                 .resultOrPartial(err -> ColonyLink.LOGGER.error("[DomumPattern] decode failed: {}", err))
@@ -136,7 +136,7 @@ public class DomumPatternItem extends Item
         if (!(block instanceof IMateriallyTexturedBlock texturedBlock)) return List.of();
 
         MaterialTextureData textureData = MaterialTextureData.readFromItemStack(target);
-        Map<ResourceLocation, Block> components = textureData.getTexturedComponents();
+        Map<Identifier, Block> components = textureData.components();
 
         List<MaterialEntry> result = new ArrayList<>();
         for (IMateriallyTexturedBlockComponent component : texturedBlock.getComponents())
@@ -156,9 +156,12 @@ public class DomumPatternItem extends Item
     // ── Tooltip ───────────────────────────────────────────────────────────────
 
     @Override
-    @net.neoforged.api.distmarker.OnlyIn(net.neoforged.api.distmarker.Dist.CLIENT)
-    public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> lines, TooltipFlag flag)
+    public void appendHoverText(ItemStack stack, TooltipContext context,
+                                net.minecraft.world.item.component.TooltipDisplay display,
+                                java.util.function.Consumer<Component> tooltipAdder, TooltipFlag flag)
     {
+        final List<Component> lines = new TooltipLines(tooltipAdder); // PORT(26.1)
+
         Level level = context.level();
         if (level == null) return;
 
@@ -177,7 +180,7 @@ public class DomumPatternItem extends Item
                 .append(Component.literal(outputCount > 1 ? " §7(×" + outputCount + ")" : "")
                         .withStyle(ChatFormatting.GRAY)));
 
-        if (net.minecraft.client.gui.screens.Screen.hasShiftDown())
+        if (net.minecraft.client.Minecraft.getInstance().hasShiftDown())
         {
             // Variant du bloc
             net.minecraft.world.item.component.BlockItemStateProperties blockState =
@@ -229,14 +232,13 @@ public class DomumPatternItem extends Item
      * Comportement identique à AE2 EncodedPatternItem.clearPattern().
      */
     @Override
-    public net.minecraft.world.InteractionResultHolder<ItemStack> use(
+    public net.minecraft.world.InteractionResult use(
             Level level, net.minecraft.world.entity.player.Player player,
             net.minecraft.world.InteractionHand hand)
     {
         if (clearPattern(player.getItemInHand(hand), player))
-            return net.minecraft.world.InteractionResultHolder.sidedSuccess(
-                    player.getItemInHand(hand), level.isClientSide());
-        return net.minecraft.world.InteractionResultHolder.pass(player.getItemInHand(hand));
+            return net.minecraft.world.InteractionResult.SUCCESS;
+        return net.minecraft.world.InteractionResult.PASS;
     }
 
     @Override
@@ -244,7 +246,7 @@ public class DomumPatternItem extends Item
             ItemStack stack, net.minecraft.world.item.context.UseOnContext context)
     {
         return clearPattern(stack, context.getPlayer())
-                ? net.minecraft.world.InteractionResult.sidedSuccess(context.getLevel().isClientSide())
+                ? net.minecraft.world.InteractionResult.SUCCESS
                 : net.minecraft.world.InteractionResult.PASS;
     }
 
@@ -255,12 +257,12 @@ public class DomumPatternItem extends Item
     private boolean clearPattern(ItemStack stack, net.minecraft.world.entity.player.Player player)
     {
         if (player == null) return false;
-        if (!player.isShiftKeyDown()) return false; // server-safe: no Screen.hasShiftDown()
+        if (!player.isShiftKeyDown()) return false; // server-safe: no Minecraft.getInstance().hasShiftDown()
         if (player.level().isClientSide()) return false;
 
         // Cherche l'item ae2:blank_pattern
         net.minecraft.world.item.Item blankItem = net.minecraft.core.registries.BuiltInRegistries.ITEM
-                .get(net.minecraft.resources.ResourceLocation.parse("ae2:blank_pattern"));
+                .getValue(net.minecraft.resources.Identifier.parse("ae2:blank_pattern"));
         if (blankItem == null || blankItem == net.minecraft.world.item.Items.AIR) return false;
 
         ItemStack blank = new ItemStack(blankItem, stack.getCount());
@@ -282,7 +284,6 @@ public class DomumPatternItem extends Item
      * à la place de l'icône pattern dans les slots buffer.
      * Côté client uniquement (utilise le clientLevel).
      */
-    @net.neoforged.api.distmarker.OnlyIn(net.neoforged.api.distmarker.Dist.CLIENT)
     public static ItemStack getTargetStackClient(ItemStack patternStack)
     {
         if (!(patternStack.getItem() instanceof DomumPatternItem)) return patternStack;
@@ -296,7 +297,7 @@ public class DomumPatternItem extends Item
 
     public record MaterialEntry(
             @Nullable Block block,
-            ResourceLocation componentId,
+            Identifier componentId,
             int count,
             boolean resolved
     ) {}

@@ -4,7 +4,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
@@ -24,7 +24,7 @@ public record WarehouseCraftPacket(
         BlockPos redirectorPos
 ) implements CustomPacketPayload
 {
-    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(
+    public static final Identifier ID = Identifier.fromNamespaceAndPath(
             ColonyLink.MODID, "warehouse_craft");
     public static final CustomPacketPayload.Type<WarehouseCraftPacket> TYPE =
             new CustomPacketPayload.Type<>(ID);

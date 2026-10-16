@@ -1,0 +1,6 @@
+{
+  "model": {
+    "type": "minecraft:model",
+    "model": "colonylink:item/warehouse_link_card"
+  }
+}

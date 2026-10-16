@@ -5,7 +5,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
@@ -27,8 +27,8 @@ public record DomumQueuePacket(
         ItemStack domumStack
 ) implements CustomPacketPayload
 {
-    public static final ResourceLocation ID =
-            ResourceLocation.fromNamespaceAndPath(ColonyLink.MODID, "domum_queue");
+    public static final Identifier ID =
+            Identifier.fromNamespaceAndPath(ColonyLink.MODID, "domum_queue");
     public static final CustomPacketPayload.Type<DomumQueuePacket> TYPE =
             new CustomPacketPayload.Type<>(ID);
 
@@ -67,7 +67,7 @@ public record DomumQueuePacket(
             return;
         }
 
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = player.level();
 
         // A3 — redirector↔wand validation (client is NOT authoritative on redirectorPos).
         // Only accept a redirectorPos actually linked to THIS player's wand. Same predicate

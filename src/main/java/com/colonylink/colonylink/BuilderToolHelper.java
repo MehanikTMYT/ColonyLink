@@ -1,20 +1,12 @@
 package com.colonylink.colonylink;
 
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.ArmorItem;
-import net.minecraft.world.item.ArmorMaterial;
-import net.minecraft.world.item.ArmorMaterials;
-import net.minecraft.world.item.AxeItem;
-import net.minecraft.world.item.HoeItem;
+import net.minecraft.resources.Identifier;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.tags.ItemTags;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.PickaxeItem;
-import net.minecraft.world.item.ShovelItem;
-import net.minecraft.world.item.SwordItem;
-import net.minecraft.world.item.Tier;
-import net.minecraft.world.item.TieredItem;
-import net.minecraft.world.item.Tiers;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.core.Holder;
 
@@ -49,6 +41,65 @@ import java.util.List;
  */
 public class BuilderToolHelper
 {
+    // ── PORT(26.1) ────────────────────────────────────────────────────────────
+    // Vanilla dropped Tiers/TieredItem and the per-type tool and armour classes: a tool is any item with a
+    // Tool component (or a sword), its kind comes from the vanilla item tags, and its tier is only visible
+    // through its durability. The old getUses() estimate below therefore becomes the only tier source, and
+    // the names keep the 1.21.1 enum so the tables and decision logic stay untouched.
+
+    /** Vanilla tool tiers, as in 1.21.1's {@code Tiers}. */
+    enum Tiers { WOOD, STONE, IRON, DIAMOND, GOLD, NETHERITE }
+
+    /** Tool kinds ColonyLink substitutes, keyed by their vanilla item tag. */
+    enum ToolKind
+    {
+        PICKAXE("pickaxe", ItemTags.PICKAXES),
+        AXE("axe", ItemTags.AXES),
+        SHOVEL("shovel", ItemTags.SHOVELS),
+        HOE("hoe", ItemTags.HOES),
+        SWORD("sword", ItemTags.SWORDS);
+
+        final String id;
+        final TagKey<Item> tag;
+
+        ToolKind(final String id, final TagKey<Item> tag)
+        {
+            this.id = id;
+            this.tag = tag;
+        }
+
+        static ToolKind of(final ItemStack stack)
+        {
+            for (final ToolKind kind : values())
+                if (stack.is(kind.tag)) return kind;
+            return null;
+        }
+    }
+
+    /** Armour slots, as in 1.21.1's {@code ArmorItem.Type}. */
+    enum ArmorPiece
+    {
+        HELMET(ItemTags.HEAD_ARMOR), CHESTPLATE(ItemTags.CHEST_ARMOR), LEGGINGS(ItemTags.LEG_ARMOR), BOOTS(ItemTags.FOOT_ARMOR);
+
+        final TagKey<Item> tag;
+
+        ArmorPiece(final TagKey<Item> tag) { this.tag = tag; }
+
+        static ArmorPiece of(final ItemStack stack)
+        {
+            for (final ArmorPiece piece : values())
+                if (stack.is(piece.tag)) return piece;
+            return null;
+        }
+    }
+
+    /** Replaces {@code instanceof TieredItem}: a damageable item that mines (Tool component) or is a sword. */
+    static boolean isTieredTool(final ItemStack stack)
+    {
+        return !stack.isEmpty() && stack.isDamageableItem()
+                && (stack.has(DataComponents.TOOL) || stack.is(ItemTags.SWORDS));
+    }
+
     // ── Interfaces neutres ────────────────────────────────────────────────────
 
     /**
@@ -66,7 +117,7 @@ public class BuilderToolHelper
          * Utilisé pour trouver les items moddés (Apotheosis, etc.) qui ont du NBT.
          * Implémentation par défaut : retourne liste vide (fallback sans NBT).
          */
-        default List<ItemStack> findByToolClass(Class<?> toolClass, Tiers estimatedTier)
+        default List<ItemStack> findByToolClass(ToolKind toolClass, Tiers estimatedTier)
         {
             return java.util.Collections.emptyList();
         }
@@ -100,17 +151,16 @@ public class BuilderToolHelper
             }
 
             @Override
-            public List<ItemStack> findByToolClass(Class<?> toolClass, Tiers estimatedTier)
+            public List<ItemStack> findByToolClass(ToolKind toolClass, Tiers estimatedTier)
             {
                 List<ItemStack> result = new ArrayList<>();
                 for (var entry : counter)
                 {
                     if (!(entry.getKey() instanceof appeng.api.stacks.AEItemKey aeKey)) continue;
-                    Item item = aeKey.getItem();
-                    if (!toolClass.isInstance(item)) continue;
-                    if (!(item instanceof TieredItem tiered)) continue;
-                    if (estimateVanillaTier(tiered.getTier()) != estimatedTier) continue;
                     ItemStack found = aeKey.toStack(1);
+                    if (toolClass != null && !found.is(toolClass.tag)) continue;
+                    if (!isTieredTool(found)) continue;
+                    if (estimateVanillaTier(found) != estimatedTier) continue;
                     result.add(found);
                 }
                 return result;
@@ -325,14 +375,8 @@ public class BuilderToolHelper
         // Passe B : items moddés avec NBT (Apotheosis, etc.)
         // On itère sur le stock réel pour trouver des items de la même classe/tier
         // qui ne matchent pas en lookup direct (NBT différent de l'item vide).
-        Item requestedItem = requested.getItem();
-        final Class<?> toolClass;
-        if      (requestedItem instanceof PickaxeItem) toolClass = PickaxeItem.class;
-        else if (requestedItem instanceof AxeItem)     toolClass = AxeItem.class;
-        else if (requestedItem instanceof ShovelItem)  toolClass = ShovelItem.class;
-        else if (requestedItem instanceof HoeItem)     toolClass = HoeItem.class;
-        else if (requestedItem instanceof SwordItem)   toolClass = SwordItem.class;
-        else toolClass = TieredItem.class;
+        // null kind = any tiered tool (the old TieredItem.class fallback).
+        final ToolKind toolClass = ToolKind.of(requested);
 
         List<ItemStack> modded = inventory.findByToolClass(toolClass, tier);
         for (ItemStack found : modded)
@@ -372,28 +416,26 @@ public class BuilderToolHelper
     // MineColonies only accepts TieredItem subclasses for actual tool requests.
     private static final net.minecraft.tags.TagKey<Item> TAG_PICKAXES =
             net.minecraft.tags.TagKey.create(net.minecraft.core.registries.Registries.ITEM,
-                    ResourceLocation.fromNamespaceAndPath("c", "tools/pickaxe"));
+                    Identifier.fromNamespaceAndPath("c", "tools/pickaxe"));
     private static final net.minecraft.tags.TagKey<Item> TAG_AXES =
             net.minecraft.tags.TagKey.create(net.minecraft.core.registries.Registries.ITEM,
-                    ResourceLocation.fromNamespaceAndPath("c", "tools/axe"));
+                    Identifier.fromNamespaceAndPath("c", "tools/axe"));
     private static final net.minecraft.tags.TagKey<Item> TAG_SHOVELS =
             net.minecraft.tags.TagKey.create(net.minecraft.core.registries.Registries.ITEM,
-                    ResourceLocation.fromNamespaceAndPath("c", "tools/shovel"));
+                    Identifier.fromNamespaceAndPath("c", "tools/shovel"));
     private static final net.minecraft.tags.TagKey<Item> TAG_HOES =
             net.minecraft.tags.TagKey.create(net.minecraft.core.registries.Registries.ITEM,
-                    ResourceLocation.fromNamespaceAndPath("c", "tools/hoe"));
+                    Identifier.fromNamespaceAndPath("c", "tools/hoe"));
     private static final net.minecraft.tags.TagKey<Item> TAG_SWORDS =
             net.minecraft.tags.TagKey.create(net.minecraft.core.registries.Registries.ITEM,
-                    ResourceLocation.fromNamespaceAndPath("c", "tools/sword"));
+                    Identifier.fromNamespaceAndPath("c", "tools/sword"));
 
     public static boolean isTool(ItemStack stack)
     {
         if (stack.isEmpty()) return false;
         Item item = stack.getItem();
-        // Vanilla instanceof check (fast path)
-        if (item instanceof PickaxeItem || item instanceof AxeItem
-                || item instanceof ShovelItem || item instanceof HoeItem
-                || item instanceof SwordItem || item instanceof TieredItem)
+        // Vanilla tool tags / tiered tools (fast path)
+        if (ToolKind.of(stack) != null || isTieredTool(stack))
             return true;
         // Tag-based check for modded tools — GUI display only.
         // Substitution stays restricted to TieredItem (what MineColonies accepts).
@@ -406,7 +448,7 @@ public class BuilderToolHelper
 
     public static boolean isArmor(ItemStack stack)
     {
-        return !stack.isEmpty() && stack.getItem() instanceof ArmorItem;
+        return !stack.isEmpty() && ArmorPiece.of(stack) != null;
     }
 
     /**
@@ -426,9 +468,8 @@ public class BuilderToolHelper
             ToolCraftingView crafting)
     {
         if (!isArmor(requested)) return SubstituteResult.NONE;
-        if (!(requested.getItem() instanceof ArmorItem requestedArmor)) return SubstituteResult.NONE;
-
-        ArmorItem.Type armorType = requestedArmor.getType();
+        ArmorPiece armorType = ArmorPiece.of(requested);
+        if (armorType == null) return SubstituteResult.NONE;
         int level     = Math.max(0, Math.min(5, buildingLevel));
         int maxTier   = MAX_ARMOR_TIER_FOR_LEVEL[level];
         int maxEnchant = MAX_ENCHANT_LEVEL[Math.min(maxTier, 4)][level];
@@ -464,7 +505,7 @@ public class BuilderToolHelper
     }
 
     /** Retourne la pièce d'armure vanilla correspondant au type et au tier donné. */
-    private static Item getVanillaArmorPiece(ArmorItem.Type type, int tier)
+    private static Item getVanillaArmorPiece(ArmorPiece type, int tier)
     {
         String mat = switch (tier) {
             case ARMOR_TIER_NETHERITE -> "netherite";
@@ -478,12 +519,10 @@ public class BuilderToolHelper
             case CHESTPLATE -> "chestplate";
             case LEGGINGS   -> "leggings";
             case BOOTS      -> "boots";
-            default         -> null;
         };
-        if (piece == null) return null;
-        ResourceLocation id = ResourceLocation.fromNamespaceAndPath("minecraft", mat + "_" + piece);
+        Identifier id = Identifier.fromNamespaceAndPath("minecraft", mat + "_" + piece);
         if (!BuiltInRegistries.ITEM.containsKey(id)) return null;
-        Item result = BuiltInRegistries.ITEM.get(id);
+        Item result = BuiltInRegistries.ITEM.getValue(id);
         return result == net.minecraft.world.item.Items.AIR ? null : result;
     }
 
@@ -503,14 +542,9 @@ public class BuilderToolHelper
 
     private static Item getEquivalentItem(ItemStack requested, Tiers tier)
     {
-        Item item = requested.getItem();
-        String typeId;
-        if      (item instanceof PickaxeItem) typeId = "pickaxe";
-        else if (item instanceof AxeItem)     typeId = "axe";
-        else if (item instanceof ShovelItem)  typeId = "shovel";
-        else if (item instanceof HoeItem)     typeId = "hoe";
-        else if (item instanceof SwordItem)   typeId = "sword";
-        else return null;
+        ToolKind kind = ToolKind.of(requested);
+        if (kind == null) return null;
+        String typeId = kind.id;
 
         String materialName = switch (tier) {
             case WOOD      -> "wooden";
@@ -521,10 +555,10 @@ public class BuilderToolHelper
             case NETHERITE -> "netherite";
         };
 
-        ResourceLocation id = ResourceLocation.fromNamespaceAndPath(
+        Identifier id = Identifier.fromNamespaceAndPath(
                 "minecraft", materialName + "_" + typeId);
         if (!BuiltInRegistries.ITEM.containsKey(id)) return null;
-        Item result = BuiltInRegistries.ITEM.get(id);
+        Item result = BuiltInRegistries.ITEM.getValue(id);
         if (result == net.minecraft.world.item.Items.AIR) return null;
         return result;
     }
@@ -534,22 +568,18 @@ public class BuilderToolHelper
     private static final java.util.concurrent.ConcurrentHashMap<String, List<Item>> CANDIDATE_CACHE
             = new java.util.concurrent.ConcurrentHashMap<>();
 
-    private static String cacheKey(Class<?> toolClass, Tiers tier)
-    { return toolClass.getSimpleName() + "_" + tier.name(); }
+    private static String cacheKey(Object toolClass, Tiers tier)
+    { return toolClass + "_" + tier.name(); }
 
     private static List<Item> getCandidateItems(ItemStack requested, Tiers tier)
     {
         Item requestedItem = requested.getItem();
-        final Class<?> toolClass;
-        if      (requestedItem instanceof PickaxeItem) toolClass = PickaxeItem.class;
-        else if (requestedItem instanceof AxeItem)     toolClass = AxeItem.class;
-        else if (requestedItem instanceof ShovelItem)  toolClass = ShovelItem.class;
-        else if (requestedItem instanceof HoeItem)     toolClass = HoeItem.class;
-        else if (requestedItem instanceof SwordItem)   toolClass = SwordItem.class;
-        else toolClass = requestedItem.getClass();
+        final ToolKind toolClass = ToolKind.of(requested);
+        // Unknown kinds only match their own item (the old getClass() fallback).
+        final Object cacheOwner = toolClass != null ? toolClass : BuiltInRegistries.ITEM.getKey(requestedItem);
 
         final Item vanillaItem = getEquivalentItem(requested, tier);
-        String key = cacheKey(toolClass, tier);
+        String key = cacheKey(cacheOwner, tier);
 
         return CANDIDATE_CACHE.computeIfAbsent(key, k -> {
             List<Item> candidates = new ArrayList<>();
@@ -557,12 +587,13 @@ public class BuilderToolHelper
             for (Item item : BuiltInRegistries.ITEM)
             {
                 if (candidates.contains(item)) continue;
-                if (!toolClass.isInstance(item)) continue;
-                if (!(item instanceof TieredItem tiered)) continue;
+                ItemStack probe = new ItemStack(item);
+                if (toolClass != null ? !probe.is(toolClass.tag) : item != requestedItem) continue;
+                if (!isTieredTool(probe)) continue;
 
                 // #11 : supporte les tiers vanilla ET les tiers custom (Apotheosis, mods...)
-                // On mappe le Tier custom sur un Tiers vanilla équivalent via getUses()
-                Tiers equivalent = estimateVanillaTier(tiered.getTier());
+                // On mappe le Tier custom sur un Tiers vanilla équivalent via la durabilité
+                Tiers equivalent = estimateVanillaTier(probe);
                 if (equivalent != tier) continue;
 
                 candidates.add(item);
@@ -581,12 +612,21 @@ public class BuilderToolHelper
      * Les tiers custom de mods (Apotheosis, etc.) — on estime via getUses() :
      * indiquer leur puissance relative — on les mappe sur le palier le plus proche.
      */
-    static Tiers estimateVanillaTier(Tier tier)
+    static Tiers estimateVanillaTier(ItemStack stack)
     {
-        if (tier instanceof Tiers t) return t;
-        // Tier custom (Apotheosis, etc.) — on estime via getUses() (durabilité)
-        // Valeurs vanilla : Wood=59, Stone=131, Iron=250, Diamond=1561, Netherite=2031
-        int uses = tier.getUses();
+        // PORT(26.1): vanilla tools carry no tier object any more, so the tier is read from durability.
+        // Valeurs vanilla : Wood=59, Gold=32, Stone=131, Copper=190, Iron=250, Diamond=1561, Netherite=2031.
+        int uses = stack.getMaxDamage();
+        // Vanilla materials (any tool kind, swords included) share their material's durability exactly,
+        // which is what the 1.21.1 `tier instanceof Tiers` shortcut gave us.
+        if (uses == net.minecraft.world.item.ToolMaterial.WOOD.durability())      return Tiers.WOOD;
+        if (uses == net.minecraft.world.item.ToolMaterial.GOLD.durability())      return Tiers.GOLD;
+        if (uses == net.minecraft.world.item.ToolMaterial.STONE.durability())     return Tiers.STONE;
+        if (uses == net.minecraft.world.item.ToolMaterial.COPPER.durability())    return Tiers.STONE; // new in 26.1, below iron
+        if (uses == net.minecraft.world.item.ToolMaterial.IRON.durability())      return Tiers.IRON;
+        if (uses == net.minecraft.world.item.ToolMaterial.DIAMOND.durability())   return Tiers.DIAMOND;
+        if (uses == net.minecraft.world.item.ToolMaterial.NETHERITE.durability()) return Tiers.NETHERITE;
+        // Tier custom (Apotheosis, etc.) — estimation par paliers comme en 1.21.1
         if (uses <= 100)  return Tiers.WOOD;
         if (uses <= 300)  return Tiers.STONE;
         if (uses <= 800)  return Tiers.IRON;

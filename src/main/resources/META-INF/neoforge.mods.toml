@@ -28,44 +28,44 @@ side="BOTH"
 [[dependencies.${mod_id}]]
 modId="minecolonies"
 type="required"
-versionRange="[1.1.1299,)"
+versionRange="[0.0.11-26.1.2,)"
 ordering="AFTER"
 side="BOTH"
 
 [[dependencies.${mod_id}]]
 modId="ae2"
 type="required"
-versionRange="[19.2.17,)"
+versionRange="[26.1.0-alpha,)"
 ordering="AFTER"
 side="BOTH"
 
 [[dependencies.${mod_id}]]
 modId="domum_ornamentum"
 type="required"
-versionRange="[1.0.230,)"
+versionRange="[1.0.0,)"
 ordering="AFTER"
 side="BOTH"
 
 [[dependencies.${mod_id}]]
 modId="jade"
 type="optional"
-versionRange="[15.0.0,)"
+versionRange="[26.1.0,)"
 ordering="AFTER"
 side="CLIENT"
 
 [[dependencies.${mod_id}]]
 modId="curios"
 type="optional"
-versionRange="[9.0.0,)"
+versionRange="[15.0.0,)"
 ordering="AFTER"
 side="BOTH"
 
-# v1.6.6 — JEI recipe-viewer integration (hover show recipe/uses on the WH/ME
-# panels). Optional + CLIENT: the mod boots fine without JEI; the plugin
-# self-activates only if JEI is present.
+# EMI recipe-viewer integration (hover show recipe/uses on the WH/ME panels;
+# replaces the former JEI plugin). Optional + CLIENT: the mod boots fine without
+# EMI; the plugin self-activates only if EMI is present.
 [[dependencies.${mod_id}]]
-modId="jei"
+modId="emi"
 type="optional"
-versionRange="[19.39.0,)"
+versionRange="[1.1.24,)"
 ordering="AFTER"
 side="CLIENT"

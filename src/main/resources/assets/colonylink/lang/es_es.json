@@ -341,8 +341,8 @@
   "colonylink.term.in_me_craftable": "§7En ME: §f%s §a● fabricable",
   "colonylink.term.in_warehouse": "§7En el almacén: §f%s",
   "colonylink.term.insert_blank": "§7Inserta aquí un Patrón en blanco",
-  "colonylink.term.jei_me": "Prioridad JEI: ME primero",
-  "colonylink.term.jei_wh": "Prioridad JEI: Almacén primero",
+  "colonylink.term.jei_me": "Prioridad EMI: ME primero",
+  "colonylink.term.jei_wh": "Prioridad EMI: Almacén primero",
   "colonylink.term.label_applied": "Applied",
   "colonylink.term.label_warehouse": "Almacén",
   "colonylink.term.material1": "Material 1: %s",
@@ -459,5 +459,6 @@
   "itemGroup.colonylink": "ColonyLink",
   "key.categories.colonylink": "ColonyLink",
   "key.colonylink.open_clipboard": "Abrir el Portapapeles",
-  "colonylink.translation.credit.es_es": "Spanish translation written entirely by Claude (Anthropic)"
+  "colonylink.translation.credit.es_es": "Spanish translation written entirely by Claude (Anthropic)",
+  "key.category.colonylink.colonylink": "ColonyLink"
 }

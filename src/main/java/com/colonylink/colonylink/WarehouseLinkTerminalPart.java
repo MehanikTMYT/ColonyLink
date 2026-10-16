@@ -1,5 +1,7 @@
 package com.colonylink.colonylink;
 
+import net.minecraft.world.level.storage.ValueOutput;
+import net.minecraft.world.level.storage.ValueInput;
 import appeng.api.config.Actionable;
 import appeng.api.networking.IManagedGridNode;
 import appeng.menu.ISubMenu;
@@ -8,11 +10,8 @@ import appeng.api.networking.crafting.ICraftingService;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.networking.storage.IStorageService;
 import appeng.api.parts.IPartItem;
-import appeng.api.parts.IPartModel;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.KeyCounter;
-import appeng.items.parts.PartModels;
-import appeng.parts.PartModel;
 import appeng.parts.reporting.AbstractTerminalPart;
 import com.minecolonies.api.colony.IColony;
 import com.minecolonies.api.colony.IColonyManager;
@@ -23,7 +22,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
@@ -73,17 +72,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public class WarehouseLinkTerminalPart extends AbstractTerminalPart
 {
     // ── Modèles ───────────────────────────────────────────────────────────────
-
-    @PartModels
-    public static final ResourceLocation MODEL_OFF =
-            ResourceLocation.fromNamespaceAndPath("colonylink", "part/warehouse_link_terminal_off");
-    @PartModels
-    public static final ResourceLocation MODEL_ON =
-            ResourceLocation.fromNamespaceAndPath("colonylink", "part/warehouse_link_terminal_on");
-
-    public static final IPartModel MODELS_OFF         = new PartModel(MODEL_BASE, MODEL_OFF, MODEL_STATUS_OFF);
-    public static final IPartModel MODELS_ON          = new PartModel(MODEL_BASE, MODEL_ON,  MODEL_STATUS_ON);
-    public static final IPartModel MODELS_HAS_CHANNEL = new PartModel(MODEL_BASE, MODEL_ON,  MODEL_STATUS_HAS_CHANNEL);
+    // PORT(26.1): AE2 part models are data-driven — see assets/colonylink/ae2/parts/warehouse_link_terminal.json
+    // (status_indicator picks the off/on/has-channel layers the old getStaticModels() selected).
 
     // ── Constantes ────────────────────────────────────────────────────────────
 
@@ -132,7 +122,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         public boolean isItemValid(int slot, ItemStack stack)
         {
             if (stack.isEmpty()) return true;
-            net.minecraft.resources.ResourceLocation id =
+            net.minecraft.resources.Identifier id =
                     net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem());
             return id != null && id.getPath().equals("blank_pattern");
         }
@@ -203,68 +193,39 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         }
     }
 
-    @Override
-    public IPartModel getStaticModels()
-    {
-        return this.selectModel(MODELS_OFF, MODELS_ON, MODELS_HAS_CHANNEL);
-    }
-
     // ── NBT ───────────────────────────────────────────────────────────────────
 
+    // PORT(26.1): parts persist through ValueOutput/ValueInput; keys are unchanged from 1.21.1.
     @Override
-    public void writeToNBT(CompoundTag data, HolderLookup.Provider registries)
+    public void writeToNBT(ValueOutput data)
     {
-        super.writeToNBT(data, registries);
-        data.put("WarehouseCard", warehouseCardSlot.serializeNBT(registries));
-        data.put("DomumTarget", domumTargetSlot.serializeNBT(registries));
-        data.put("BlankPattern", blankPatternSlot.serializeNBT(registries));
+        super.writeToNBT(data);
+        warehouseCardSlot.serialize(data.child("WarehouseCard"));
+        domumTargetSlot.serialize(data.child("DomumTarget"));
+        blankPatternSlot.serialize(data.child("BlankPattern"));
         // domumOutputSlot intentionnellement NON persisté — slot preview temporaire
-        data.put("CraftingGrid", craftingGridSlot.serializeNBT(registries));
+        craftingGridSlot.serialize(data.child("CraftingGrid"));
 
         // Queue Domum — liste d'ItemStack sérialisés
-        net.minecraft.nbt.ListTag queueTag = new net.minecraft.nbt.ListTag();
+        ValueOutput.TypedOutputList<ItemStack> queueTag = data.list("DomumQueue", ItemStack.CODEC);
         for (ItemStack stack : domumQueue)
-        {
-            net.minecraft.nbt.CompoundTag stackTag = (net.minecraft.nbt.CompoundTag)
-                    ItemStack.CODEC.encodeStart(
-                                    registries.createSerializationContext(net.minecraft.nbt.NbtOps.INSTANCE),
-                                    stack)
-                            .resultOrPartial(e -> ColonyLink.LOGGER.error("[WarehouseTerminal] queue save error: {}", e))
-                            .orElse(new net.minecraft.nbt.CompoundTag());
-            if (!stackTag.isEmpty()) queueTag.add(stackTag);
-        }
-        data.put("DomumQueue", queueTag);
+            if (!stack.isEmpty()) queueTag.add(stack);
     }
 
     @Override
-    public void readFromNBT(CompoundTag data, HolderLookup.Provider registries)
+    public void readFromNBT(ValueInput data)
     {
-        super.readFromNBT(data, registries);
-        if (data.contains("WarehouseCard"))
-            warehouseCardSlot.deserializeNBT(registries, data.getCompound("WarehouseCard"));
-        if (data.contains("DomumTarget"))
-            domumTargetSlot.deserializeNBT(registries, data.getCompound("DomumTarget"));
-        if (data.contains("BlankPattern"))
-            blankPatternSlot.deserializeNBT(registries, data.getCompound("BlankPattern"));
+        super.readFromNBT(data);
+        data.child("WarehouseCard").ifPresent(warehouseCardSlot::deserialize);
+        data.child("DomumTarget").ifPresent(domumTargetSlot::deserialize);
+        data.child("BlankPattern").ifPresent(blankPatternSlot::deserialize);
         // domumOutputSlot toujours vide à l'ouverture — pas de désérialisation
-        if (data.contains("CraftingGrid"))
-            craftingGridSlot.deserializeNBT(registries, data.getCompound("CraftingGrid"));
+        data.child("CraftingGrid").ifPresent(craftingGridSlot::deserialize);
 
         // Queue Domum
         domumQueue.clear();
-        if (data.contains("DomumQueue", net.minecraft.nbt.Tag.TAG_LIST))
-        {
-            net.minecraft.nbt.ListTag queueTag =
-                    data.getList("DomumQueue", net.minecraft.nbt.Tag.TAG_COMPOUND);
-            for (int i = 0; i < queueTag.size(); i++)
-            {
-                ItemStack.CODEC.parse(
-                                registries.createSerializationContext(net.minecraft.nbt.NbtOps.INSTANCE),
-                                queueTag.getCompound(i))
-                        .resultOrPartial(e -> ColonyLink.LOGGER.error("[WarehouseTerminal] queue load error: {}", e))
-                        .ifPresent(domumQueue::add);
-            }
-        }
+        for (ItemStack stack : data.listOrEmpty("DomumQueue", ItemStack.CODEC))
+            domumQueue.add(stack);
     }
 
     // ── Activation (clic droit) ───────────────────────────────────────────────
@@ -462,7 +423,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
             for (BlockPos rackPos : warehouse.getContainers())
             {
                 if (!visitedPos.add(rackPos)) continue;
-                IItemHandler rack = level.getCapability(Capabilities.ItemHandler.BLOCK, rackPos, null);
+                IItemHandler rack = CapCompat.itemHandler(level, rackPos, null);
                 if (rack == null) continue;
                 int slots = Math.min(rack.getSlots(), RACK_HALF_SLOTS);
                 for (int s = 0; s < slots; s++)
@@ -570,7 +531,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
             for (BlockPos rackPos : warehouse.getContainers())
             {
                 if (!visitedPos.add(rackPos)) continue;
-                IItemHandler rack = level.getCapability(Capabilities.ItemHandler.BLOCK, rackPos, null);
+                IItemHandler rack = CapCompat.itemHandler(level, rackPos, null);
                 if (rack == null) continue;
                 // Sécurité : si un méta-handler arrive ici, on le saute (il sera
                 // beaucoup trop gros et fausserait le total). En pratique on
@@ -633,7 +594,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     {
         // Le meta-handler MineColonies est toujours expose a la position du batiment
         BlockPos hutPos = warehouse.getPosition();
-        IItemHandler h = level.getCapability(Capabilities.ItemHandler.BLOCK, hutPos, null);
+        IItemHandler h = CapCompat.itemHandler(level, hutPos, null);
         // Verifier que ce handler a plus de slots qu'un rack simple (27 ou 54 slots)
         // pour s'assurer que c'est bien le meta-handler et non un rack place sur le hut
         if (h != null && h.getSlots() > RACK_HALF_SLOTS)
@@ -666,7 +627,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         ItemStack carried = player.containerMenu.getCarried();
         if (carried.isEmpty()) return;
 
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = player.level();
         IColony colony = findColony(level);
         if (colony == null) { msg(player, Component.translatable("colonylink.terminal.no_colony")); return; }
         BuildingWareHouse wh = findWarehouse(colony);
@@ -688,7 +649,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         {
             if (toInsert.isEmpty()) break;
             if (!visitedPos.add(rackPos)) continue;
-            IItemHandler rack = level.getCapability(Capabilities.ItemHandler.BLOCK, rackPos, null);
+            IItemHandler rack = CapCompat.itemHandler(level, rackPos, null);
             if (rack == null || !visited.add(rack)) continue;
             // v1.3.9 — skip méta-handler : on n'écrit jamais via l'agrégat.
             ItemStack before = toInsert.copy();
@@ -743,7 +704,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     public void pickupFromWarehouse(ServerPlayer player, ItemStack template, int requestCount)
     {
         if (!checkPermission(player)) return;
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = player.level();
         IColony colony = findColony(level);
         if (colony == null) { msg(player, Component.translatable("colonylink.terminal.no_colony")); return; }
         BuildingWareHouse wh = findWarehouse(colony);
@@ -782,7 +743,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         {
             if (remaining <= 0) break;
             if (!visitedPos.add(rackPos)) continue;
-            IItemHandler rack = level.getCapability(Capabilities.ItemHandler.BLOCK, rackPos, null);
+            IItemHandler rack = CapCompat.itemHandler(level, rackPos, null);
             if (rack == null || !visited.add(rack)) continue;
             // Pour le bloc Warehouse Hut (position du batiment), scanner tous les slots.
             // Pour les racks normaux, limiter a RACK_HALF_SLOTS (moitie exposee).
@@ -882,7 +843,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     public int transferWarehouseToMe(ServerPlayer player, ItemStack template, int count)
     {
         if (!checkPermission(player)) return 0;
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = player.level();
         IColony colony = findColony(level);
         if (colony == null) { msg(player, Component.translatable("colonylink.terminal.no_colony")); return 0; }
         BuildingWareHouse wh = findWarehouse(colony);
@@ -908,7 +869,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         {
             if (remaining <= 0) break;
             if (!visitedPos.add(rackPos)) continue;
-            IItemHandler rack = level.getCapability(Capabilities.ItemHandler.BLOCK, rackPos, null);
+            IItemHandler rack = CapCompat.itemHandler(level, rackPos, null);
             if (rack == null || !visited.add(rack)) continue;
             // v1.3.9 — skip méta-handler.
             for (int s = 0; s < Math.min(rack.getSlots(), RACK_HALF_SLOTS) && remaining > 0; s++)
@@ -939,7 +900,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
             for (BlockPos rackPos : wh.getContainers())
             {
                 if (ret.isEmpty()) break;
-                IItemHandler rack = level.getCapability(Capabilities.ItemHandler.BLOCK, rackPos, null);
+                IItemHandler rack = CapCompat.itemHandler(level, rackPos, null);
                 if (rack == null || !retVisited.add(rack)) continue;
                 // v1.3.9 — skip méta-handler.
                 ret = insertIntoHandler(rack, ret);
@@ -956,7 +917,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     public int transferWarehouseToInventory(ServerPlayer player, ItemStack template, int count)
     {
         if (!checkPermission(player)) return 0;
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = player.level();
         IColony colony = findColony(level);
         if (colony == null) { msg(player, Component.translatable("colonylink.terminal.no_colony")); return 0; }
         BuildingWareHouse wh = findWarehouse(colony);
@@ -976,7 +937,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         {
             if (remaining <= 0) break;
             if (!visitedPos.add(rackPos)) continue;
-            IItemHandler rack = level.getCapability(Capabilities.ItemHandler.BLOCK, rackPos, null);
+            IItemHandler rack = CapCompat.itemHandler(level, rackPos, null);
             if (rack == null || !visited.add(rack)) continue;
             // v1.3.9 — skip méta-handler.
             for (int s = 0; s < Math.min(rack.getSlots(), RACK_HALF_SLOTS) && remaining > 0; s++)
@@ -1002,7 +963,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
             for (BlockPos rp : wh.getContainers())
             {
                 if (toGive.isEmpty()) break;
-                IItemHandler rack = level.getCapability(Capabilities.ItemHandler.BLOCK, rp, null);
+                IItemHandler rack = CapCompat.itemHandler(level, rp, null);
                 if (rack == null || !retVis.add(rack)) continue;
                 // v1.3.9 — skip méta-handler.
                 toGive = insertIntoHandler(rack, toGive);
@@ -1019,7 +980,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     public int transferMeToWarehouse(ServerPlayer player, ItemStack template, int count)
     {
         if (!checkPermission(player)) return 0;
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = player.level();
         IColony colony = findColony(level);
         if (colony == null) { msg(player, Component.translatable("colonylink.terminal.no_colony")); return 0; }
         BuildingWareHouse wh = findWarehouse(colony);
@@ -1047,7 +1008,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         {
             if (remaining.isEmpty()) break;
             if (!visitedPos.add(rackPos)) continue;
-            IItemHandler rack = level.getCapability(Capabilities.ItemHandler.BLOCK, rackPos, null);
+            IItemHandler rack = CapCompat.itemHandler(level, rackPos, null);
             if (rack == null || !visited.add(rack)) continue;
             // v1.3.9 — skip méta-handler.
             remaining = insertIntoHandler(rack, remaining);
@@ -1124,7 +1085,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     public int transferPlayerToWarehouse(ServerPlayer player, ItemStack stack)
     {
         if (!checkPermission(player)) return 0;
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = player.level();
         IColony colony = findColony(level);
         if (colony == null) return 0;
         BuildingWareHouse wh = findWarehouse(colony);
@@ -1143,7 +1104,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         {
             if (stack.isEmpty()) break;
             if (!visitedPos.add(rackPos)) continue;
-            IItemHandler rack = level.getCapability(Capabilities.ItemHandler.BLOCK, rackPos, null);
+            IItemHandler rack = CapCompat.itemHandler(level, rackPos, null);
             if (rack == null || !visited.add(rack)) continue;
             // v1.3.9 — skip méta-handler.
             stack = insertIntoHandler(rack, stack);
@@ -1366,7 +1327,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         // (AE2 security), by resolvePart requiring the menu to be actually open, and
         // by the menu's range check — no colony binding to enforce here.
         if (!hasWarehouseCard()) return true;
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = player.level();
         IColony colony = findColony(level);
         // v1.6.2 — card present but no colony resolvable: deny warehouse ops instead
         // of failing open. A bound card without a colony can only be an anomaly.

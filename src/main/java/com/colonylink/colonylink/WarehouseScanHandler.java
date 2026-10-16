@@ -71,7 +71,7 @@ public class WarehouseScanHandler
 
     public static void handleWarehouseCheck(ServerPlayer player, BlockPos builderPos)
     {
-        long currentTick = player.serverLevel().getGameTime();
+        long currentTick = player.level().getGameTime();
         java.util.UUID uuid = player.getUUID();
 
         // Cooldown check
@@ -102,7 +102,7 @@ public class WarehouseScanHandler
             return;
         }
 
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = player.level();
 
         // v1.4.9 — cross-dimension : le Clipboard ne peut pas atteindre une colonie
         // dans une autre dimension. Refus propre (null = entrée legacy → on laisse passer).
@@ -110,7 +110,7 @@ public class WarehouseScanHandler
                 ColonyLinkWandLinkableHandler.getBuilderDimension(wandStack, builderPos);
         if (builderDim != null && !level.dimension().equals(builderDim))
         {
-            player.sendSystemMessage(Component.translatable("colonylink.handler.cross_dimension", builderDim.location().getPath()));
+            player.sendSystemMessage(Component.translatable("colonylink.handler.cross_dimension", builderDim.identifier().getPath()));
             sendFailure(player, currentTick);
             return;
         }
@@ -274,8 +274,7 @@ public class WarehouseScanHandler
 
                 for (BlockPos rackPos : containerList)
                 {
-                    IItemHandler handler = level.getCapability(
-                            Capabilities.ItemHandler.BLOCK, rackPos, null);
+                    IItemHandler handler = CapCompat.itemHandler(level, rackPos, null);
                     if (handler == null) continue;
 
                     for (int slot = 0; slot < handler.getSlots(); slot++)
@@ -527,7 +526,7 @@ public class WarehouseScanHandler
 
         for (IMateriallyTexturedBlockComponent component : texturedBlock.getComponents())
         {
-            Block materialBlock = textureData.getTexturedComponents().get(component.getId());
+            Block materialBlock = textureData.components().get(component.getId());
             if (materialBlock == null)
             {
                 if (!component.isOptional())

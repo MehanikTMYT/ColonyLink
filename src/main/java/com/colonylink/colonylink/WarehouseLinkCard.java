@@ -11,17 +11,20 @@ import java.util.List;
 
 public class WarehouseLinkCard extends Item
 {
-    public WarehouseLinkCard()
+    public WarehouseLinkCard(Item.Properties properties)
     {
-        super(new Item.Properties().stacksTo(1));
+        super(properties.stacksTo(1));
     }
 
     @Override
-    @OnlyIn(Dist.CLIENT)
-    public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag)
+    public void appendHoverText(ItemStack stack, TooltipContext context,
+                                net.minecraft.world.item.component.TooltipDisplay display,
+                                java.util.function.Consumer<Component> tooltipAdder, TooltipFlag flag)
     {
+        final List<Component> tooltip = new TooltipLines(tooltipAdder); // PORT(26.1)
+
         tooltip.add(Component.translatable("colonylink.card.line1"));
-        if (net.minecraft.client.gui.screens.Screen.hasShiftDown())
+        if (net.minecraft.client.Minecraft.getInstance().hasShiftDown())
         {
             tooltip.add(Component.translatable("colonylink.card.insert"));
             tooltip.add(Component.translatable("colonylink.card.enables"));

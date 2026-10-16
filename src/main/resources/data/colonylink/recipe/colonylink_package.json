@@ -6,8 +6,8 @@
     "SPS"
   ],
   "key": {
-    "S": {"tag": "minecraft:wooden_slabs"},
-    "P": {"item": "minecraft:paper"}
+    "S": "#minecraft:wooden_slabs",
+    "P": "minecraft:paper"
   },
   "result": {
     "id": "colonylink:colonylink_package",

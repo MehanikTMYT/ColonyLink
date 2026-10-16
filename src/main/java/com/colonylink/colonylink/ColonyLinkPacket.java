@@ -6,7 +6,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
@@ -64,7 +64,7 @@ public record ColonyLinkPacket(
                 ItemStack.EMPTY, 0, ResourceStatus.NO_PATTERN, BlockPos.ZERO, List.of(), false);
     }
 
-    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(
+    public static final Identifier ID = Identifier.fromNamespaceAndPath(
             ColonyLink.MODID, "colony_link_packet");
     public static final CustomPacketPayload.Type<ColonyLinkPacket> TYPE =
             new CustomPacketPayload.Type<>(ID);

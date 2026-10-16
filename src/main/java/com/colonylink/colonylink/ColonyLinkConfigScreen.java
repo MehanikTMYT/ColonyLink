@@ -1,6 +1,6 @@
 package com.colonylink.colonylink;
 
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
@@ -87,10 +87,10 @@ public class ColonyLinkConfigScreen extends Screen
     // ── Render ────────────────────────────────────────────────────────────────
 
     @Override
-    public void renderBackground(GuiGraphics g, int mx, int my, float pt) {}
+    public void extractBackground(GuiGraphicsExtractor g, int mx, int my, float pt) {}
 
     @Override
-    public void render(GuiGraphics g, int mx, int my, float pt)
+    public void extractRenderState(GuiGraphicsExtractor g, int mx, int my, float pt)
     {
         // Fond sombre semi-transparent
         g.fill(0, 0, this.width, this.height, 0xAA000000);
@@ -106,7 +106,7 @@ public class ColonyLinkConfigScreen extends Screen
 
         // Barre de titre
         g.fill(x + 2, y + 2, x + W - 2, y + 20, 0xFF3A3A3A);
-        g.drawCenteredString(this.font, Component.translatable("colonylink.cfg.header").getString(), x + W / 2 - 50, y + 6, 0xFFFFAA);
+        GuiCompat.drawCenteredString(g, this.font, Component.translatable("colonylink.cfg.header").getString(), x + W / 2 - 50, y + 6, 0xFFFFAA);
 
         // Sélecteur de thème (toujours actif, dans le bandeau, à droite)
         drawThemeSelector(g, mx, my);
@@ -123,7 +123,7 @@ public class ColonyLinkConfigScreen extends Screen
         // Boutons bas
         drawBottomButtons(g, mx, my);
 
-        super.render(g, mx, my, pt);
+        super.extractRenderState(g, mx, my, pt);
     }
 
     // ── Sélecteur de thème ─────────────────────────────────────────────────────
@@ -132,7 +132,7 @@ public class ColonyLinkConfigScreen extends Screen
     private int themeBtnW() { return 98; }
     private int themeBtnH() { return 14; }
 
-    private void drawThemeSelector(GuiGraphics g, int mx, int my)
+    private void drawThemeSelector(GuiGraphicsExtractor g, int mx, int my)
     {
         int bx = themeBtnX(), by = themeBtnY(), bw = themeBtnW(), bh = themeBtnH();
         boolean hov = mx >= bx && mx <= bx + bw && my >= by && my <= by + bh;
@@ -167,10 +167,10 @@ public class ColonyLinkConfigScreen extends Screen
         g.fill(bx + bw - 1, by, bx + bw, by + bh, bevelDark);
 
         String label = Component.translatable("colonylink.cfg.theme", name).getString();
-        g.drawCenteredString(this.font, label, bx + bw / 2, by + 3, textCol);
+        GuiCompat.drawCenteredString(g, this.font, label, bx + bw / 2, by + 3, textCol);
     }
 
-    private void drawTabs(GuiGraphics g, int mx, int my)
+    private void drawTabs(GuiGraphicsExtractor g, int mx, int my)
     {
         int x = gx() + 10, y = gy() + 22;
         // tw dynamique : largeur du GUI / nombre de tabs avec marges
@@ -184,11 +184,11 @@ public class ColonyLinkConfigScreen extends Screen
             int tc = active ? 0xFFFFAA : 0xAAAAAA;
             g.fill(tx, y, tx + tw, y + th, bg);
             g.fill(tx, y, tx + tw, y + 1, active ? 0xFFFFAA44 : 0xFF555555);
-            g.drawCenteredString(this.font, Component.translatable(TABS[i]).getString(), tx + tw / 2, y + 3, tc);
+            GuiCompat.drawCenteredString(g, this.font, Component.translatable(TABS[i]).getString(), tx + tw / 2, y + 3, tc);
         }
     }
 
-    private void drawTabContent(GuiGraphics g, int mx, int my)
+    private void drawTabContent(GuiGraphicsExtractor g, int mx, int my)
     {
         int sx = sliderAreaX(), sy = sliderAreaY();
         switch (activeTab)
@@ -204,10 +204,10 @@ public class ColonyLinkConfigScreen extends Screen
      * Dessine 3 sliders R/G/B pour une couleur.
      * sliderBase = index de base dans le système de slots (0, 3 ou 6).
      */
-    private void drawColorSliders(GuiGraphics g, int mx, int my,
+    private void drawColorSliders(GuiGraphicsExtractor g, int mx, int my,
                                   int sx, int sy, String label, int color, int sliderBase)
     {
-        g.drawString(this.font, "§7" + label, sx, sy - 8, 0xCCCCCC, false);
+        GuiCompat.drawString(g, this.font, "§7" + label, sx, sy - 8, 0xCCCCCC, false);
 
         int r = (color >> 16) & 0xFF;
         int gv = (color >> 8)  & 0xFF;
@@ -231,14 +231,14 @@ public class ColonyLinkConfigScreen extends Screen
             String lockKey  = mc ? "colonylink.cfg.locked_minecolonies"      : "colonylink.cfg.locked_ae";
             String hintKey  = mc ? "colonylink.cfg.locked_minecolonies_hint" : "colonylink.cfg.locked_ae_hint";
             int oy = sy + 3 * 36 + 2;
-            g.drawString(this.font, Component.translatable(lockKey).getString(), sx, oy, 0xFF9A9FB4, false);
-            g.drawString(this.font, Component.translatable(hintKey).getString(), sx, oy + 11, 0x888888, false);
+            GuiCompat.drawString(g, this.font, Component.translatable(lockKey).getString(), sx, oy, 0xFF9A9FB4, false);
+            GuiCompat.drawString(g, this.font, Component.translatable(hintKey).getString(), sx, oy + 11, 0x888888, false);
         }
     }
 
-    private void drawLayoutSliders(GuiGraphics g, int mx, int my, int sx, int sy)
+    private void drawLayoutSliders(GuiGraphicsExtractor g, int mx, int my, int sx, int sy)
     {
-        g.drawString(this.font, Component.translatable("colonylink.cfg.section_layout").getString(), sx, sy - 8, 0xCCCCCC, false);
+        GuiCompat.drawString(g, this.font, Component.translatable("colonylink.cfg.section_layout").getString(), sx, sy - 8, 0xCCCCCC, false);
 
         // Opacity : slot 9 — toujours actif (géométrique)
         int opPct = Math.round(wOpacity * 100);
@@ -261,7 +261,7 @@ public class ColonyLinkConfigScreen extends Screen
      * Dessine un slider horizontal.
      * slotId : identifiant unique pour le drag.
      */
-    private void drawSlider(GuiGraphics g, int mx, int my,
+    private void drawSlider(GuiGraphicsExtractor g, int mx, int my,
                             int sx, int sy, int sw,
                             int min, int max, int value,
                             String label, int trackColor, int slotId, boolean enabled)
@@ -270,7 +270,7 @@ public class ColonyLinkConfigScreen extends Screen
         int trackH = 6;
 
         // Label (grisé si désactivé)
-        g.drawString(this.font, label, sx, sy + 2, enabled ? 0xDDDDDD : 0xFF666666, false);
+        GuiCompat.drawString(g, this.font, label, sx, sy + 2, enabled ? 0xDDDDDD : 0xFF666666, false);
 
         // Track fond
         g.fill(sx, trackY, sx + sw, trackY + trackH, 0xFF1A1A1A);
@@ -328,12 +328,12 @@ public class ColonyLinkConfigScreen extends Screen
         }
     }
 
-    private void drawPreview(GuiGraphics g)
+    private void drawPreview(GuiGraphicsExtractor g)
     {
         int px = previewX(), py = previewY(), pw = previewW(), ph = previewH();
 
         // Label
-        g.drawString(this.font, Component.translatable("colonylink.cfg.preview").getString(), px, py - 10, 0x888888, false);
+        GuiCompat.drawString(g, this.font, Component.translatable("colonylink.cfg.preview").getString(), px, py - 10, 0x888888, false);
 
         // Calcul couleurs avec opacité de travail — AE : palette lavande ;
         // MineColonies : parchemin beige ; DEFAULT : couleurs config.
@@ -377,7 +377,7 @@ public class ColonyLinkConfigScreen extends Screen
         g.fill(px + bw + 4, btnY, px + bw + 40, btnY + 1, 0x88FFFFFF);
     }
 
-    private void drawBottomButtons(GuiGraphics g, int mx, int my)
+    private void drawBottomButtons(GuiGraphicsExtractor g, int mx, int my)
     {
         int y = gy() + H - 30;
         int x = gx();
@@ -390,7 +390,7 @@ public class ColonyLinkConfigScreen extends Screen
         drawBtn(g, mx, my, x + W - 130, y, 120, 20, Component.translatable("colonylink.cfg.btn_apply").getString(), 0xFF004400, 0xFF006600, 0xFF44FF44, 14);
     }
 
-    private void drawBtn(GuiGraphics g, int mx, int my,
+    private void drawBtn(GuiGraphicsExtractor g, int mx, int my,
                          int bx, int by, int bw, int bh,
                          String label, int bgNormal, int bgHover, int tc, int id)
     {
@@ -400,14 +400,16 @@ public class ColonyLinkConfigScreen extends Screen
         g.fill(bx, by, bx + 1, by + bh, 0xFF888888);
         g.fill(bx, by + bh - 1, bx + bw, by + bh, 0xFF222222);
         g.fill(bx + bw - 1, by, bx + bw, by + bh, 0xFF222222);
-        g.drawCenteredString(this.font, label, bx + bw / 2, by + 4, tc);
+        GuiCompat.drawCenteredString(g, this.font, label, bx + bw / 2, by + 4, tc);
     }
 
     // ── Mouse ─────────────────────────────────────────────────────────────────
 
     @Override
-    public boolean mouseClicked(double mx, double my, int btn)
+    public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event, boolean doubleClick)
     {
+        final double mx = event.x(), my = event.y(); final int btn = event.button(); // PORT(26.1): input events
+
         int x = gx(), y = gy();
 
         // Sélecteur de thème (toujours actif)
@@ -462,25 +464,29 @@ public class ColonyLinkConfigScreen extends Screen
             }
         }
 
-        return super.mouseClicked(mx, my, btn);
+        return super.mouseClicked(new net.minecraft.client.input.MouseButtonEvent(mx, my, event.buttonInfo()), doubleClick);
     }
 
     @Override
-    public boolean mouseDragged(double mx, double my, int btn, double dx, double dy)
+    public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent event, double dx, double dy)
     {
+        final double mx = event.x(), my = event.y(); final int btn = event.button(); // PORT(26.1): input events
+
         if (draggingSlider >= 0)
         {
             // applySliderValue est appelé dans drawSlider lors du prochain render
             return true;
         }
-        return super.mouseDragged(mx, my, btn, dx, dy);
+        return super.mouseDragged(new net.minecraft.client.input.MouseButtonEvent(mx, my, event.buttonInfo()), dx, dy);
     }
 
     @Override
-    public boolean mouseReleased(double mx, double my, int btn)
+    public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent event)
     {
+        final double mx = event.x(), my = event.y(); final int btn = event.button(); // PORT(26.1): input events
+
         draggingSlider = -1;
-        return super.mouseReleased(mx, my, btn);
+        return super.mouseReleased(new net.minecraft.client.input.MouseButtonEvent(mx, my, event.buttonInfo()));
     }
 
     /**

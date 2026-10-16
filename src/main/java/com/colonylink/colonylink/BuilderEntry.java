@@ -6,7 +6,7 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.Level;
 
 import java.util.ArrayList;
@@ -46,20 +46,20 @@ public record BuilderEntry(
         tag.putString("builder_name", builderName);
         tag.putString("building_label", buildingLabel);
         // v1.4.9 — dimension du builder (figée à l'appairage). Absent = legacy/inconnu.
-        if (dimension != null) tag.putString("dim", dimension.location().toString());
+        if (dimension != null) tag.putString("dim", dimension.identifier().toString());
         return tag;
     }
 
     public static BuilderEntry fromNbt(CompoundTag tag)
     {
-        BlockPos bPos = new BlockPos(tag.getInt("bx"), tag.getInt("by"), tag.getInt("bz"));
-        BlockPos rPos = new BlockPos(tag.getInt("rx"), tag.getInt("ry"), tag.getInt("rz"));
-        String bName = tag.contains("builder_name") ? tag.getString("builder_name") : "N/A";
-        String label = tag.contains("building_label") ? tag.getString("building_label") : "N/A";
+        BlockPos bPos = new BlockPos(tag.getIntOr("bx", 0), tag.getIntOr("by", 0), tag.getIntOr("bz", 0));
+        BlockPos rPos = new BlockPos(tag.getIntOr("rx", 0), tag.getIntOr("ry", 0), tag.getIntOr("rz", 0));
+        String bName = tag.contains("builder_name") ? tag.getStringOr("builder_name", "") : "N/A";
+        String label = tag.contains("building_label") ? tag.getStringOr("building_label", "") : "N/A";
         ResourceKey<Level> dim = null;
         if (tag.contains("dim"))
         {
-            ResourceLocation rl = ResourceLocation.tryParse(tag.getString("dim"));
+            Identifier rl = Identifier.tryParse(tag.getStringOr("dim", ""));
             if (rl != null) dim = ResourceKey.create(Registries.DIMENSION, rl);
         }
         return new BuilderEntry(bPos, rPos, bName, label, dim);

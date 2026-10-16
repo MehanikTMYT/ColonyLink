@@ -18,7 +18,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
@@ -53,7 +53,7 @@ public record PackageTokenPacket(
         String citizenName   // v1.6.0 — for the server-side sent-key
 ) implements CustomPacketPayload
 {
-    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(
+    public static final Identifier ID = Identifier.fromNamespaceAndPath(
             ColonyLink.MODID, "package_token");
     public static final CustomPacketPayload.Type<PackageTokenPacket> TYPE =
             new CustomPacketPayload.Type<>(ID);
@@ -121,7 +121,7 @@ public record PackageTokenPacket(
             {
                 // Dimension guard: refuse a cross-dimension redirector. Legacy entries
                 // (dimension == null) are not filtered — historical behaviour preserved.
-                if (e.dimension() != null && !e.dimension().equals(player.serverLevel().dimension()))
+                if (e.dimension() != null && !e.dimension().equals(player.level().dimension()))
                     break;
                 redirectorLinked = true;
                 break;
@@ -144,7 +144,7 @@ public record PackageTokenPacket(
         }
 
         // 3. Vérifier le redirector et la warehouse card
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = player.level();
         var be = level.getBlockEntity(redirectorPos);
         if (!(be instanceof ColonyLinkRedirectorBlockEntity redirector))
         {
@@ -277,7 +277,7 @@ public record PackageTokenPacket(
             for (BlockPos rackPos : containers)
             {
                 if (remaining <= 0) break outer;
-                IItemHandler rack = level.getCapability(Capabilities.ItemHandler.BLOCK, rackPos, null);
+                IItemHandler rack = CapCompat.itemHandler(level, rackPos, null);
                 if (rack == null) continue;
                 while (remaining > 0)
                 {

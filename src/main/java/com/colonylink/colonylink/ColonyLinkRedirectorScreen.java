@@ -2,7 +2,7 @@ package com.colonylink.colonylink;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.renderer.Rect2i;
 import net.minecraft.network.chat.Component;
@@ -31,7 +31,6 @@ import java.util.List;
  * card tooltip now derives its position from the menu slot instead of duplicated
  * hardcoded coordinates).
  */
-@OnlyIn(Dist.CLIENT)
 public class ColonyLinkRedirectorScreen extends AbstractContainerScreen<ColonyLinkRedirectorMenu>
 {
     // ── Layout (UI passe 1 — 176 canon, compact) ──────────────────────────────
@@ -57,9 +56,8 @@ public class ColonyLinkRedirectorScreen extends AbstractContainerScreen<ColonyLi
 
     public ColonyLinkRedirectorScreen(ColonyLinkRedirectorMenu menu, Inventory playerInventory, Component title)
     {
-        super(menu, playerInventory, title);
-        this.imageWidth = GUI_WIDTH;
-        this.imageHeight = GUI_HEIGHT;
+        // PORT(26.1): image size is final and passed to the constructor.
+        super(menu, playerInventory, title, GUI_WIDTH, GUI_HEIGHT);
     }
 
     @Override
@@ -80,8 +78,10 @@ public class ColonyLinkRedirectorScreen extends AbstractContainerScreen<ColonyLi
     // ── Background ────────────────────────────────────────────────────────────
 
     @Override
-    protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY)
+    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick)
     {
+        super.extractBackground(graphics, mouseX, mouseY, partialTick);
+
         int x = this.leftPos;
         int y = this.topPos;
 
@@ -132,7 +132,7 @@ public class ColonyLinkRedirectorScreen extends AbstractContainerScreen<ColonyLi
     }
 
     /** Minimal procedural fallback panel (AE2 assets missing): light fill + dark frame. */
-    private void drawFallbackPanel(GuiGraphics g, int x, int y)
+    private void drawFallbackPanel(GuiGraphicsExtractor g, int x, int y)
     {
         g.fill(x, y, x + GUI_WIDTH, y + GUI_HEIGHT, 0xFFC6C6C6);
         g.fill(x, y, x + GUI_WIDTH, y + 1, AeGuiBlits.AE_TEXT);
@@ -142,7 +142,7 @@ public class ColonyLinkRedirectorScreen extends AbstractContainerScreen<ColonyLi
     }
 
     /** Minimal procedural 18x18 slot well (vanilla-style recess). */
-    private void drawFallbackWell(GuiGraphics g, int wx, int wy)
+    private void drawFallbackWell(GuiGraphicsExtractor g, int wx, int wy)
     {
         g.fill(wx, wy, wx + 18, wy + 18, 0xFF373737);
         g.fill(wx + 1, wy + 1, wx + 18, wy + 18, 0xFFFFFFFF);
@@ -150,7 +150,7 @@ public class ColonyLinkRedirectorScreen extends AbstractContainerScreen<ColonyLi
     }
 
     /** Minimal procedural stand-in for the upgrade cell box (28x30 + well). */
-    private void drawFallbackUpgradeBox(GuiGraphics g, int bx, int by)
+    private void drawFallbackUpgradeBox(GuiGraphicsExtractor g, int bx, int by)
     {
         g.fill(bx, by, bx + AeGuiBlits.UPGRADE_CELL_W, by + AeGuiBlits.UPGRADE_CELL_H, 0xFFC6C6C6);
         g.fill(bx, by, bx + AeGuiBlits.UPGRADE_CELL_W, by + 1, AeGuiBlits.AE_TEXT);
@@ -164,15 +164,15 @@ public class ColonyLinkRedirectorScreen extends AbstractContainerScreen<ColonyLi
     // ── Labels (title + compact 2-line header + inventory label) ──────────────
 
     @Override
-    protected void renderLabels(GuiGraphics graphics, int mouseX, int mouseY)
+    protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY)
     {
         // Light AE body → dark palette text, flat (no shadow). Statuses use the
         // light-body semantic tints already calibrated in ColonyLinkGuiConfig.
         ColonyLinkGuiConfig cfg = ColonyLinkGuiConfig.get();
 
-        graphics.drawString(this.font, this.title, this.titleLabelX, this.titleLabelY,
+        GuiCompat.drawString(graphics, this.font, this.title, this.titleLabelX, this.titleLabelY,
                 AeGuiBlits.AE_TEXT, false);
-        graphics.drawString(this.font, this.playerInventoryTitle, this.inventoryLabelX, this.inventoryLabelY,
+        GuiCompat.drawString(graphics, this.font, this.playerInventoryTitle, this.inventoryLabelX, this.inventoryLabelY,
                 AeGuiBlits.AE_TEXT, false);
 
         ColonyLinkRedirectorBlockEntity be = menu.getBlockEntity();
@@ -186,7 +186,7 @@ public class ColonyLinkRedirectorScreen extends AbstractContainerScreen<ColonyLi
             {
                 String line = ChatFormatting.stripFormatting(
                         Component.translatable("colonylink.screen.info.builder", bName).getString());
-                graphics.drawString(this.font, ellipsize(line, GUI_WIDTH - 16),
+                GuiCompat.drawString(graphics, this.font, ellipsize(line, GUI_WIDTH - 16),
                         8, HEADER1_Y, AeGuiBlits.AE_TEXT, false);
             }
         }
@@ -203,7 +203,7 @@ public class ColonyLinkRedirectorScreen extends AbstractContainerScreen<ColonyLi
         String wandText = ChatFormatting.stripFormatting(Component.translatable(
                 wandLinked ? "colonylink.redir.clipboard_linked"
                            : "colonylink.redir.clipboard_unlinked").getString());
-        graphics.drawString(this.font, ellipsize(wandText, GUI_WIDTH - 16),
+        GuiCompat.drawString(graphics, this.font, ellipsize(wandText, GUI_WIDTH - 16),
                 8, HEADER2_Y, wandLinked ? cfg.semGreen() : cfg.semRed(), false);
     }
 
@@ -225,7 +225,7 @@ public class ColonyLinkRedirectorScreen extends AbstractContainerScreen<ColonyLi
      * normal item rendering.
      */
     @Override
-    protected void renderSlot(GuiGraphics graphics, Slot slot)
+    protected void extractSlot(GuiGraphicsExtractor graphics, Slot slot, int mouseX, int mouseY)
     {
         ItemStack inSlot = slot.getItem();
         if (slot instanceof net.neoforged.neoforge.items.SlotItemHandler
@@ -241,23 +241,23 @@ public class ColonyLinkRedirectorScreen extends AbstractContainerScreen<ColonyLi
                 if (this.isHovering(slot.x, slot.y, 16, 16, (double) lastMouseX, (double) lastMouseY))
                     graphics.fill(x, y, x + 16, y + 16, 0x80FFFFFF);
 
-                graphics.renderItem(target, x, y);
-                graphics.renderItemDecorations(this.font, target, x, y, null);
+                graphics.item(target, x, y);
+                graphics.itemDecorations(this.font, target, x, y, null);
                 return;
             }
         }
-        super.renderSlot(graphics, slot);
+        super.extractSlot(graphics, slot, mouseX, mouseY);
     }
 
     // Track mouse pos for the highlight in renderSlot
     private int lastMouseX = 0, lastMouseY = 0;
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick)
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick)
     {
         lastMouseX = mouseX;
         lastMouseY = mouseY;
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.extractRenderState(graphics, mouseX, mouseY, partialTick);
 
         // Custom tooltip for the Domum pattern slots of the buffer.
         boolean domumTooltipShown = false;
@@ -297,7 +297,7 @@ public class ColonyLinkRedirectorScreen extends AbstractContainerScreen<ColonyLi
                 tt.add(Component.translatable("colonylink.redir.no_variant"));
             }
 
-            if (hasShiftDown())
+            if (this.minecraft.hasShiftDown())
             {
                 // Materials — shift only
                 List<DomumPatternItem.MaterialEntry> mats =
@@ -318,7 +318,7 @@ public class ColonyLinkRedirectorScreen extends AbstractContainerScreen<ColonyLi
                         .withStyle(ChatFormatting.DARK_GRAY));
             }
 
-            graphics.renderComponentTooltip(this.font, tt, mouseX, mouseY);
+            graphics.setComponentTooltipForNextFrame(this.font, tt, mouseX, mouseY);
             domumTooltipShown = true;
             break;
         }
@@ -343,24 +343,24 @@ public class ColonyLinkRedirectorScreen extends AbstractContainerScreen<ColonyLi
                 tooltip.add(Component.translatable("colonylink.redir.card_inserted"));
             else
                 tooltip.add(Component.translatable("colonylink.redir.card_empty"));
-            graphics.renderComponentTooltip(this.font, tooltip, mouseX, mouseY);
+            graphics.setComponentTooltipForNextFrame(this.font, tooltip, mouseX, mouseY);
             cardTooltipShown = true;
         }
 
         // Vanilla tooltip only when no custom tooltip is shown
         if (!domumTooltipShown && !cardTooltipShown)
-            this.renderTooltip(graphics, mouseX, mouseY);
+            this.extractTooltip(graphics, mouseX, mouseY);
     }
 
     // ── JEI integration ───────────────────────────────────────────────────────
 
     /**
      * Screen-absolute areas covered by GUI parts that overflow the panel bounds —
-     * the upgrade-cell box on the right. Consumed by ColonyLinkJeiPlugin
+     * the upgrade-cell box on the right. Consumed by ColonyLinkEmiPlugin
      * (IGuiContainerHandler.getGuiExtraAreas) so the JEI overlay never overlaps it,
      * mirroring AE2's UpgradesPanel.addExclusionZones.
      */
-    public List<Rect2i> getJeiExclusionAreas()
+    public List<Rect2i> getViewerExclusionAreas()
     {
         return List.of(new Rect2i(upgradeBoxX(), upgradeBoxY(),
                 AeGuiBlits.UPGRADE_CELL_W, AeGuiBlits.UPGRADE_CELL_H));

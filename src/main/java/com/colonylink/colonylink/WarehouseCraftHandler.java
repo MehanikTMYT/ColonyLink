@@ -70,7 +70,7 @@ public class WarehouseCraftHandler
         // as the normal craft path (CraftHandler) before any validation or use.
         realCount = net.minecraft.util.Mth.clamp(realCount, 1, CraftHandler.MAX_CRAFT_COUNT);
 
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = player.level();
 
         // ── Détection wand ────────────────────────────────────────────────────
         ItemStack wandStack = findWandInInventory(player);
@@ -369,7 +369,7 @@ public class WarehouseCraftHandler
 
         for (IMateriallyTexturedBlockComponent component : texturedBlock.getComponents())
         {
-            Block materialBlock = textureData.getTexturedComponents().get(component.getId());
+            Block materialBlock = textureData.components().get(component.getId());
             if (materialBlock == null)
             {
                 if (!component.isOptional())
@@ -479,8 +479,7 @@ public class WarehouseCraftHandler
             for (BlockPos rackPos : containerList)
             {
                 if (remainder.isEmpty()) break;
-                IItemHandler rackHandler = level.getCapability(
-                        Capabilities.ItemHandler.BLOCK, rackPos, null);
+                IItemHandler rackHandler = CapCompat.itemHandler(level, rackPos, null);
                 if (rackHandler == null) continue;
                 for (int slot = 0; slot < rackHandler.getSlots() && !remainder.isEmpty(); slot++)
                     remainder = rackHandler.insertItem(slot, remainder, false);
@@ -501,8 +500,7 @@ public class WarehouseCraftHandler
             if (containerList == null) return 0;
             for (BlockPos rackPos : containerList)
             {
-                IItemHandler rackHandler = level.getCapability(
-                        Capabilities.ItemHandler.BLOCK, rackPos, null);
+                IItemHandler rackHandler = CapCompat.itemHandler(level, rackPos, null);
                 if (rackHandler == null) continue;
                 for (int slot = 0; slot < rackHandler.getSlots(); slot++)
                 {
@@ -528,8 +526,7 @@ public class WarehouseCraftHandler
             if (containerList == null) return 0;
             for (BlockPos rackPos : containerList)
             {
-                IItemHandler rackHandler = level.getCapability(
-                        Capabilities.ItemHandler.BLOCK, rackPos, null);
+                IItemHandler rackHandler = CapCompat.itemHandler(level, rackPos, null);
                 if (rackHandler == null) continue;
                 for (int slot = 0; slot < rackHandler.getSlots(); slot++)
                 {
@@ -560,8 +557,7 @@ public class WarehouseCraftHandler
             for (BlockPos rackPos : containerList)
             {
                 if (remaining <= 0) break;
-                IItemHandler rackHandler = level.getCapability(
-                        Capabilities.ItemHandler.BLOCK, rackPos, null);
+                IItemHandler rackHandler = CapCompat.itemHandler(level, rackPos, null);
                 if (rackHandler == null) continue;
                 for (int slot = 0; slot < rackHandler.getSlots() && remaining > 0; slot++)
                 {

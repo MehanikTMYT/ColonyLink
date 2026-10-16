@@ -227,7 +227,7 @@ public class ColonyLinkServerTicker
     private static void sendFullUpdate(ServerPlayer player, BlockPos builderPos,
                                        int activeTabIndex, ItemStack wandStack)
     {
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = player.level();
 
         if (wandStack == null || !ColonyLinkWandLinkableHandler.isLinked(wandStack)) return;
 
@@ -853,7 +853,7 @@ public class ColonyLinkServerTicker
                 for (var comp : tb.getComponents())
                 {
                     net.minecraft.world.level.block.Block mat =
-                            td.getTexturedComponents().get(comp.getId());
+                            td.components().get(comp.getId());
                     if (mat != null)
                         lines.add(Component.translatable("colonylink.avail.domum_mat",
                                 new net.minecraft.world.item.ItemStack(mat).getDisplayName()));
@@ -897,7 +897,7 @@ public class ColonyLinkServerTicker
         java.util.List<BuilderEntry> entries = ColonyLinkWandLinkableHandler.getBuilderEntries(wandStack);
         if (entries.size() <= 1) return;
 
-        net.minecraft.server.level.ServerLevel level = player.serverLevel();
+        net.minecraft.server.level.ServerLevel level = player.level();
         java.util.List<Integer> counts = new java.util.ArrayList<>();
 
         for (int i = 0; i < entries.size(); i++)
@@ -1056,8 +1056,8 @@ public class ColonyLinkServerTicker
             ServerPlayer player, BuilderEntry entry)
     {
         ServerLevel lvl = entry.dimension() != null
-                ? player.server.getLevel(entry.dimension())
-                : player.serverLevel();
+                ? player.level().getServer().getLevel(entry.dimension())
+                : player.level();
         if (lvl == null) return null;
 
         IColony colony = IColonyManager.getInstance().getClosestColony(lvl, entry.builderPos());
@@ -1115,8 +1115,8 @@ public class ColonyLinkServerTicker
     private static boolean builderHutGone(ServerPlayer player, BuilderEntry entry)
     {
         ServerLevel lvl = entry.dimension() != null
-                ? player.server.getLevel(entry.dimension())
-                : player.serverLevel();
+                ? player.level().getServer().getLevel(entry.dimension())
+                : player.level();
         if (lvl == null) return false;
         IColony colony = IColonyManager.getInstance().getClosestColony(lvl, entry.builderPos());
         if (colony == null) return false;

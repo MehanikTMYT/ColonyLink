@@ -1,12 +1,10 @@
 package com.colonylink.colonylink;
 
 import appeng.api.features.GridLinkables;
-import appeng.api.parts.PartModels;
-import appeng.items.parts.PartModelsHelper;
 import com.mojang.logging.LogUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.CreativeModeTabs;
@@ -44,14 +42,14 @@ public class ColonyLink
 
     // ── Items ─────────────────────────────────────────────────────────────────
 
-    public static final DeferredItem<Item> COLONY_LINK_WAND = ITEMS.register("colony_link_wand",
-            () -> new ColonyLinkWand(new Item.Properties().stacksTo(1)));
+    public static final DeferredItem<Item> COLONY_LINK_WAND = ITEMS.registerItem("colony_link_wand",
+            props -> new ColonyLinkWand(props.stacksTo(1)));
 
-    public static final DeferredItem<Item> WAREHOUSE_LINK_CARD = ITEMS.register("warehouse_link_card",
-            () -> new WarehouseLinkCard());
+    public static final DeferredItem<Item> WAREHOUSE_LINK_CARD = ITEMS.registerItem("warehouse_link_card",
+            WarehouseLinkCard::new);
 
-    public static final DeferredItem<Item> COLONY_LINK_PACKAGE = ITEMS.register("colonylink_package",
-            () -> new ColonyLinkPackage());
+    public static final DeferredItem<Item> COLONY_LINK_PACKAGE = ITEMS.registerItem("colonylink_package",
+            ColonyLinkPackage::new);
 
     // ── Creative tab ──────────────────────────────────────────────────────────
 
@@ -82,19 +80,15 @@ public class ColonyLink
     {
         modEventBus.addListener(this::commonSetup);
         modEventBus.addListener(this::registerPayloads);
-        if (net.neoforged.fml.loading.FMLEnvironment.dist.isClient())
+        if (net.neoforged.fml.loading.FMLEnvironment.getDist().isClient())
             modEventBus.addListener(this::registerScreens);
-        if (net.neoforged.fml.loading.FMLEnvironment.dist.isClient())
-            modEventBus.addListener(ColonyLinkClient::onRegisterAdditionalModels);
-        if (net.neoforged.fml.loading.FMLEnvironment.dist.isClient())
+        if (net.neoforged.fml.loading.FMLEnvironment.getDist().isClient())
             modEventBus.addListener(ColonyLinkClient::onRegisterBlockEntityRenderers);
         modEventBus.addListener(ColonyLinkRegistry::registerCapabilities);
 
-        if (net.neoforged.fml.loading.FMLEnvironment.dist.isClient())
+        if (net.neoforged.fml.loading.FMLEnvironment.getDist().isClient())
             modEventBus.addListener(ColonyLinkClient::onRegisterItemDecorations);
-        if (net.neoforged.fml.loading.FMLEnvironment.dist.isClient())
-            modEventBus.addListener(ColonyLinkClient::onRegisterItemColors);
-        if (net.neoforged.fml.loading.FMLEnvironment.dist.isClient())
+        if (net.neoforged.fml.loading.FMLEnvironment.getDist().isClient())
             modEventBus.addListener(ColonyLinkClient::onRegisterKeyMappings);
 
         ITEMS.register(modEventBus);
@@ -109,13 +103,13 @@ public class ColonyLink
 
         AddPackageLootModifier.LOOT_MODIFIERS.register(modEventBus);
 
-        PartModels.registerModels(
-                PartModelsHelper.createModels(WarehouseLinkTerminalPart.class));
+        // PORT(26.1): part models and the terminal item tint are data-driven now
+        // (assets/colonylink/ae2/parts, assets/colonylink/items) — nothing to register here.
 
         NeoForge.EVENT_BUS.register(ColonyLinkServerTicker.class);
         NeoForge.EVENT_BUS.register(ColonyLinkCommand.class);
 
-        if (net.neoforged.fml.loading.FMLEnvironment.dist.isClient())
+        if (net.neoforged.fml.loading.FMLEnvironment.getDist().isClient())
             NeoForge.EVENT_BUS.addListener(ColonyLinkClient::onKeyInput);
         NeoForge.EVENT_BUS.addListener(ColonyLink::onRightClickBlock);
 
@@ -127,7 +121,6 @@ public class ColonyLink
 
     // ── Screens ───────────────────────────────────────────────────────────────
 
-    @OnlyIn(Dist.CLIENT)
     private void registerScreens(RegisterMenuScreensEvent event)
     {
         event.register(ColonyLinkRegistry.REDIRECTOR_MENU_TYPE.get(),
@@ -162,7 +155,7 @@ public class ColonyLink
 
         var wrenchTag = net.minecraft.tags.TagKey.create(
                 net.minecraft.core.registries.Registries.ITEM,
-                ResourceLocation.fromNamespaceAndPath("c", "tools/wrench"));
+                Identifier.fromNamespaceAndPath("c", "tools/wrench"));
 
         if (held.is(wrenchTag))
         {

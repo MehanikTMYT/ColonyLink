@@ -4,7 +4,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
@@ -18,7 +18,7 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 public record GuiStatePacket(boolean open, BlockPos builderPos, int activeTabIndex)
         implements CustomPacketPayload
 {
-    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(
+    public static final Identifier ID = Identifier.fromNamespaceAndPath(
             ColonyLink.MODID, "gui_state");
     public static final CustomPacketPayload.Type<GuiStatePacket> TYPE =
             new CustomPacketPayload.Type<>(ID);

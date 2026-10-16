@@ -13,7 +13,7 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
@@ -41,7 +41,7 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
  */
 public record CancelRequestPacket(BlockPos redirectorPos) implements CustomPacketPayload
 {
-    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(
+    public static final Identifier ID = Identifier.fromNamespaceAndPath(
             ColonyLink.MODID, "cancel_request");
     public static final CustomPacketPayload.Type<CancelRequestPacket> TYPE =
             new CustomPacketPayload.Type<>(ID);
@@ -62,7 +62,7 @@ public record CancelRequestPacket(BlockPos redirectorPos) implements CustomPacke
         context.enqueueWork(() -> {
             if (!(context.player() instanceof ServerPlayer serverPlayer)) return;
 
-            ServerLevel level = serverPlayer.serverLevel();
+            ServerLevel level = serverPlayer.level();
             BlockPos redirectorPos = packet.redirectorPos();
 
             // ── Détection wand (inclut Curios) ────────────────────────────────

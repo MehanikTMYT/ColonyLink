@@ -3,7 +3,7 @@ package com.colonylink.colonylink;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
@@ -13,7 +13,7 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
  */
 public record CitizensRequestPacket() implements CustomPacketPayload
 {
-    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(ColonyLink.MODID, "citizens_request");
+    public static final Identifier ID = Identifier.fromNamespaceAndPath(ColonyLink.MODID, "citizens_request");
     public static final CustomPacketPayload.Type<CitizensRequestPacket> TYPE = new CustomPacketPayload.Type<>(ID);
 
     public static final StreamCodec<RegistryFriendlyByteBuf, CitizensRequestPacket> STREAM_CODEC = StreamCodec.of(

@@ -21,7 +21,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResultHolder;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -117,8 +117,11 @@ public class ColonyLinkWand extends Item implements IAEItemPowerStorage
 
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context,
-                                List<Component> tooltip, TooltipFlag flag)
+                                net.minecraft.world.item.component.TooltipDisplay display,
+                                java.util.function.Consumer<Component> tooltipAdder, TooltipFlag flag)
     {
+        final List<Component> tooltip = new TooltipLines(tooltipAdder); // PORT(26.1)
+
         long stored   = WandEnergyStorage.getStoredRF(stack);
         long capacity = ColonyLinkConfig.safeGet(ColonyLinkConfig.WAND_RF_CAPACITY, 160_000L);
         // v1.6.1 — si le cap a ete abaisse alors que le wand etait charge au-dessus, on
@@ -179,38 +182,38 @@ public class ColonyLinkWand extends Item implements IAEItemPowerStorage
     // ── use() — clic droit AIR ────────────────────────────────────────────────
 
     @Override
-    public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand)
+    public InteractionResult use(Level level, Player player, InteractionHand hand)
     {
         ItemStack wandStack = player.getItemInHand(hand);
-        if (level.isClientSide()) return InteractionResultHolder.pass(wandStack);
-        if (player.isShiftKeyDown()) return InteractionResultHolder.pass(wandStack);
-        if (!(player instanceof ServerPlayer sp)) return InteractionResultHolder.pass(wandStack);
+        if (level.isClientSide()) return InteractionResult.PASS;
+        if (player.isShiftKeyDown()) return InteractionResult.PASS;
+        if (!(player instanceof ServerPlayer sp)) return InteractionResult.PASS;
 
         if (WandEnergyStorage.getStoredRF(wandStack) <= 0)
         {
             player.sendSystemMessage(Component.translatable("colonylink.wand.msg.out_of_power"));
-            return InteractionResultHolder.fail(wandStack);
+            return InteractionResult.FAIL;
         }
 
         if (!ColonyLinkWandLinkableHandler.isLinked(wandStack))
         {
             player.sendSystemMessage(Component.translatable("colonylink.wand.msg.not_linked"));
-            return InteractionResultHolder.fail(wandStack);
+            return InteractionResult.FAIL;
         }
 
         List<BuilderEntry> entries = ColonyLinkWandLinkableHandler.getBuilderEntries(wandStack);
         if (entries.isEmpty())
         {
             player.sendSystemMessage(Component.translatable("colonylink.wand.msg.no_builder_yet"));
-            return InteractionResultHolder.fail(wandStack);
+            return InteractionResult.FAIL;
         }
 
         int activeTab = ColonyLinkWandLinkableHandler.getActiveTab(wandStack);
         BuilderEntry active = entries.get(Math.min(activeTab, entries.size() - 1));
 
         return openGUIStatic(wandStack, sp, (ServerLevel) level, active.builderPos(), activeTab)
-                ? InteractionResultHolder.success(wandStack)
-                : InteractionResultHolder.fail(wandStack);
+                ? InteractionResult.SUCCESS
+                : InteractionResult.FAIL;
     }
 
     // ── useOn() — clic droit sur BLOC ─────────────────────────────────────────
@@ -228,7 +231,7 @@ public class ColonyLinkWand extends Item implements IAEItemPowerStorage
             return net.minecraft.world.InteractionResult.PASS;
 
         ItemStack wandStack = null;
-        for (ItemStack s : player.getInventory().items)
+        for (ItemStack s : player.getInventory().getNonEquipmentItems())
             if (s.getItem() instanceof ColonyLinkWand) { wandStack = s; break; }
         if (wandStack == null) wandStack = context.getItemInHand();
 

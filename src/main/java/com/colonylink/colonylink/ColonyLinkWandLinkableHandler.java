@@ -6,7 +6,7 @@ import net.minecraft.core.GlobalPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.level.Level;
@@ -72,7 +72,7 @@ public class ColonyLinkWandLinkableHandler implements IGridLinkableHandler
             tag.putInt(NBT_LINKED_X, pos.pos().getX());
             tag.putInt(NBT_LINKED_Y, pos.pos().getY());
             tag.putInt(NBT_LINKED_Z, pos.pos().getZ());
-            tag.putString(NBT_LINKED_DIM, pos.dimension().location().toString());
+            tag.putString(NBT_LINKED_DIM, pos.dimension().identifier().toString());
             return CustomData.of(tag);
         });
     }
@@ -106,14 +106,14 @@ public class ColonyLinkWandLinkableHandler implements IGridLinkableHandler
         var tag = data.copyTag();
         if (!tag.contains(NBT_LINKED_DIM)) return null;
 
-        int x = tag.getInt(NBT_LINKED_X);
-        int y = tag.getInt(NBT_LINKED_Y);
-        int z = tag.getInt(NBT_LINKED_Z);
-        String dimStr = tag.getString(NBT_LINKED_DIM);
+        int x = tag.getIntOr(NBT_LINKED_X, 0);
+        int y = tag.getIntOr(NBT_LINKED_Y, 0);
+        int z = tag.getIntOr(NBT_LINKED_Z, 0);
+        String dimStr = tag.getStringOr(NBT_LINKED_DIM, "");
 
         ResourceKey<Level> dimKey = ResourceKey.create(
                 Registries.DIMENSION,
-                ResourceLocation.parse(dimStr)
+                Identifier.parse(dimStr)
         );
         return GlobalPos.of(dimKey, new BlockPos(x, y, z));
     }
@@ -135,21 +135,21 @@ public class ColonyLinkWandLinkableHandler implements IGridLinkableHandler
         {
             List<BuilderEntry> migrated = new ArrayList<>();
             BlockPos bPos = new BlockPos(
-                    tag.getInt(LEGACY_BUILDER_X),
-                    tag.getInt(LEGACY_BUILDER_Y),
-                    tag.getInt(LEGACY_BUILDER_Z));
+                    tag.getIntOr(LEGACY_BUILDER_X, 0),
+                    tag.getIntOr(LEGACY_BUILDER_Y, 0),
+                    tag.getIntOr(LEGACY_BUILDER_Z, 0));
             BlockPos rPos = tag.contains(LEGACY_REDIRECTOR_X)
                     ? new BlockPos(
-                    tag.getInt(LEGACY_REDIRECTOR_X),
-                    tag.getInt(LEGACY_REDIRECTOR_Y),
-                    tag.getInt(LEGACY_REDIRECTOR_Z))
+                    tag.getIntOr(LEGACY_REDIRECTOR_X, 0),
+                    tag.getIntOr(LEGACY_REDIRECTOR_Y, 0),
+                    tag.getIntOr(LEGACY_REDIRECTOR_Z, 0))
                     : BlockPos.ZERO;
             migrated.add(new BuilderEntry(bPos, rPos, "Builder", "N/A", null));
             return migrated;
         }
 
         if (!tag.contains(NBT_BUILDER_ENTRIES)) return new ArrayList<>();
-        return BuilderEntry.listFromNbt(tag.getList(NBT_BUILDER_ENTRIES, 10));
+        return BuilderEntry.listFromNbt(tag.getListOrEmpty(NBT_BUILDER_ENTRIES));
     }
 
     /** Écrit la liste de BuilderEntry dans le NBT de la wand. */
@@ -240,7 +240,7 @@ public class ColonyLinkWandLinkableHandler implements IGridLinkableHandler
         if (data == null) return 0;
         var tag = data.copyTag();
         if (!tag.contains(NBT_ACTIVE_TAB)) return 0;
-        int tab = tag.getInt(NBT_ACTIVE_TAB);
+        int tab = tag.getIntOr(NBT_ACTIVE_TAB, 0);
         List<BuilderEntry> entries = getBuilderEntries(stack);
         // v1.6.2 — clamp low bound too: a wand whose NBT was poisoned with a
         // negative active_tab (modified client) self-heals instead of crashing on
@@ -312,7 +312,7 @@ public class ColonyLinkWandLinkableHandler implements IGridLinkableHandler
         net.minecraft.world.item.component.CustomData data = stack.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
         if (data == null) return 0;
         var tag = data.copyTag();
-        return tag.contains(NBT_CITIZEN_PACKAGES) ? tag.getInt(NBT_CITIZEN_PACKAGES) : 0;
+        return tag.contains(NBT_CITIZEN_PACKAGES) ? tag.getIntOr(NBT_CITIZEN_PACKAGES, 0) : 0;
     }
 
     /** Définit le nombre de packages (clamped 0..MAX_PACKAGES). */
@@ -457,9 +457,9 @@ public class ColonyLinkWandLinkableHandler implements IGridLinkableHandler
         var tag = data.copyTag();
         if (!tag.contains(NBT_SENT_REQUESTS)) return new java.util.HashSet<>();
         java.util.Set<String> keys = new java.util.HashSet<>();
-        var list = tag.getList(NBT_SENT_REQUESTS, 8); // 8 = TAG_String
+        var list = tag.getListOrEmpty(NBT_SENT_REQUESTS); // 8 = TAG_String
         for (int i = 0; i < list.size(); i++)
-            keys.add(list.getString(i));
+            keys.add(list.getStringOr(i, ""));
         return keys;
     }
 
@@ -480,12 +480,12 @@ public class ColonyLinkWandLinkableHandler implements IGridLinkableHandler
                 net.minecraft.world.item.component.CustomData.EMPTY, data -> {
                     var tag = data.copyTag();
                     net.minecraft.nbt.ListTag old = tag.contains(NBT_SENT_REQUESTS)
-                            ? tag.getList(NBT_SENT_REQUESTS, 8)
+                            ? tag.getListOrEmpty(NBT_SENT_REQUESTS)
                             : new net.minecraft.nbt.ListTag();
                     net.minecraft.nbt.ListTag list = new net.minecraft.nbt.ListTag();
                     for (int i = 0; i < old.size(); i++)
                     {
-                        String k = old.getString(i);
+                        String k = old.getStringOr(i, "");
                         if (k.equals(key)) return data; // exact duplicate, nothing to do
                         if (identityPrefix != null && k.startsWith(identityPrefix))
                             continue; // same (builder, item) with stale baseline — replace
@@ -514,11 +514,11 @@ public class ColonyLinkWandLinkableHandler implements IGridLinkableHandler
                 net.minecraft.world.item.component.CustomData.EMPTY, data -> {
                     var tag = data.copyTag();
                     if (!tag.contains(NBT_SENT_REQUESTS)) return data;
-                    net.minecraft.nbt.ListTag old = tag.getList(NBT_SENT_REQUESTS, 8);
+                    net.minecraft.nbt.ListTag old = tag.getListOrEmpty(NBT_SENT_REQUESTS);
                     net.minecraft.nbt.ListTag pruned = new net.minecraft.nbt.ListTag();
                     for (int i = 0; i < old.size(); i++)
                     {
-                        String k = old.getString(i);
+                        String k = old.getStringOr(i, "");
                         boolean recognized = k.startsWith(SENT_PREFIX_BUILDER)
                                 || k.startsWith(SENT_PREFIX_CITIZEN);
                         if (!recognized) continue; // legacy unprefixed key — drop

@@ -1,9 +1,10 @@
 package com.colonylink.colonylink;
 
-import com.mojang.blaze3d.systems.RenderSystem;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.util.ARGB;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.resources.Identifier;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 
@@ -17,12 +18,11 @@ import net.neoforged.api.distmarker.OnlyIn;
  * the AE2 upgrade-panel cell (the overflowing side box).
  *
  * <p>Legal frame (validated on the Clipboard): AE2 assets are CC BY-NC-SA and are
- * referenced by ResourceLocation AT RUNTIME ONLY — never copied into this repo.
+ * referenced by Identifier AT RUNTIME ONLY — never copied into this repo.
  * AE2 is a required dependency so they are guaranteed present, but internal asset
  * paths are not API: callers probe once at init() ({@link #probeTexture}) and fall
  * back to a procedural painter — never a magenta missing-texture.
  */
-@OnlyIn(Dist.CLIENT)
 public final class AeGuiBlits
 {
     private AeGuiBlits() {}
@@ -34,21 +34,21 @@ public final class AeGuiBlits
     public static final int AE_MUTED = 0xFF878FA5;
 
     // ── AE2 frame + light body (nine-slice source) ────────────────────────────
-    public static final ResourceLocation AE_BACKGROUND =
-            ResourceLocation.fromNamespaceAndPath("ae2", "textures/guis/background.png");
+    public static final Identifier AE_BACKGROUND =
+            Identifier.fromNamespaceAndPath("ae2", "textures/guis/background.png");
     public static final int AE_BG_BORDER = 4;    // nine-slice border, px
     public static final int AE_BG_TEX    = 256;  // background.png is 256x256
     public static final int AE_BG_TILE   = 248;  // source edge/center band = 256 - 2*4
 
     // ── AE2 button sprites (atlas ids + probe file) ───────────────────────────
-    public static final ResourceLocation AE_BTN_NORMAL   = ResourceLocation.fromNamespaceAndPath("ae2", "button");
-    public static final ResourceLocation AE_BTN_HOVER    = ResourceLocation.fromNamespaceAndPath("ae2", "button_highlighted");
-    public static final ResourceLocation AE_BTN_DISABLED = ResourceLocation.fromNamespaceAndPath("ae2", "button_disabled");
-    public static final ResourceLocation AE_BTN_PROBE    = ResourceLocation.fromNamespaceAndPath("ae2", "textures/gui/sprites/button.png");
+    public static final Identifier AE_BTN_NORMAL   = Identifier.fromNamespaceAndPath("ae2", "button");
+    public static final Identifier AE_BTN_HOVER    = Identifier.fromNamespaceAndPath("ae2", "button_highlighted");
+    public static final Identifier AE_BTN_DISABLED = Identifier.fromNamespaceAndPath("ae2", "button_disabled");
+    public static final Identifier AE_BTN_PROBE    = Identifier.fromNamespaceAndPath("ae2", "textures/gui/sprites/button.png");
 
     // ── AE2 states.png (generic GUI sprites — slot wells, tabs, icons) ────────
-    public static final ResourceLocation AE_STATES =
-            ResourceLocation.fromNamespaceAndPath("ae2", "textures/guis/states.png");
+    public static final Identifier AE_STATES =
+            Identifier.fromNamespaceAndPath("ae2", "textures/guis/states.png");
     public static final int AE_STATES_TEX = 256;  // states.png is 256x256
     /** AE2 Icon.SLOT_BACKGROUND — the standard 18x18 slot well inside states.png. */
     public static final int SLOT_BG_U = 192;
@@ -56,8 +56,8 @@ public final class AeGuiBlits
     public static final int SLOT_BG_SIZE = 18;
 
     // ── AE2 extra_panels.png (upgrade side-box cells) ─────────────────────────
-    public static final ResourceLocation AE_EXTRA_PANELS =
-            ResourceLocation.fromNamespaceAndPath("ae2", "textures/guis/extra_panels.png");
+    public static final Identifier AE_EXTRA_PANELS =
+            Identifier.fromNamespaceAndPath("ae2", "textures/guis/extra_panels.png");
     public static final int AE_EXTRA_PANELS_TEX = 128;  // extra_panels.png is 128x128 (measured)
     /** AE2's src rect for one all-borders cell: src(0,0,28,30) — matches UpgradesPanel.drawSlot
      *  (18 + 5 left/top + 5 right, +7 bottom). NOTE (measured from the real PNG): the cell's
@@ -79,36 +79,32 @@ public final class AeGuiBlits
      * frame). Internal AE2/MineColonies asset paths are not API — probe + silent
      * procedural fallback is the validated pattern.
      */
-    public static boolean probeTexture(ResourceLocation tex)
+    public static boolean probeTexture(Identifier tex)
     {
         Minecraft mc = Minecraft.getInstance();
         return mc != null && mc.getResourceManager().getResource(tex).isPresent();
     }
 
     /**
-     * Tinted texture blit that actually honours alpha. GuiGraphics' raw-ResourceLocation
+     * Tinted texture blit that actually honours alpha. GuiGraphicsExtractor' raw-Identifier
      * blit routes to a no-blend, no-colour innerBlit (POSITION_TEX shader), so setColor's
      * alpha is written but never composited — the blit stays opaque. We reproduce MC's own
      * tinted-blit discipline (enableBlend -> shader colour -> blit -> disableBlend, cf. the
-     * per-vertex-colour GuiGraphics.innerBlit) around the raw blit. Blend + shader colour are
+     * per-vertex-colour GuiGraphicsExtractor.innerBlit) around the raw blit. Blend + shader colour are
      * reset on exit so no later render is tinted.
      */
-    public static void blitTinted(GuiGraphics g, ResourceLocation tex, int x, int y,
+    public static void blitTinted(GuiGraphicsExtractor g, Identifier tex, int x, int y,
                                   int u, int v, int w, int h, int texW, int texH, float alpha)
     {
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        g.setColor(1f, 1f, 1f, alpha);
-        g.blit(tex, x, y, u, v, w, h, texW, texH);
-        g.setColor(1f, 1f, 1f, 1f);
-        RenderSystem.disableBlend();
+        // PORT(26.1): no shader colour / blend state any more — the tint is the blit's vertex colour.
+        g.blit(RenderPipelines.GUI_TEXTURED, tex, x, y, u, v, w, h, texW, texH, ARGB.white(alpha));
     }
 
     /**
      * Like {@link #blitTinted}, but STRETCHES a source region (sw×sh at u,v within a
      * texW×texH texture) to the destination rect (w×h). Honours opacity/blend.
      */
-    public static void blitTintedStretched(GuiGraphics g, ResourceLocation tex, int x, int y,
+    public static void blitTintedStretched(GuiGraphicsExtractor g, Identifier tex, int x, int y,
                                            int w, int h, float u, float v, int sw, int sh,
                                            int texW, int texH, float alpha)
     {
@@ -120,21 +116,17 @@ public final class AeGuiBlits
      * &lt;1.0 = darker). Used e.g. for hover states of textured buttons that have no hover
      * sprite. Blend + tint are reset on all paths.
      */
-    public static void blitTintedStretched(GuiGraphics g, ResourceLocation tex, int x, int y,
+    public static void blitTintedStretched(GuiGraphicsExtractor g, Identifier tex, int x, int y,
                                            int w, int h, float u, float v, int sw, int sh,
                                            int texW, int texH, float bright, float alpha)
     {
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        g.setColor(bright, bright, bright, alpha);
-        g.blit(tex, x, y, w, h, u, v, sw, sh, texW, texH);
-        g.setColor(1f, 1f, 1f, 1f);
-        RenderSystem.disableBlend();
+        g.blit(RenderPipelines.GUI_TEXTURED, tex, x, y, u, v, w, h, sw, sh, texW, texH,
+                ARGB.colorFromFloat(alpha, bright, bright, bright));
     }
 
     /**
      * AE2 frame drawn by blitting AE2's own background.png as a nine-slice,
-     * re-implemented with GuiGraphics (AE2's BackgroundGenerator/Blitter are
+     * re-implemented with GuiGraphicsExtractor (AE2's BackgroundGenerator/Blitter are
      * internal, unpublished API and are NOT called). BORDER=4px corners at native
      * size; edges tiled 1:1 in {@code AE_BG_TILE}-wide chunks (no scaling, so a
      * non-integer GUI scale magnifies with nearest-neighbour, not blur).
@@ -147,7 +139,7 @@ public final class AeGuiBlits
      * {@code alpha} is the effective opacity (config opacity multiplied over the
      * texture's own alpha). The tint is reset to opaque on every exit path.
      */
-    public static void drawAeNineSlice(GuiGraphics g, int x, int y, int w, int h, float alpha, boolean withCenter)
+    public static void drawAeNineSlice(GuiGraphicsExtractor g, int x, int y, int w, int h, float alpha, boolean withCenter)
     {
         // Degenerate: no room for a border ring on both sides — draw nothing.
         if (w < AE_BG_BORDER * 2 || h < AE_BG_BORDER * 2) return;
@@ -199,19 +191,14 @@ public final class AeGuiBlits
      * Honours the given alpha; blend + tint are reset on exit so nothing later is
      * tinted. Background only — the caller draws the label on top.
      */
-    public static void drawAeButtonBg(GuiGraphics g, int x, int y, int w, int h, AeBtnVis vis, float alpha)
+    public static void drawAeButtonBg(GuiGraphicsExtractor g, int x, int y, int w, int h, AeBtnVis vis, float alpha)
     {
-        ResourceLocation sprite = switch (vis) {
+        Identifier sprite = switch (vis) {
             case HOVER    -> AE_BTN_HOVER;
             case DISABLED -> AE_BTN_DISABLED;
             case NORMAL   -> AE_BTN_NORMAL;
         };
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        g.setColor(1f, 1f, 1f, alpha);
-        g.blitSprite(sprite, x, y, w, h);
-        g.setColor(1f, 1f, 1f, 1f);
-        RenderSystem.disableBlend();
+        g.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, x, y, w, h, ARGB.white(alpha));
     }
 
     // ── New for the Redirector chantier ───────────────────────────────────────
@@ -220,7 +207,7 @@ public final class AeGuiBlits
      * Generic tinted blit of a sprite region from AE2's states.png (256x256) —
      * e.g. the standard slot well {@code SLOT_BG_*} at (slotX-1, slotY-1).
      */
-    public static void blitStatesSprite(GuiGraphics g, int srcX, int srcY, int w, int h,
+    public static void blitStatesSprite(GuiGraphicsExtractor g, int srcX, int srcY, int w, int h,
                                         int destX, int destY, float alpha)
     {
         blitTinted(g, AE_STATES, destX, destY, srcX, srcY, w, h, AE_STATES_TEX, AE_STATES_TEX, alpha);
@@ -245,7 +232,7 @@ public final class AeGuiBlits
      * SlotItemHandlers draw no icon either, so the cell renders as Fab specified:
      * an empty AE2 upgrade slot.
      */
-    public static void drawUpgradeCell(GuiGraphics g, int x, int y, float alpha)
+    public static void drawUpgradeCell(GuiGraphicsExtractor g, int x, int y, float alpha)
     {
         blitTinted(g, AE_EXTRA_PANELS, x, y, 0, 0, UPGRADE_CELL_W, UPGRADE_CELL_H,
                 AE_EXTRA_PANELS_TEX, AE_EXTRA_PANELS_TEX, alpha);

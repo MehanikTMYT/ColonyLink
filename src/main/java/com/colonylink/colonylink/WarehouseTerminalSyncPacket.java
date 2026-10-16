@@ -4,7 +4,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
@@ -26,7 +26,7 @@ public record WarehouseTerminalSyncPacket(
 {
     public record WarehouseItemEntry(ItemStack stack, long count) {}
 
-    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(
+    public static final Identifier ID = Identifier.fromNamespaceAndPath(
             ColonyLink.MODID, "warehouse_terminal_sync");
     public static final CustomPacketPayload.Type<WarehouseTerminalSyncPacket> TYPE =
             new CustomPacketPayload.Type<>(ID);

@@ -6,10 +6,10 @@
     "EFE"
   ],
   "key": {
-    "E": { "item": "minecraft:ender_pearl" },
-    "F": { "item": "ae2:fluix_crystal" },
-    "B": { "item": "minecolonies:clipboard" },
-    "L": { "item": "ae2:logic_processor" }
+    "E": "minecraft:ender_pearl",
+    "F": "ae2:fluix_crystal",
+    "B": "minecolonies:clipboard",
+    "L": "ae2:logic_processor"
   },
   "result": {
     "id": "colonylink:colony_link_wand",

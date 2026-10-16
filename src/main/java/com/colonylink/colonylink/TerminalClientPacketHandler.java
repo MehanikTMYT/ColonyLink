@@ -15,7 +15,6 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
  * ne doivent PAS contenir de références directes à Screen ou ses sous-classes.
  * Elles délèguent ici via registerPayloads() côté client uniquement.
  */
-@OnlyIn(Dist.CLIENT)
 public class TerminalClientPacketHandler
 {
     public static void handleWarehouseSync(WarehouseTerminalSyncPacket packet, IPayloadContext ctx)

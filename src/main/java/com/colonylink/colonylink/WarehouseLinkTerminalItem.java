@@ -27,9 +27,9 @@ import java.util.List;
 public class WarehouseLinkTerminalItem extends Item
         implements IPartItem<WarehouseLinkTerminalPart>
 {
-    public WarehouseLinkTerminalItem()
+    public WarehouseLinkTerminalItem(Item.Properties properties)
     {
-        super(new Item.Properties().stacksTo(1));
+        super(properties.stacksTo(1));
     }
 
     // ── IPartItem ─────────────────────────────────────────────────────────────
@@ -57,13 +57,15 @@ public class WarehouseLinkTerminalItem extends Item
     // ── Tooltip ───────────────────────────────────────────────────────────────
 
     @Override
-    @OnlyIn(Dist.CLIENT)
     public void appendHoverText(ItemStack stack, TooltipContext ctx,
-                                List<Component> tooltip, TooltipFlag flag)
+                                net.minecraft.world.item.component.TooltipDisplay display,
+                                java.util.function.Consumer<Component> tooltipAdder, TooltipFlag flag)
     {
+        final List<Component> tooltip = new TooltipLines(tooltipAdder); // PORT(26.1)
+
         tooltip.add(Component.translatable("colonylink.term_item.line1"));
 
-        if (net.minecraft.client.gui.screens.Screen.hasShiftDown())
+        if (net.minecraft.client.Minecraft.getInstance().hasShiftDown())
         {
             tooltip.add(Component.translatable("colonylink.tip.setup").withStyle(ChatFormatting.YELLOW));
             tooltip.add(Component.translatable("colonylink.term_item.setup1"));

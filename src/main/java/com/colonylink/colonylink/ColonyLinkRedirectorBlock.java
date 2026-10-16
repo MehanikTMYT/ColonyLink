@@ -1,6 +1,6 @@
 package com.colonylink.colonylink;
 
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
@@ -19,7 +19,9 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
-import net.minecraft.world.level.block.state.properties.DirectionProperty;
+import net.minecraft.world.level.block.state.properties.EnumProperty;
+import net.minecraft.world.level.redstone.Orientation;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.Nullable;
@@ -28,14 +30,15 @@ import java.util.List;
 
 public class ColonyLinkRedirectorBlock extends Block implements EntityBlock
 {
-    public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
+    public static final EnumProperty<net.minecraft.core.Direction> FACING = BlockStateProperties.HORIZONTAL_FACING;
 
     /** true while a craft is in progress (or outputs await injection): drives _off/_on models. */
     public static final BooleanProperty WORKING = BooleanProperty.create("working");
 
-    public ColonyLinkRedirectorBlock()
+    public ColonyLinkRedirectorBlock(BlockBehaviour.Properties properties)
     {
-        super(BlockBehaviour.Properties.of()
+        // PORT(26.1): the registry hands in Properties already carrying the block id.
+        super(properties
                 .strength(0.5f)
                 .destroyTime(0.5f)
                 // The upper half is a glass cage: without noOcclusion() the block is
@@ -93,10 +96,10 @@ public class ColonyLinkRedirectorBlock extends Block implements EntityBlock
      * Ici on met juste à jour l'état du redirector en réponse au changement de voisin.
      */
     @Override
-    public void neighborChanged(BlockState state, Level level, BlockPos pos,
-                                Block neighborBlock, BlockPos neighborPos, boolean movedByPiston)
+    protected void neighborChanged(BlockState state, Level level, BlockPos pos,
+                                   Block neighborBlock, @org.jetbrains.annotations.Nullable Orientation orientation, boolean movedByPiston)
     {
-        super.neighborChanged(state, level, pos, neighborBlock, neighborPos, movedByPiston);
+        super.neighborChanged(state, level, pos, neighborBlock, orientation, movedByPiston);
         if (level.isClientSide()) return;
 
         var be = level.getBlockEntity(pos);
@@ -118,35 +121,16 @@ public class ColonyLinkRedirectorBlock extends Block implements EntityBlock
         level.updateNeighborsAt(pos, this);
     }
 
+    /**
+     * PORT(26.1): onRemove is gone. The buffer/card drops moved to
+     * {@link ColonyLinkRedirectorBlockEntity#preRemoveSideEffects}, which vanilla only calls when the block is
+     * really replaced; the neighbour update stays here so adjacent AE2 cables drop the node.
+     */
     @Override
-    public void onRemove(BlockState state, Level level, BlockPos pos,
-                         BlockState newState, boolean movedByPiston)
+    protected void affectNeighborsAfterRemoval(BlockState state, ServerLevel level, BlockPos pos, boolean movedByPiston)
     {
-        if (!state.hasBlockEntity() || state.getBlock() == newState.getBlock())
-        {
-            super.onRemove(state, level, pos, newState, movedByPiston);
-            return;
-        }
-        if (!level.isClientSide())
-        {
-            var be = level.getBlockEntity(pos);
-            if (be instanceof ColonyLinkRedirectorBlockEntity redirector)
-            {
-                // Droppe le contenu du buffer
-                for (int slot = 0; slot < redirector.buffer.getSlots(); slot++)
-                {
-                    net.minecraft.world.item.ItemStack stack = redirector.buffer.getStackInSlot(slot);
-                    if (!stack.isEmpty())
-                        Block.popResource(level, pos, stack);
-                }
-                // Droppe la Warehouse Link Card si présente
-                net.minecraft.world.item.ItemStack card = redirector.warehouseCardSlot.getStackInSlot(0);
-                if (!card.isEmpty())
-                    Block.popResource(level, pos, card);
-            }
-            level.updateNeighborsAt(pos, this);
-        }
-        super.onRemove(state, level, pos, newState, movedByPiston);
+        super.affectNeighborsAfterRemoval(state, level, pos, movedByPiston);
+        level.updateNeighborsAt(pos, this);
     }
 
     /**
@@ -179,7 +163,7 @@ public class ColonyLinkRedirectorBlock extends Block implements EntityBlock
         // pas d'ouvrir le GUI de son côté
         var wrenchTag = net.minecraft.tags.TagKey.create(
                 net.minecraft.core.registries.Registries.ITEM,
-                net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("c", "tools/wrench"));
+                net.minecraft.resources.Identifier.fromNamespaceAndPath("c", "tools/wrench"));
         if (held.is(wrenchTag))
         {
             // Sneak + wrench → retire le Redirector proprement.

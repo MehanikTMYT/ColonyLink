@@ -252,8 +252,8 @@
   "colonylink.term.click_select": "\n§8Click to select — then click Encode",
   "colonylink.term.missing_material": "§cMissing required material!",
   "colonylink.term.search": "Search...",
-  "colonylink.term.jei_wh": "JEI priority: Warehouse first",
-  "colonylink.term.jei_me": "JEI priority: ME first",
+  "colonylink.term.jei_wh": "EMI priority: Warehouse first",
+  "colonylink.term.jei_me": "EMI priority: ME first",
   "colonylink.term.ae2_offline": "AE2 Offline",
   "colonylink.term.label_warehouse": "Warehouse",
   "colonylink.term.label_applied": "Applied",
@@ -466,5 +466,6 @@
   "colonylink.craft_all.diag": "§7 (free CPUs seen: %s, craft submission limit: %s, AdvancedAE installed: %s, quantum computer on network: %s, AdvancedAE compat: %s)",
   "colonylink.craft_all.active": "active",
   "colonylink.craft_all.inactive": "inactive",
-  "colonylink.wh2me.transfer": "§7[WH→ME] %sx %s"
+  "colonylink.wh2me.transfer": "§7[WH→ME] %sx %s",
+  "key.category.colonylink.colonylink": "ColonyLink"
 }

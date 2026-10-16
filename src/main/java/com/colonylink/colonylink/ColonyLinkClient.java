@@ -1,12 +1,10 @@
 package com.colonylink.colonylink;
 
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import appeng.api.util.AEColor;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.color.item.ItemColor;
-import net.minecraft.client.resources.model.ModelResourceLocation;
-import net.minecraft.util.FastColor;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
@@ -28,7 +26,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *     (unbound by default — player assigns in Controls menu).
  *
  * Server safety:
- *   This class is @OnlyIn(Dist.CLIENT). The dispatcher in ColonyLink.java
+ *   This class is . The dispatcher in ColonyLink.java
  *   MUST wrap all listener registrations for this class in dist.isClient().
  *
  * Keybinding notes (v1.4.0):
@@ -41,19 +39,14 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *   - Guard: key is consumed only when no screen is open (getScreen() == null)
  *     to avoid conflicts with chest/crafting GUIs.
  */
-@OnlyIn(Dist.CLIENT)
 public final class ColonyLinkClient
 {
-    /**
-     * Reserved variant string for side-loaded (non-blockstate, non-item) models.
-     * NeoForge enforces this at ModelEvent$RegisterAdditional.register().
-     */
-    private static final String STANDALONE_VARIANT = "standalone";
-
     // ── Keybinding ────────────────────────────────────────────────────────────
 
     /** Category shown in the Controls menu. */
-    public static final String KEY_CATEGORY = "key.categories.colonylink";
+    // PORT(26.1): key categories are registered ids; the label key is key.category.colonylink.colonylink.
+    public static final KeyMapping.Category KEY_CATEGORY =
+            KeyMapping.Category.register(net.minecraft.resources.Identifier.fromNamespaceAndPath("colonylink", "colonylink"));
 
     /**
      * The keybinding for opening the Clipboard GUI.
@@ -66,18 +59,6 @@ public final class ColonyLinkClient
     );
 
     private ColonyLinkClient() {}
-
-    // ── Model registration ────────────────────────────────────────────────────
-
-    /**
-     * Registers part model ResourceLocations with the NeoForge model pipeline.
-     * Side-loaded models MUST use variant "standalone" in NeoForge 1.21.1.
-     */
-    public static void onRegisterAdditionalModels(ModelEvent.RegisterAdditional event)
-    {
-        event.register(new ModelResourceLocation(WarehouseLinkTerminalPart.MODEL_OFF, STANDALONE_VARIANT));
-        event.register(new ModelResourceLocation(WarehouseLinkTerminalPart.MODEL_ON,  STANDALONE_VARIANT));
-    }
 
     // ── Block entity renderer registration ────────────────────────────────────
 
@@ -103,13 +84,6 @@ public final class ColonyLinkClient
     {
         event.register(ColonyLinkRegistry.DOMUM_PATTERN_ITEM.get(),
                 DomumPatternDecorator.INSTANCE);
-    }
-
-    public static void onRegisterItemColors(RegisterColorHandlersEvent.Item event)
-    {
-        event.register(
-                makeOpaque(new StaticItemColor(AEColor.TRANSPARENT)),
-                ColonyLinkRegistry.WAREHOUSE_LINK_TERMINAL_ITEM.get());
     }
 
     // ── Keybinding registration ───────────────────────────────────────────────
@@ -149,27 +123,6 @@ public final class ColonyLinkClient
 
         // Consume the key and send the packet to the server
         KEY_OPEN_CLIPBOARD.consumeClick();
-        PacketDistributor.sendToServer(new OpenWandGuiPacket());
-    }
-
-    // ── Internal helpers ──────────────────────────────────────────────────────
-
-    private static final class StaticItemColor implements ItemColor
-    {
-        private final AEColor color;
-
-        StaticItemColor(AEColor color) { this.color = color; }
-
-        @Override
-        public int getColor(ItemStack stack, int tintIndex)
-        {
-            return color.getVariantByTintIndex(tintIndex);
-        }
-    }
-
-    private static ItemColor makeOpaque(ItemColor inner)
-    {
-        return (stack, tintIndex) ->
-                FastColor.ARGB32.opaque(inner.getColor(stack, tintIndex));
+        ClientPacketDistributor.sendToServer(new OpenWandGuiPacket());
     }
 }

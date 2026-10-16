@@ -17,9 +17,11 @@ public class ColonyLinkRecipes
             DeferredRegister.create(net.minecraft.core.registries.Registries.RECIPE_SERIALIZER, ColonyLink.MODID);
 
     public static final DeferredHolder<RecipeSerializer<?>, RecipeSerializer<ClearNbtRecipe>> CLEAR_NBT_SERIALIZER =
-            RECIPE_SERIALIZERS.register("clear_nbt", ClearNbtRecipeSerializer::new);
+            RECIPE_SERIALIZERS.register("clear_nbt",
+                    () -> new RecipeSerializer<>(ClearNbtRecipeSerializer.CODEC, ClearNbtRecipeSerializer.STREAM_CODEC));
 
-    public static class ClearNbtRecipeSerializer implements RecipeSerializer<ClearNbtRecipe>
+    /** PORT(26.1): RecipeSerializer is a record now; this class only holds its codecs. */
+    public static final class ClearNbtRecipeSerializer
     {
         public static final MapCodec<ClearNbtRecipe> CODEC = RecordCodecBuilder.mapCodec(inst -> inst.group(
                 CraftingBookCategory.CODEC
@@ -35,19 +37,13 @@ public class ColonyLinkRecipes
                 StreamCodec.of(
                         (buf, recipe) -> {
                             buf.writeEnum(recipe.category());
-                            buf.writeResourceLocation(BuiltInRegistries.ITEM.getKey(recipe.targetItem));
+                            buf.writeIdentifier(BuiltInRegistries.ITEM.getKey(recipe.targetItem));
                         },
                         buf -> {
                             CraftingBookCategory cat = buf.readEnum(CraftingBookCategory.class);
-                            Item item = BuiltInRegistries.ITEM.get(buf.readResourceLocation());
+                            Item item = BuiltInRegistries.ITEM.getValue(buf.readIdentifier());
                             return new ClearNbtRecipe(cat, item);
                         }
                 );
-
-        @Override
-        public MapCodec<ClearNbtRecipe> codec() { return CODEC; }
-
-        @Override
-        public StreamCodec<RegistryFriendlyByteBuf, ClearNbtRecipe> streamCodec() { return STREAM_CODEC; }
     }
 }

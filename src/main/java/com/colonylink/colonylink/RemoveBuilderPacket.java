@@ -3,7 +3,7 @@ package com.colonylink.colonylink;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
@@ -14,7 +14,7 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
  */
 public record RemoveBuilderPacket(int tabIndex) implements CustomPacketPayload
 {
-    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(ColonyLink.MODID, "remove_builder");
+    public static final Identifier ID = Identifier.fromNamespaceAndPath(ColonyLink.MODID, "remove_builder");
     public static final CustomPacketPayload.Type<RemoveBuilderPacket> TYPE = new CustomPacketPayload.Type<>(ID);
 
     public static final StreamCodec<RegistryFriendlyByteBuf, RemoveBuilderPacket> STREAM_CODEC = StreamCodec.of(

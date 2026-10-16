@@ -1,5 +1,8 @@
 package com.colonylink.colonylink;
 
+import net.minecraft.nbt.NbtOps;
+import net.minecraft.world.level.storage.ValueOutput;
+import net.minecraft.world.level.storage.ValueInput;
 import appeng.api.config.Actionable;
 import appeng.api.networking.GridFlags;
 import appeng.api.networking.GridHelper;
@@ -33,7 +36,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.entity.player.Inventory;
@@ -781,7 +784,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
         if (!(block instanceof IMateriallyTexturedBlock texturedBlock)) return ItemStack.EMPTY;
 
         MaterialTextureData textureData = MaterialTextureData.readFromItemStack(targetStack);
-        Map<ResourceLocation, Block> components = textureData.getTexturedComponents();
+        Map<Identifier, Block> components = textureData.components();
 
         // Reconstruit le MaterialTextureData depuis les components connus
         MaterialTextureData.Builder builder = MaterialTextureData.builder();
@@ -866,6 +869,23 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
     @Override
     public void setRemoved() { super.setRemoved(); gridNode.destroy(); }
 
+    /** PORT(26.1): drops formerly done in ColonyLinkRedirectorBlock#onRemove — buffer contents and the warehouse card. */
+    @Override
+    public void preRemoveSideEffects(BlockPos pos, BlockState state)
+    {
+        super.preRemoveSideEffects(pos, state);
+        if (level == null || level.isClientSide()) return;
+        for (int slot = 0; slot < buffer.getSlots(); slot++)
+        {
+            ItemStack stack = buffer.getStackInSlot(slot);
+            if (!stack.isEmpty())
+                net.minecraft.world.level.block.Block.popResource(level, pos, stack);
+        }
+        ItemStack card = warehouseCardSlot.getStackInSlot(0);
+        if (!card.isEmpty())
+            net.minecraft.world.level.block.Block.popResource(level, pos, card);
+    }
+
     @Override
     public @Nullable IGridNode getGridNode(Direction dir)
     {
@@ -949,8 +969,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
                 if (!b.getPosition().equals(targetInventoryPos)) continue;
                 for (BlockPos containerPos : b.getContainers())
                 {
-                    IItemHandler h = level.getCapability(
-                            Capabilities.ItemHandler.BLOCK, containerPos, null);
+                    IItemHandler h = CapCompat.itemHandler(level, containerPos, null);
                     if (h != null) handlers.add(h);
                 }
                 break;
@@ -989,8 +1008,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
         List<IItemHandler> handlers = getBuildingHandlers();
         if (handlers.isEmpty())
         {
-            IItemHandler direct = level.getCapability(
-                    Capabilities.ItemHandler.BLOCK, targetInventoryPos, null);
+            IItemHandler direct = CapCompat.itemHandler(level, targetInventoryPos, null);
             if (direct == null) return false;
             handlers = List.of(direct);
         }
@@ -1119,12 +1137,10 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
      * (working / renderStack / ae2Active / state caches).
      */
     @Override
-    public void onDataPacket(Connection net, ClientboundBlockEntityDataPacket pkt,
-                             HolderLookup.Provider lookupProvider)
+    public void onDataPacket(Connection net, ValueInput input)
     {
-        CompoundTag tag = pkt.getTag();
-        if (tag != null && !tag.isEmpty())
-            handleUpdateTag(tag, lookupProvider);
+        // PORT(26.1): the packet payload arrives as a ValueInput.
+        handleUpdateTag(input);
     }
 
     @Override
@@ -1152,60 +1168,57 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
 
         // ── Couche 0 : état d'affichage animé ────────────────────────────────
         tag.putBoolean("working", this.working);
-        tag.put("renderStack", this.renderStack.saveOptional(provider));
+        tag.store("renderStack", ItemStack.OPTIONAL_CODEC, provider.createSerializationContext(NbtOps.INSTANCE), this.renderStack);
         tag.putInt("shuffleProgress", this.shuffleProgress);
         return tag;
     }
 
     @Override
-    public void handleUpdateTag(CompoundTag tag, HolderLookup.Provider provider)
+    public void handleUpdateTag(ValueInput tag)
     {
-        super.handleUpdateTag(tag, provider);
-        if (tag.contains("ae2_active"))    ae2ActiveClientCache = tag.getBoolean("ae2_active");
-        if (tag.contains("state"))
-        {
-            try { state = RedirectorState.valueOf(tag.getString("state")); }
+        super.handleUpdateTag(tag);
+        tag.read("ae2_active", com.mojang.serialization.Codec.BOOL).ifPresent(v -> ae2ActiveClientCache = v);
+        tag.getString("state").ifPresent(v -> {
+            try { state = RedirectorState.valueOf(v); }
             catch (Exception ignored) {}
-        }
-        if (tag.contains("warehouse_priority")) warehousePriorityClientCache = tag.getBoolean("warehouse_priority");
-        if (tag.contains("target_x"))
-            targetInventoryPos = new BlockPos(tag.getInt("target_x"), tag.getInt("target_y"), tag.getInt("target_z"));
-        if (tag.contains("builder_x"))
-            linkedBuilderPos = new BlockPos(tag.getInt("builder_x"), tag.getInt("builder_y"), tag.getInt("builder_z"));
-        if (tag.contains("linked_builder_name")) linkedBuilderName = tag.getString("linked_builder_name");
+        });
+        tag.read("warehouse_priority", com.mojang.serialization.Codec.BOOL).ifPresent(v -> warehousePriorityClientCache = v);
+        if (tag.getInt("target_x").isPresent())
+            targetInventoryPos = new BlockPos(tag.getIntOr("target_x", 0), tag.getIntOr("target_y", 0), tag.getIntOr("target_z", 0));
+        if (tag.getInt("builder_x").isPresent())
+            linkedBuilderPos = new BlockPos(tag.getIntOr("builder_x", 0), tag.getIntOr("builder_y", 0), tag.getIntOr("builder_z", 0));
+        tag.getString("linked_builder_name").ifPresent(v -> linkedBuilderName = v);
 
         // ── Couche 0 : état d'affichage animé ────────────────────────────────
-        this.working = tag.getBoolean("working");
-        this.renderStack = tag.contains("renderStack")
-                ? ItemStack.parseOptional(provider, tag.getCompound("renderStack"))
-                : ItemStack.EMPTY;
-        this.shuffleProgress = tag.getInt("shuffleProgress");
+        this.working = tag.getBooleanOr("working", false);
+        this.renderStack = tag.read("renderStack", ItemStack.OPTIONAL_CODEC).orElse(ItemStack.EMPTY);
+        this.shuffleProgress = tag.getIntOr("shuffleProgress", 0);
     }
 
     // ── NBT ───────────────────────────────────────────────────────────────────
+    // PORT(26.1): block entities persist through ValueOutput/ValueInput. Keys are unchanged, so worlds saved by
+    // the 1.21.1 build load the same buffer, card slot, craft queue and pending outputs.
 
     @Override
-    protected void saveAdditional(CompoundTag tag, HolderLookup.Provider provider)
+    protected void saveAdditional(ValueOutput tag)
     {
-        super.saveAdditional(tag, provider);
-        gridNode.saveToNBT(tag);
-        tag.put("buffer", buffer.serializeNBT(provider));
-        tag.put("warehouse_card_slot", warehouseCardSlot.serializeNBT(provider));
+        super.saveAdditional(tag);
+        gridNode.serialize(tag);
+        buffer.serialize(tag.child("buffer"));
+        warehouseCardSlot.serialize(tag.child("warehouse_card_slot"));
         tag.putBoolean("warehouse_priority", warehousePriority);
 
         // v1.4.9 — persistance de la file de craft et des sorties en attente.
         // Indispensable : ces ItemStacks correspondent à des matériaux déjà prélevés
         // du réseau AE2 ; les perdre au déchargement de chunk = voiding.
-        ListTag queueTag = new ListTag();
+        ValueOutput.ValueOutputList queueTag = tag.childrenList("craft_queue");
         for (PendingDomumCraft p : craftQueue)
-            queueTag.add(savePending(p, provider));
-        tag.put("craft_queue", queueTag);
+            savePending(p, queueTag.addChild());
 
-        ListTag pendingTag = new ListTag();
+        ValueOutput.TypedOutputList<ItemStack> pendingTag = tag.list("pending_outputs", ItemStack.OPTIONAL_CODEC);
         // Copie défensive (le ticker tourne aussi sur le thread serveur).
         for (ItemStack out : new ArrayList<>(pendingOutputs))
-            if (!out.isEmpty()) pendingTag.add(out.saveOptional(provider));
-        tag.put("pending_outputs", pendingTag);
+            if (!out.isEmpty()) pendingTag.add(out);
 
         if (targetInventoryPos != null)
         {
@@ -1224,79 +1237,60 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
     }
 
     @Override
-    protected void loadAdditional(CompoundTag tag, HolderLookup.Provider provider)
+    protected void loadAdditional(ValueInput tag)
     {
-        super.loadAdditional(tag, provider);
-        gridNode.loadFromNBT(tag);
-        if (tag.contains("buffer"))          buffer.deserializeNBT(provider, tag.getCompound("buffer"));
-        if (tag.contains("warehouse_card_slot")) warehouseCardSlot.deserializeNBT(provider, tag.getCompound("warehouse_card_slot"));
-        if (tag.contains("warehouse_priority")) warehousePriority = tag.getBoolean("warehouse_priority");
+        super.loadAdditional(tag);
+        gridNode.deserialize(tag);
+        tag.child("buffer").ifPresent(buffer::deserialize);
+        tag.child("warehouse_card_slot").ifPresent(warehouseCardSlot::deserialize);
+        warehousePriority = tag.getBooleanOr("warehouse_priority", warehousePriority);
 
         // v1.4.9 — restauration de la file de craft et des sorties en attente.
         craftQueue.clear();
-        if (tag.contains("craft_queue"))
+        for (ValueInput entry : tag.childrenListOrEmpty("craft_queue"))
         {
-            ListTag queueTag = tag.getList("craft_queue", Tag.TAG_COMPOUND);
-            for (int i = 0; i < queueTag.size(); i++)
-            {
-                PendingDomumCraft p = loadPending(queueTag.getCompound(i), provider);
-                if (p != null && !p.targetStack().isEmpty())
-                    craftQueue.add(p);
-            }
+            PendingDomumCraft p = loadPending(entry);
+            if (p != null && !p.targetStack().isEmpty())
+                craftQueue.add(p);
         }
 
         pendingOutputs.clear();
-        if (tag.contains("pending_outputs"))
-        {
-            ListTag pendingTag = tag.getList("pending_outputs", Tag.TAG_COMPOUND);
-            for (int i = 0; i < pendingTag.size(); i++)
-            {
-                ItemStack out = ItemStack.parseOptional(provider, pendingTag.getCompound(i));
-                if (!out.isEmpty()) pendingOutputs.add(out);
-            }
-        }
+        for (ItemStack out : tag.listOrEmpty("pending_outputs", ItemStack.OPTIONAL_CODEC))
+            if (!out.isEmpty()) pendingOutputs.add(out);
 
-        if (tag.contains("target_x"))
-            targetInventoryPos = new BlockPos(tag.getInt("target_x"), tag.getInt("target_y"), tag.getInt("target_z"));
-        if (tag.contains("builder_x"))
-            linkedBuilderPos = new BlockPos(tag.getInt("builder_x"), tag.getInt("builder_y"), tag.getInt("builder_z"));
-        if (tag.contains("linked_builder_name")) linkedBuilderName = tag.getString("linked_builder_name");
-        if (tag.contains("state"))
-        {
-            try { state = RedirectorState.valueOf(tag.getString("state")); }
+        if (tag.getInt("target_x").isPresent())
+            targetInventoryPos = new BlockPos(tag.getIntOr("target_x", 0), tag.getIntOr("target_y", 0), tag.getIntOr("target_z", 0));
+        if (tag.getInt("builder_x").isPresent())
+            linkedBuilderPos = new BlockPos(tag.getIntOr("builder_x", 0), tag.getIntOr("builder_y", 0), tag.getIntOr("builder_z", 0));
+        tag.getString("linked_builder_name").ifPresent(v -> linkedBuilderName = v);
+        tag.getString("state").ifPresent(v -> {
+            try { state = RedirectorState.valueOf(v); }
             catch (Exception e) { state = RedirectorState.NO_CONTROLLER; }
-        }
+        });
     }
 
     // ── NBT helpers (PendingDomumCraft) ───────────────────────────────────────
 
-    private static CompoundTag savePending(PendingDomumCraft p, HolderLookup.Provider provider)
+    private static void savePending(PendingDomumCraft p, ValueOutput c)
     {
-        CompoundTag c = new CompoundTag();
-        c.put("target", p.targetStack().saveOptional(provider));
-        ListTag mats = new ListTag();
+        c.store("target", ItemStack.OPTIONAL_CODEC, p.targetStack());
+        ValueOutput.TypedOutputList<ItemStack> mats = c.list("materials", ItemStack.OPTIONAL_CODEC);
         for (ItemStack m : p.materials())
-            if (!m.isEmpty()) mats.add(m.saveOptional(provider));
-        c.put("materials", mats);
+            if (!m.isEmpty()) mats.add(m);
         c.putInt("count", p.outputCount());
-        return c;
     }
 
     @Nullable
-    private static PendingDomumCraft loadPending(CompoundTag c, HolderLookup.Provider provider)
+    private static PendingDomumCraft loadPending(ValueInput c)
     {
-        ItemStack target = ItemStack.parseOptional(provider, c.getCompound("target"));
+        ItemStack target = c.read("target", ItemStack.OPTIONAL_CODEC).orElse(ItemStack.EMPTY);
         if (target.isEmpty()) return null;
 
         List<ItemStack> mats = new ArrayList<>();
-        ListTag list = c.getList("materials", Tag.TAG_COMPOUND);
-        for (int i = 0; i < list.size(); i++)
-        {
-            ItemStack m = ItemStack.parseOptional(provider, list.getCompound(i));
+        for (ItemStack m : c.listOrEmpty("materials", ItemStack.OPTIONAL_CODEC))
             if (!m.isEmpty()) mats.add(m);
-        }
 
-        int count = Math.max(1, c.getInt("count"));
+        int count = Math.max(1, c.getIntOr("count", 0));
         return new PendingDomumCraft(target, mats, count);
     }
 

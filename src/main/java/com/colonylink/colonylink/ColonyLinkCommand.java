@@ -271,7 +271,7 @@ public class ColonyLinkCommand
     {
         dispatcher.register(
                 Commands.literal("colonylink")
-                        .requires(src -> src.hasPermission(2))
+                        .requires(net.minecraft.commands.Commands.hasPermission(net.minecraft.commands.Commands.LEVEL_GAMEMASTERS))
 
                         // /colonylink info
                         .then(Commands.literal("info")

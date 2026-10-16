@@ -6,12 +6,12 @@
     "NEN"
   ],
   "key": {
-    "M": { "item": "minecraft:piston" },
-    "E": { "item": "ae2:charged_certus_quartz_crystal" },
-    "C": { "item": "ae2:terminal" },
-    "X": { "item": "ae2:annihilation_core"},
-    "Z": { "item": "ae2:formation_core"},
-    "N": { "item": "minecraft:sticky_piston"}
+    "M": "minecraft:piston",
+    "E": "ae2:charged_certus_quartz_crystal",
+    "C": "ae2:terminal",
+    "X": "ae2:annihilation_core",
+    "Z": "ae2:formation_core",
+    "N": "minecraft:sticky_piston"
   },
   "result": {
     "id": "colonylink:warehouse_link_terminal",

@@ -6,7 +6,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.jetbrains.annotations.Nullable;
@@ -17,7 +17,7 @@ import org.jetbrains.annotations.Nullable;
 public record TerminalGuiStatePacket(boolean open, BlockPos hostPos, int sideByte)
         implements CustomPacketPayload
 {
-    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(
+    public static final Identifier ID = Identifier.fromNamespaceAndPath(
             ColonyLink.MODID, "terminal_gui_state");
     public static final CustomPacketPayload.Type<TerminalGuiStatePacket> TYPE =
             new CustomPacketPayload.Type<>(ID);
@@ -59,7 +59,7 @@ public record TerminalGuiStatePacket(boolean open, BlockPos hostPos, int sideByt
     @Nullable
     static WarehouseLinkTerminalPart resolvePart(ServerPlayer player, BlockPos pos, int sideOrd)
     {
-        var be = player.serverLevel().getBlockEntity(pos);
+        var be = player.level().getBlockEntity(pos);
         if (!(be instanceof IPartHost host)) return null;
         Direction side = sideOrd >= 0 && sideOrd < Direction.values().length
                 ? Direction.values()[sideOrd] : Direction.NORTH;

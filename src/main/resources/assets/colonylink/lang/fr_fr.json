@@ -262,8 +262,8 @@
   "colonylink.term.in_me_craftable": "§7Dans le ME : §f%s §a● fabricable",
   "colonylink.term.in_warehouse": "§7Dans l'entrepôt : §f%s",
   "colonylink.term.insert_blank": "§7Insérez un Modèle vierge ici",
-  "colonylink.term.jei_me": "Priorité JEI : ME d'abord",
-  "colonylink.term.jei_wh": "Priorité JEI : entrepôt d'abord",
+  "colonylink.term.jei_me": "Priorité EMI : ME d'abord",
+  "colonylink.term.jei_wh": "Priorité EMI : entrepôt d'abord",
   "colonylink.term.label_applied": "Applied",
   "colonylink.term.label_warehouse": "Entrepôt",
   "colonylink.term.material1": "Matériau 1 : %s",
@@ -467,5 +467,6 @@
   "colonylink.cfg.title_color": "Couleur de la barre de titre",
   "config.jade.plugin_colonylink.redirector": "Redirecteur ColonyLink",
   "colonylink.ticker.access_revoked": "§c[ColonyLink] Accès révoqué.",
-  "colonylink.translation.credit.fr_fr": "French translation written entirely by Claude (Anthropic)"
+  "colonylink.translation.credit.fr_fr": "French translation written entirely by Claude (Anthropic)",
+  "key.category.colonylink.colonylink": "ColonyLink"
 }

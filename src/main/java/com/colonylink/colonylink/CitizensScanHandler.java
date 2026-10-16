@@ -52,7 +52,7 @@ public class CitizensScanHandler
             GlobalPos linkedPos = ColonyLinkWandLinkableHandler.getLinkedPos(wandStack);
             if (linkedPos != null)
             {
-                ServerLevel targetLevel = player.server.getLevel(linkedPos.dimension());
+                ServerLevel targetLevel = player.level().getServer().getLevel(linkedPos.dimension());
                 if (targetLevel != null)
                 {
                     var be = targetLevel.getBlockEntity(linkedPos.pos());
@@ -78,7 +78,7 @@ public class CitizensScanHandler
         List<BuilderEntry> entries = ColonyLinkWandLinkableHandler.getBuilderEntries(wandStack);
         if (entries.isEmpty()) return;
 
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = player.level();
 
         IColony colony = null;
         for (BuilderEntry e : entries)

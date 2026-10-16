@@ -77,9 +77,9 @@ public class SendToBuilderHandler
             {
                 ResourceKey<Level> builderDim =
                         ColonyLinkWandLinkableHandler.getBuilderDimension(wandForDim, builderPos);
-                if (builderDim != null && !player.serverLevel().dimension().equals(builderDim))
+                if (builderDim != null && !player.level().dimension().equals(builderDim))
                 {
-                    player.sendSystemMessage(Component.translatable("colonylink.handler.cross_dimension", builderDim.location().getPath()));
+                    player.sendSystemMessage(Component.translatable("colonylink.handler.cross_dimension", builderDim.identifier().getPath()));
                     return;
                 }
             }
@@ -90,7 +90,7 @@ public class SendToBuilderHandler
         // ACCESS_HUTS is the same action the ticker and the wand already require.
         {
             IColony permColony = IColonyManager.getInstance()
-                    .getClosestColony(player.serverLevel(), builderPos);
+                    .getClosestColony(player.level(), builderPos);
             if (permColony != null
                     && !permColony.getPermissions().hasPermission(player, Action.ACCESS_HUTS))
             {
@@ -106,7 +106,7 @@ public class SendToBuilderHandler
             return;
         }
 
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = player.level();
 
         // v1.6.2 — the item is not authoritative. Validate it is something this builder
         // legitimately needs right now: a missing build material, a live open request,
@@ -249,7 +249,7 @@ public class SendToBuilderHandler
         if (buildingHandlers.isEmpty())
         {
             // Dernier fallback : capability directe (non-MineColonies)
-            IItemHandler direct = level.getCapability(Capabilities.ItemHandler.BLOCK, targetPos, null);
+            IItemHandler direct = CapCompat.itemHandler(level, targetPos, null);
             if (direct == null)
             {
                 player.sendSystemMessage(Component.translatable("colonylink.stb.no_inventory"));
@@ -651,8 +651,7 @@ public class SendToBuilderHandler
                 for (BlockPos rackPos : containerList)
                 {
                     if (remaining <= 0) break;
-                    IItemHandler rackHandler = level.getCapability(
-                            Capabilities.ItemHandler.BLOCK, rackPos, null);
+                    IItemHandler rackHandler = CapCompat.itemHandler(level, rackPos, null);
                     if (rackHandler == null) continue;
 
                     for (int slot = 0; slot < rackHandler.getSlots() && remaining > 0; slot++)

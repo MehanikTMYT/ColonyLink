@@ -67,9 +67,10 @@ public class AddPackageLootModifier extends LootModifier
 
     private final Source source;
 
-    public AddPackageLootModifier(LootItemCondition[] conditions, Source source)
+    public AddPackageLootModifier(LootItemCondition[] conditions, int priority, Source source)
     {
-        super(conditions);
+        // PORT(26.1): loot modifiers carry a priority next to their conditions.
+        super(conditions, priority);
         this.source = source;
     }
 

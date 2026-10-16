@@ -406,7 +406,7 @@ public class ColonyLinkGuiConfig
      * En AE, {@link #border()}/{@link #borderShadow()}/{@link #frameBorderWidth()}
      * renvoient déjà les valeurs de la palette → cadre AE sans changer ce code.
      */
-    public void drawBorders(net.minecraft.client.gui.GuiGraphics g, int x, int y, int w, int h)
+    public void drawBorders(net.minecraft.client.gui.GuiGraphicsExtractor g, int x, int y, int w, int h)
     {
         int light  = border();
         int shadow = borderShadow();

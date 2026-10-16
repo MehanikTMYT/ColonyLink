@@ -341,8 +341,8 @@
   "colonylink.term.in_me_craftable": "§7В МЭ: §f%s §a● можно создать",
   "colonylink.term.in_warehouse": "§7На складе: §f%s",
   "colonylink.term.insert_blank": "§7Вставьте сюда пустой шаблон",
-  "colonylink.term.jei_me": "Приоритет JEI: сначала МЭ",
-  "colonylink.term.jei_wh": "Приоритет JEI: сначала склад",
+  "colonylink.term.jei_me": "Приоритет EMI: сначала МЭ",
+  "colonylink.term.jei_wh": "Приоритет EMI: сначала склад",
   "colonylink.term.label_applied": "Applied",
   "colonylink.term.label_warehouse": "Склад",
   "colonylink.term.material1": "Материал 1: %s",
@@ -459,5 +459,14 @@
   "itemGroup.colonylink": "ColonyLink",
   "key.categories.colonylink": "ColonyLink",
   "key.colonylink.open_clipboard": "Открыть буфер обмена",
-  "colonylink.translation.credit.ru_ru": "Russian translation written entirely by Claude (Anthropic)"
+  "colonylink.translation.credit.ru_ru": "Russian translation written entirely by Claude (Anthropic)",
+  "key.category.colonylink.colonylink": "ColonyLink",
+  "colonylink.cfg.theme": "Тема: %s",
+  "colonylink.cfg.theme_default": "Стандартная",
+  "colonylink.cfg.theme_ae": "AE",
+  "colonylink.cfg.theme_minecolonies": "MineColonies",
+  "colonylink.cfg.locked_ae": "§7Цвета заданы темой AE.",
+  "colonylink.cfg.locked_ae_hint": "§8Чтобы менять их, вернитесь к стандартной теме.",
+  "colonylink.cfg.locked_minecolonies": "§7Цвета заданы темой MineColonies.",
+  "colonylink.cfg.locked_minecolonies_hint": "§8Чтобы менять их, вернитесь к стандартной теме."
 }

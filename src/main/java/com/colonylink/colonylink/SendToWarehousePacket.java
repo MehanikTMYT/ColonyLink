@@ -20,7 +20,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
@@ -67,7 +67,7 @@ import java.util.Set;
 public record SendToWarehousePacket(ItemStack stack, BlockPos builderPos, int count)
         implements CustomPacketPayload
 {
-    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(ColonyLink.MODID, "send_to_warehouse");
+    public static final Identifier ID = Identifier.fromNamespaceAndPath(ColonyLink.MODID, "send_to_warehouse");
     public static final CustomPacketPayload.Type<SendToWarehousePacket> TYPE = new CustomPacketPayload.Type<>(ID);
 
     public static final StreamCodec<RegistryFriendlyByteBuf, SendToWarehousePacket> STREAM_CODEC = StreamCodec.of(
@@ -145,13 +145,13 @@ public record SendToWarehousePacket(ItemStack stack, BlockPos builderPos, int co
         // Cross-dimension: same v1.4.9 policy as the builder path — refuse cleanly.
         ResourceKey<Level> builderDim =
                 ColonyLinkWandLinkableHandler.getBuilderDimension(wandStack, builderPos);
-        if (builderDim != null && !player.serverLevel().dimension().equals(builderDim))
+        if (builderDim != null && !player.level().dimension().equals(builderDim))
         {
-            player.sendSystemMessage(Component.translatable("colonylink.handler.cross_dimension", builderDim.location().getPath()));
+            player.sendSystemMessage(Component.translatable("colonylink.handler.cross_dimension", builderDim.identifier().getPath()));
             return;
         }
 
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = player.level();
 
         // ── 4. Colony, building, permission ──────────────────────────────────
         IColony colony = IColonyManager.getInstance().getClosestColony(level, builderPos);
@@ -246,7 +246,7 @@ public record SendToWarehousePacket(ItemStack stack, BlockPos builderPos, int co
             if (containers == null) continue;
             for (BlockPos rackPos : containers)
             {
-                IItemHandler rack = level.getCapability(Capabilities.ItemHandler.BLOCK, rackPos, null);
+                IItemHandler rack = CapCompat.itemHandler(level, rackPos, null);
                 if (rack != null) rackHandlers.add(rack);
             }
         }

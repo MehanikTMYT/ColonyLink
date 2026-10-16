@@ -10,7 +10,7 @@ import com.ldtteam.domumornamentum.block.IMateriallyTexturedBlock;
 import com.ldtteam.domumornamentum.block.IMateriallyTexturedBlockComponent;
 import com.ldtteam.domumornamentum.client.model.data.MaterialTextureData;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
@@ -146,7 +146,7 @@ public class DomumPatternDetails implements IPatternDetails
         if (!(block instanceof IMateriallyTexturedBlock texturedBlock)) return new IInput[0];
 
         MaterialTextureData textureData = MaterialTextureData.readFromItemStack(targetStack);
-        Map<ResourceLocation, Block> components = textureData.getTexturedComponents();
+        Map<Identifier, Block> components = textureData.components();
 
         List<IInput> result = new ArrayList<>();
         for (IMateriallyTexturedBlockComponent component : texturedBlock.getComponents())

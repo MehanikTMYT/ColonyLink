@@ -1,5 +1,6 @@
 package com.colonylink.colonylink;
 
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Inventory;
@@ -274,7 +275,7 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
             public boolean mayPlace(ItemStack stack)
             {
                 if (stack.isEmpty()) return true;
-                net.minecraft.resources.ResourceLocation id =
+                net.minecraft.resources.Identifier id =
                         net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem());
                 return id != null && id.getPath().equals("blank_pattern");
             }
@@ -336,11 +337,12 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
     {
         if (player.level().isClientSide()) return;
         CraftingInput input = craftingGrid.asCraftInput();
+        // PORT(26.1): recipes are server-only (ServerLevel#recipeAccess); assemble takes no registries.
+        if (!(player.level() instanceof net.minecraft.server.level.ServerLevel serverLevel)) return;
         Optional<RecipeHolder<CraftingRecipe>> recipe =
-                player.level().getRecipeManager()
-                        .getRecipeFor(RecipeType.CRAFTING, input, player.level());
+                serverLevel.recipeAccess().getRecipeFor(RecipeType.CRAFTING, input, serverLevel);
         craftResult.setItem(0, recipe.isPresent()
-                ? recipe.get().value().assemble(input, player.level().registryAccess())
+                ? recipe.get().value().assemble(input)
                 : ItemStack.EMPTY);
     }
 
@@ -372,7 +374,7 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
             var side = part.getSide();
             if (side != null) sideByte = side.ordinal();
         }
-        PacketDistributor.sendToServer(new DomumEncodePatternPacket(hostPos, sideByte, target.copy()));
+        ClientPacketDistributor.sendToServer(new DomumEncodePatternPacket(hostPos, sideByte, target.copy()));
     }
 
     // ── stillValid ────────────────────────────────────────────────────────────
@@ -475,7 +477,7 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
             }
             else
             {
-                net.minecraft.resources.ResourceLocation id =
+                net.minecraft.resources.Identifier id =
                         net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(ss.getItem());
                 boolean isBlank = id != null && id.getNamespace().equals("ae2")
                         && id.getPath().equals("blank_pattern");
@@ -521,7 +523,7 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
                             var side = part.getSide();
                             if (side != null) sideByte = side.ordinal();
                         }
-                        PacketDistributor.sendToServer(new TerminalTransferPacket(
+                        ClientPacketDistributor.sendToServer(new TerminalTransferPacket(
                                 stackToSend, stackToSend.getCount(), dir, hostPos, sideByte));
                         slot.set(ItemStack.EMPTY);
                         return rs;

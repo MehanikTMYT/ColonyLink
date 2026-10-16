@@ -19,16 +19,19 @@ import java.util.List;
  */
 public class ColonyLinkPackage extends Item
 {
-    public ColonyLinkPackage()
+    public ColonyLinkPackage(Item.Properties properties)
     {
-        super(new Item.Properties().stacksTo(64));
+        super(properties.stacksTo(64));
     }
 
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context,
-                                List<Component> tooltip, TooltipFlag flag)
+                                net.minecraft.world.item.component.TooltipDisplay display,
+                                java.util.function.Consumer<Component> tooltipAdder, TooltipFlag flag)
     {
-        super.appendHoverText(stack, context, tooltip, flag);
+        final List<Component> tooltip = new TooltipLines(tooltipAdder); // PORT(26.1)
+
+        super.appendHoverText(stack, context, display, tooltipAdder, flag);
         tooltip.add(Component.literal("§8──────────────────"));
         tooltip.add(Component.translatable("colonylink.pkg.line1"));
         tooltip.add(Component.literal("§8──────────────────"));

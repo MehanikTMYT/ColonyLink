@@ -5,7 +5,7 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
@@ -30,7 +30,7 @@ public record DomumEncodePatternPacket(
 {
     public static final CustomPacketPayload.Type<DomumEncodePatternPacket> TYPE =
             new CustomPacketPayload.Type<>(
-                    ResourceLocation.fromNamespaceAndPath(ColonyLink.MODID, "domum_encode_pattern"));
+                    Identifier.fromNamespaceAndPath(ColonyLink.MODID, "domum_encode_pattern"));
 
     // RegistryFriendlyByteBuf requis pour ItemStack.STREAM_CODEC (encode les DataComponents avec registries)
     public static final StreamCodec<RegistryFriendlyByteBuf, DomumEncodePatternPacket> STREAM_CODEC =
@@ -68,7 +68,7 @@ public record DomumEncodePatternPacket(
             return;
         }
 
-        HolderLookup.Provider provider = player.serverLevel().registryAccess();
+        HolderLookup.Provider provider = player.level().registryAccess();
 
         // Le blank pattern est dans le slot 48 du menu (WarehouseLinkTerminalMenu)
         // Les slots Domum sont à x=-2000 mais leur ItemStackHandler est accessible via le menu
@@ -90,7 +90,7 @@ public record DomumEncodePatternPacket(
         }
 
         // Récupère le count depuis la recette Domum via RecipeManager
-        int outputCount = DomumRecipeHelper.getOutputCount(packet.targetStack, player.serverLevel());
+        int outputCount = DomumRecipeHelper.getOutputCount(packet.targetStack, player.level());
 
         ItemStack encoded = DomumPatternItem.encode(packet.targetStack, provider, outputCount);
         if (encoded.isEmpty())
@@ -134,7 +134,7 @@ public record DomumEncodePatternPacket(
         // On accède directement à l'ItemStackHandler du menu
         ItemStack s = menu.blankPatternSlot.getStackInSlot(0);
         if (s.isEmpty()) return ItemStack.EMPTY;
-        ResourceLocation id = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(s.getItem());
+        Identifier id = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(s.getItem());
         if (id != null && id.getPath().equals("blank_pattern")) return s;
         return ItemStack.EMPTY;
     }
