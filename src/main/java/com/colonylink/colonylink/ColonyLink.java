@@ -221,7 +221,9 @@ public class ColonyLink
         // v1.6.0 — bumped to "2": SendToWarehousePacket and PackageTokenPacket changed
         // shape and ResourceStatus gained an ordinal; mismatched client/server versions
         // must fail the handshake cleanly instead of corrupting codecs.
-        PayloadRegistrar registrar = event.registrar("2");
+        // 1.7.0-beta.3 — bumped to "3": CitizensPacket entries gained the request UUID,
+        // colony state, Warehouse stock and mark; PackageTokenPacket carries a request UUID.
+        PayloadRegistrar registrar = event.registrar("3");
 
         registrar.playToClient(ColonyLinkPacket.TYPE, ColonyLinkPacket.STREAM_CODEC,
                 (p, c) -> ClientPacketHandler.handleColonyLink(p, c));

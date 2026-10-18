@@ -50,7 +50,7 @@ public record PackageTokenPacket(
         int count,
         BlockPos redirectorPos,
         boolean isCraft,     // false = Send, true = Craft AE2
-        String citizenName   // v1.6.0 — for the server-side sent-key
+        java.util.UUID requestId // 1.7.0-beta.3 — MineColonies request (was: citizenName)
 ) implements CustomPacketPayload
 {
     public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(
@@ -64,14 +64,15 @@ public record PackageTokenPacket(
                 buf.writeInt(p.count());
                 buf.writeBlockPos(p.redirectorPos());
                 buf.writeBoolean(p.isCraft());
-                buf.writeUtf(p.citizenName());
+                buf.writeLong(p.requestId().getMostSignificantBits());
+                buf.writeLong(p.requestId().getLeastSignificantBits());
             },
             buf -> new PackageTokenPacket(
                     ItemStack.STREAM_CODEC.decode(buf),
                     buf.readInt(),
                     buf.readBlockPos(),
                     buf.readBoolean(),
-                    buf.readUtf()
+                    new java.util.UUID(buf.readLong(), buf.readLong())
             )
     );
 
@@ -83,7 +84,7 @@ public record PackageTokenPacket(
         context.enqueueWork(() -> {
             if (!(context.player() instanceof ServerPlayer sp)) return;
             handlePackageAction(sp, packet.stack(), packet.count(), packet.redirectorPos(),
-                    packet.isCraft(), packet.citizenName());
+                    packet.isCraft(), packet.requestId());
         });
     }
 
@@ -91,7 +92,7 @@ public record PackageTokenPacket(
 
     private static void handlePackageAction(ServerPlayer player, ItemStack stack,
                                             int count, BlockPos redirectorPos, boolean isCraft,
-                                            String citizenName)
+                                            java.util.UUID requestId)
     {
         // v1.6.0 — input hardening: a non-positive count or empty stack can only
         // come from a modified client. Reject before consuming anything.
@@ -229,6 +230,37 @@ public record PackageTokenPacket(
             sendWarehouse = card.warehouse();
         }
 
+        // 1.7.0-beta.3 — the row's MineColonies request must still exist in this colony
+        // and still be the player's to provide. Send: the colony checked above. Craft:
+        // the same Builder's colony when it resolves (the craft itself touches no colony,
+        // so an unresolvable colony keeps the pre-beta.3 behaviour: craft, no mark).
+        IColony requestColony = isCraft ? ColonyResolver.forBuilder(level, linkedBuilderPos) : sendColony;
+        if (requestColony != null)
+        {
+            if (requestId == null)
+            {
+                resyncPackages(player, wand);
+                player.sendSystemMessage(Component.translatable("colonylink.citizens.msg.request_gone"));
+                return;
+            }
+            var request = requestColony.getRequestManager().getRequestForToken(CitizenRequestMemory.token(requestId));
+            if (request == null)
+            {
+                resyncPackages(player, wand);
+                player.sendSystemMessage(Component.translatable("colonylink.citizens.msg.request_gone"));
+                CitizensScanHandler.sendCitizensPacket(player, true);
+                return;
+            }
+            byte state = CitizenRequestMemory.classifyRequest(requestColony.getRequestManager(), request);
+            if (state != CitizensPacket.STATE_PLAYER && state != CitizensPacket.STATE_RETRYING)
+            {
+                resyncPackages(player, wand);
+                player.sendSystemMessage(Component.translatable("colonylink.citizens.msg.already_handled"));
+                CitizensScanHandler.sendCitizensPacket(player, true);
+                return;
+            }
+        }
+
         // 5. Consommer 1 package AVANT l'action (point de non-retour)
         ColonyLinkWandLinkableHandler.consumeCitizenPackage(wand);
 
@@ -243,13 +275,21 @@ public record PackageTokenPacket(
         String itemName = stripBrackets(stack.getDisplayName().getString());
         if (success)
         {
-            // v1.6.0 — record the sent-request key SERVER-side (authoritative
-            // stack, synced to the client, survives relogs). Only on success:
-            // the refund path below must not leave a key behind. addSentRequestKey
-            // dedupes, so the "Sent ↺" re-click (craft+send pair) stays idempotent.
-            if (citizenName != null && !citizenName.isEmpty())
-                ColonyLinkWandLinkableHandler.addSentRequestKey(wand,
-                        ColonyLinkWandLinkableHandler.citizenSentKey(citizenName, stack.getItem()));
+            // 1.7.0-beta.3 — the mark goes to the colony's shared server memory, keyed
+            // by the request UUID (no more "c|name|item" key in the Clipboard). Only on
+            // success: the refund path below must not leave a mark behind. A Craft mark
+            // needs hut access (the craft path does not require it otherwise).
+            if (requestColony != null && requestId != null
+                    && (!isCraft || requestColony.getPermissions().hasPermission(player, Action.ACCESS_HUTS)))
+            {
+                CitizenRequestMemory.mark(CitizenRequestMemory.ColonyKey.of(requestColony), requestId,
+                        new CitizenRequestMemory.Entry(
+                                isCraft ? CitizenRequestMemory.Mark.CRAFTING : CitizenRequestMemory.Mark.SENT,
+                                player.getUUID(), player.getName().getString(), level.getGameTime(),
+                                stack.getItem(), count, linkedPos, stack.copy()));
+                // Every Citizens viewer sees the new state at once (shared memory).
+                CitizensScanHandler.rescanCitizensViewers(player);
+            }
 
             String action = (isCraft ? Component.translatable("colonylink.pkg_token.action_craft").getString() : Component.translatable("colonylink.pkg_token.action_sent").getString());
             player.sendSystemMessage(Component.translatable("colonylink.pkg_token.success", action, count, itemName, (stored - 1)));

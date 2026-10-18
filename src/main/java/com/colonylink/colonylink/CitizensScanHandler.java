@@ -4,6 +4,7 @@ import com.minecolonies.api.colony.IColony;
 import com.minecolonies.api.colony.ICitizenData;
 import com.minecolonies.api.colony.IColonyManager;
 import com.minecolonies.api.colony.buildings.IBuilding;
+import com.minecolonies.api.colony.requestsystem.manager.IRequestManager;
 import com.minecolonies.api.colony.requestsystem.request.IRequest;
 import com.minecolonies.api.colony.requestsystem.request.RequestState;
 import com.minecolonies.api.colony.requestsystem.requestable.IDeliverable;
@@ -113,6 +114,13 @@ public class CitizensScanHandler
 
         List<CitizensPacket.CitizenRequestEntry> result = new ArrayList<>();
 
+        // 1.7.0-beta.3 — shared per-colony memory, keyed by request UUID. Cleaned once
+        // per scan, only from MineColonies' own state (never from "the row is missing").
+        IRequestManager requestManager = colony.getRequestManager();
+        CitizenRequestMemory.ColonyKey colonyKey = CitizenRequestMemory.ColonyKey.of(colony);
+        CitizenRequestMemory.cleanup(colonyKey, requestManager, player.server);
+        WarehouseStock warehouseStock = new WarehouseStock(colony, level);
+
         for (ICitizenData citizen : colony.getCitizenManager().getCitizens())
         {
             IBuilding workBuilding = citizen.getWorkBuilding();
@@ -169,6 +177,17 @@ public class CitizensScanHandler
                     if (count <= 0) count = 1;
                     display.setCount(Math.min(count, 64));
 
+                    // 1.7.0-beta.3 — diagnostic for "Sent reverts to Send": same uuid
+                    // across scans = our memory was wiped; new uuid = MineColonies
+                    // created a new request.
+                    if (ColonyLink.LOGGER.isDebugEnabled())
+                        ColonyLink.LOGGER.debug("[ColonyLink] Citizens scan: uuid={} state={} resolver={} citizen={} item={} count={}",
+                                CitizenRequestMemory.requestUuid(req), req.getState(),
+                                CitizenRequestMemory.resolverName(colony.getRequestManager(), req),
+                                citizen.getName(),
+                                net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(display.getItem()),
+                                count);
+
                     ItemStack finalDisplay = display;
                     BuilderToolHelper.SubstituteAction finalAction = BuilderToolHelper.SubstituteAction.NONE;
 
@@ -214,8 +233,22 @@ public class CitizensScanHandler
                         craftableInME = !availableInME && finalCs.isCraftable(finalDisplay);
                     }
 
+                    // 1.7.0-beta.3 — request identity, who handles it, Warehouse stock
+                    // (only when it is still the player's to provide) and our mark.
+                    java.util.UUID requestId = CitizenRequestMemory.requestUuid(req);
+                    if (requestId == null) continue; // not a StandardToken: cannot be tracked
+                    byte colonyState = CitizenRequestMemory.classifyRequest(requestManager, req);
+                    int whStock = -1;
+                    if (colonyState == CitizensPacket.STATE_PLAYER
+                            || colonyState == CitizensPacket.STATE_RETRYING)
+                        whStock = Math.min(count, warehouseStock.count(del, display));
+                    CitizenRequestMemory.Entry markEntry = CitizenRequestMemory.get(colonyKey, requestId);
+                    byte mark = markEntry != null ? markEntry.mark().code() : CitizensPacket.MARK_NONE;
+                    String markedBy = markEntry != null ? markEntry.playerName() : "";
+
                     result.add(new CitizensPacket.CitizenRequestEntry(
-                            finalDisplay, citizen.getName(), jobName, count, availableInME, craftableInME));
+                            finalDisplay, citizen.getName(), jobName, count, availableInME, craftableInME,
+                            requestId, colonyState, whStock, mark, markedBy));
                 }
             }
             catch (Exception e)
@@ -224,14 +257,15 @@ public class CitizensScanHandler
             }
         }
 
-        // v1.6.0 — server-side reconciliation of the citizen sent-keys ("c|").
-        // Any stored citizen key whose request is no longer active is pruned, so
-        // the grey "Sent ↺" button re-arms when the request resolves. Scoped to
-        // the citizen family: builder keys ("b|") are reconciled by the ticker.
-        // The early returns above skip this on failure — a failed scan must
-        // never wipe the memory.
-        // v1.6.2 — throttle the ticker path: identical content means nothing to send
-        // and nothing to reconcile. An explicit click (force) always proceeds.
+        // 1.7.0-beta.3 — the citizen "c|name|item" keys in the Clipboard are obsolete
+        // (marks live in CitizenRequestMemory): purge them all. pruneSentRequestKeys
+        // leaves the component untouched when nothing is removed, so after the first
+        // purge this costs one read. Builder keys ("b|") are not touched.
+        ColonyLinkWandLinkableHandler.pruneSentRequestKeys(wandStack, java.util.Collections.emptySet(),
+                ColonyLinkWandLinkableHandler.SENT_PREFIX_CITIZEN);
+
+        // v1.6.2 — throttle the ticker path: identical content means nothing to send.
+        // An explicit click (force) always proceeds.
         long sig = computeCitizensSig(result);
         if (!force)
         {
@@ -240,14 +274,27 @@ public class CitizensScanHandler
         }
         LAST_SIG.put(player.getUUID(), sig);
 
-        java.util.Set<String> activeCitizenKeys = new java.util.HashSet<>();
-        for (CitizensPacket.CitizenRequestEntry entry : result)
-            activeCitizenKeys.add(ColonyLinkWandLinkableHandler.citizenSentKey(
-                    entry.citizenName(), entry.stack().getItem()));
-        ColonyLinkWandLinkableHandler.pruneSentRequestKeys(wandStack, activeCitizenKeys,
-                ColonyLinkWandLinkableHandler.SENT_PREFIX_CITIZEN);
-
         PacketDistributor.sendToPlayer(player, new CitizensPacket(result));
+    }
+
+    /**
+     * 1.7.0-beta.3 — forced rescan for {@code actor} and every other player whose
+     * Clipboard is open on the Citizens tab in the same dimension (the Sent memory is
+     * shared per colony). Each rescan resolves its own colony and permission, so a
+     * viewer of another colony just gets an unchanged list.
+     */
+    public static void rescanCitizensViewers(ServerPlayer actor)
+    {
+        sendCitizensPacket(actor, true);
+        var server = actor.getServer();
+        if (server == null) return;
+        for (java.util.UUID uuid : ColonyLinkServerTicker.citizensTabViewers())
+        {
+            if (uuid.equals(actor.getUUID())) continue;
+            ServerPlayer other = server.getPlayerList().getPlayer(uuid);
+            if (other != null && other.level() == actor.level())
+                sendCitizensPacket(other, true);
+        }
     }
 
     // ── v1.6.2 — throttle state for the ticker Citizens tab ────────────────────
@@ -318,9 +365,87 @@ public class CitizensScanHandler
             h = 31 * h + e.count();
             h = 31 * h + (e.availableInME()  ? 1 : 0);
             h = 31 * h + (e.craftableInME() ? 1 : 0);
+            // 1.7.0-beta.3 — state changes must be pushed too
+            h = 31 * h + e.requestId().hashCode();
+            h = 31 * h + e.colonyState();
+            h = 31 * h + e.warehouseStock();
+            h = 31 * h + e.mark();
+            h = 31 * h + e.markedBy().hashCode();
             sig = (sig ^ h) * P;
         }
         return sig;
+    }
+
+    /**
+     * 1.7.0-beta.3 — matching items across ALL the colony's Warehouses (MineColonies
+     * sums every Warehouse when deciding whether it can resolve a request), counted
+     * with the request's own matcher (tags, fuel lists, NBT…). Read the way the
+     * Warehouse Link Terminal reads a Warehouse: the aggregated meta-handler MineColonies
+     * exposes at the hut position, else each rack's local half (27 slots, double racks
+     * mirror the other half). Racks in unloaded chunks are skipped (getCapability on an
+     * unloaded position returns null). Walked once per (requestable type, displayed
+     * item) per scan.
+     */
+    private static final class WarehouseStock
+    {
+        private static final int RACK_HALF_SLOTS = 27;
+
+        private final ServerLevel level;
+        private final List<com.minecolonies.core.colony.buildings.workerbuildings.BuildingWareHouse> warehouses = new ArrayList<>();
+        private final java.util.Map<String, Integer> cache = new java.util.HashMap<>();
+
+        WarehouseStock(IColony colony, ServerLevel level)
+        {
+            this.level = level;
+            for (IBuilding b : colony.getServerBuildingManager().getBuildings().values())
+                if (b instanceof com.minecolonies.core.colony.buildings.workerbuildings.BuildingWareHouse wh)
+                    warehouses.add(wh);
+        }
+
+        int count(IDeliverable request, ItemStack display)
+        {
+            String key = request.getClass().getName() + "|"
+                    + net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(display.getItem())
+                    + "|" + display.getComponents().hashCode();
+            return cache.computeIfAbsent(key, k -> {
+                long total = 0;
+                for (var wh : warehouses)
+                {
+                    try { total += countIn(wh, request); }
+                    catch (Exception ignored) {}
+                }
+                return (int) Math.min(Integer.MAX_VALUE, total);
+            });
+        }
+
+        private long countIn(com.minecolonies.core.colony.buildings.workerbuildings.BuildingWareHouse wh,
+                             IDeliverable request)
+        {
+            var cap = net.neoforged.neoforge.capabilities.Capabilities.ItemHandler.BLOCK;
+            net.neoforged.neoforge.items.IItemHandler meta = level.getCapability(cap, wh.getPosition(), null);
+            if (meta != null && meta.getSlots() > RACK_HALF_SLOTS)
+                return countSlots(meta, meta.getSlots(), request);
+            long total = 0;
+            java.util.Set<net.minecraft.core.BlockPos> seen = new java.util.HashSet<>();
+            for (net.minecraft.core.BlockPos rackPos : wh.getContainers())
+            {
+                if (!seen.add(rackPos)) continue;
+                net.neoforged.neoforge.items.IItemHandler rack = level.getCapability(cap, rackPos, null);
+                if (rack != null) total += countSlots(rack, Math.min(rack.getSlots(), RACK_HALF_SLOTS), request);
+            }
+            return total;
+        }
+
+        private static long countSlots(net.neoforged.neoforge.items.IItemHandler h, int slots, IDeliverable request)
+        {
+            long total = 0;
+            for (int s = 0; s < slots; s++)
+            {
+                ItemStack st = h.getStackInSlot(s);
+                if (!st.isEmpty() && request.matches(st)) total += st.getCount();
+            }
+            return total;
+        }
     }
 
     private static ItemStack findWandInInventory(ServerPlayer player)

@@ -149,14 +149,14 @@ public class ColonyLinkScreen extends Screen
     private List<CitizensPacket.CitizenRequestEntry> citizenEntries = new ArrayList<>();
     private boolean citizensLoading = false;
     private int citizenPackageCount = 0; // count synced depuis serveur
-    // v1.6.0 — READ-ONLY cache of the server-written sent keys (wand NBT is
-    // authoritative and synced by the server; the client never writes it).
-    private final java.util.Set<String> sentCitizenRequests = new java.util.HashSet<>();
-    // v1.6.0 — optimistic overlays: rows grey out immediately on click, and the
-    // server truth takes over on the next sync. Time-bounded so a server-side
-    // rejection cannot leave a row stuck grey (same pattern as craftHoldUntil).
+    // 1.7.0-beta.3 — the Sent / Crafting marks now come with each CitizensPacket row
+    // (server memory per colony, keyed by request UUID); no Clipboard NBT is read.
+    // Optimistic overlays, keyed by request UUID: the row shows the mark right after
+    // the click, and the server truth takes over on the next sync. Time-bounded so a
+    // server-side rejection cannot leave a row stuck (same pattern as craftHoldUntil).
     private static final long PENDING_HOLD_MS = 5_000L;
-    private final java.util.Map<String, Long> optimisticCitizenSentUntil = new java.util.HashMap<>();
+    private final java.util.Map<java.util.UUID, Long> optimisticCitizenSentUntil = new java.util.HashMap<>();
+    private final java.util.Map<java.util.UUID, Long> optimisticCitizenCraftUntil = new java.util.HashMap<>();
     private final java.util.Map<String, Long> pendingSentUntil = new java.util.HashMap<>();
 
     private List<ColonyLinkPacket.ResourceEntry> entries = new ArrayList<>();
@@ -387,38 +387,145 @@ public class ColonyLinkScreen extends Screen
     {
         this.citizenEntries = packet.entries();
         this.citizensLoading = false;
-        // v1.6.0 — the SERVER now owns citizen_sent_keys: keys are added in
-        // PackageTokenPacket.handle and pruned in CitizensScanHandler, on the
-        // authoritative wand stack (synced to us automatically). The client
-        // only rebuilds its read cache — ZERO client-side NBT writes.
-        refreshSentCache();
+        // 1.7.0-beta.3 — drop the optimistic overlays the server confirmed (the row now
+        // carries a mark) or that expired. A server-side rejection thus un-greys the
+        // row after PENDING_HOLD_MS at the latest.
+        java.util.Set<java.util.UUID> marked = new java.util.HashSet<>();
+        for (CitizensPacket.CitizenRequestEntry ce : citizenEntries)
+            if (ce.mark() != CitizensPacket.MARK_NONE) marked.add(ce.requestId());
+        long now = System.currentTimeMillis();
+        optimisticCitizenSentUntil.entrySet().removeIf(e -> marked.contains(e.getKey()) || e.getValue() <= now);
+        optimisticCitizenCraftUntil.entrySet().removeIf(e -> marked.contains(e.getKey()) || e.getValue() <= now);
+    }
+
+    // ── 1.7.0-beta.3 — Citizens row button ───────────────────────────────────
+
+    /** INFO: grey, disabled (Delivering / In Warehouse / Colony crafting). */
+    private enum CitBtnKind { INFO, CRAFTING, SENT, IN_WH, SEND, CRAFT }
+
+    private record CitBtn(CitBtnKind kind, String label, boolean clickable) {}
+
+    private static boolean overlayActive(java.util.Map<java.util.UUID, Long> overlay, java.util.UUID id)
+    {
+        Long until = overlay.get(id);
+        return until != null && until > System.currentTimeMillis();
     }
 
     /**
-     * v1.6.0 — rebuilds the read-only sent-keys cache from the (server-written,
-     * auto-synced) wand NBT and drops optimistic overlays the server confirmed
-     * (now in NBT) or that expired. The overlay itself is checked live at
-     * render/click time via isCitizenSentDisplayed(), so a server-side
-     * rejection un-greys the row after PENDING_HOLD_MS without waiting for the
-     * next citizens scan.
+     * The button a Citizens row shows, highest priority first: what MineColonies is
+     * already doing with the request, then ColonyLink's own mark (server memory or
+     * optimistic overlay), then the Warehouse stock, then Send / Craft. Null = no button.
      */
-    private void refreshSentCache()
+    private CitBtn citizenButton(CitizensPacket.CitizenRequestEntry ce)
     {
-        this.sentCitizenRequests.clear();
-        net.minecraft.world.item.ItemStack wand = getClientWand();
-        if (!wand.isEmpty())
-            this.sentCitizenRequests.addAll(ColonyLinkWandLinkableHandler.getSentRequestKeys(wand));
-        long now = System.currentTimeMillis();
-        this.optimisticCitizenSentUntil.entrySet().removeIf(e ->
-                this.sentCitizenRequests.contains(e.getKey()) || e.getValue() <= now);
+        switch (ce.colonyState())
+        {
+            case CitizensPacket.STATE_DELIVERING ->
+            { return new CitBtn(CitBtnKind.INFO, Component.translatable("colonylink.citizens.delivering").getString(), false); }
+            case CitizensPacket.STATE_WAREHOUSE ->
+            { return new CitBtn(CitBtnKind.INFO, Component.translatable("colonylink.citizens.in_warehouse").getString(), false); }
+            case CitizensPacket.STATE_COLONY_CRAFT ->
+            { return new CitBtn(CitBtnKind.INFO, Component.translatable("colonylink.citizens.colony_crafting").getString(), false); }
+            default -> {}
+        }
+        boolean hasWH = hasWarehouseCard && !redirectorPos.equals(net.minecraft.core.BlockPos.ZERO);
+        boolean canSend  = hasWH && ce.availableInME();
+        boolean canCraft = hasWH && ce.craftableInME();
+        if (ce.mark() == CitizensPacket.MARK_CRAFTING || overlayActive(optimisticCitizenCraftUntil, ce.requestId()))
+            return new CitBtn(CitBtnKind.CRAFTING, Component.translatable("colonylink.citizens.crafting").getString(), false);
+        if (ce.mark() == CitizensPacket.MARK_SENT || overlayActive(optimisticCitizenSentUntil, ce.requestId()))
+            // Still re-clickable (Craft + Send, 2 packages) as the manual way out.
+            return new CitBtn(CitBtnKind.SENT, Component.translatable("colonylink.screen.cit.sent").getString(),
+                    canSend || canCraft);
+        if (ce.warehouseStock() > 0 && ce.warehouseStock() >= ce.count())
+            return new CitBtn(CitBtnKind.IN_WH,
+                    Component.translatable("colonylink.citizens.in_wh_count", ce.warehouseStock()).getString(), false);
+        if (canSend)
+            return new CitBtn(CitBtnKind.SEND, Component.translatable("colonylink.screen.btn.send").getString(), true);
+        if (canCraft)
+            return new CitBtn(CitBtnKind.CRAFT, Component.translatable("colonylink.screen.btn.craft").getString(), true);
+        return null;
     }
 
-    /** True if a citizen row must show as sent: server truth OR live optimistic overlay. */
-    private boolean isCitizenSentDisplayed(String key)
+    /** Button width: 44 like before, wider when the label needs it (render and click share it). */
+    private int citizenButtonWidth(CitBtn b)
     {
-        if (sentCitizenRequests.contains(key)) return true;
-        Long until = optimisticCitizenSentUntil.get(key);
-        return until != null && until > System.currentTimeMillis();
+        return Math.max(44, this.font.width(b.label()) + 8);
+    }
+
+    private void drawCitizenButton(GuiGraphics g, CitBtn b, int bx, int by, int bw, int bh, boolean hov)
+    {
+        ColonyLinkGuiConfig _cl = ColonyLinkGuiConfig.get();
+        boolean aeBtn = _cl.isAe() && aeButtonPresent;
+        boolean mcBtn = mcButtonReady();
+        switch (b.kind())
+        {
+            case SEND -> drawCitizenActiveButton(g, b.label(), bx, by, bw, bh, hov, mcBtn, aeBtn,
+                    _cl.semBlue(), 0xFF0066CC, 0xFF004488, 0x4488FF);
+            case CRAFT -> drawCitizenActiveButton(g, b.label(), bx, by, bw, bh, hov, mcBtn, aeBtn,
+                    _cl.semGreen(), 0xFF007700, 0xFF005500, 0x00FF00);
+            case SENT ->
+            {
+                // Grey, but hover feedback when re-clickable (unchanged look).
+                boolean h = hov && b.clickable();
+                if (mcBtn)
+                    drawMcButtonAuto(g, bx, by, bw, bh, b.label(), false, h);
+                else if (aeBtn)
+                {
+                    drawAeButtonBg(g, bx, by, bw, bh, AeBtnVis.DISABLED, _cl.alphaControl());
+                    drawCenteredNoShadow(g, b.label(), bx + bw / 2, by + 3, _cl.semGray());
+                }
+                else
+                    drawCitizenFlatButton(g, b.label(), bx, by, bw, bh, h ? 0xFF3A3A3A : 0xFF2A2A2A, 0x888888);
+            }
+            default ->
+            {
+                // INFO grey / CRAFTING amber / IN_WH pale green — all disabled, no hover.
+                int aeCol   = b.kind() == CitBtnKind.CRAFTING ? _cl.semAmber()
+                            : b.kind() == CitBtnKind.IN_WH    ? _cl.semGreen() : _cl.semGray();
+                int flatCol = b.kind() == CitBtnKind.CRAFTING ? 0xFFAA00
+                            : b.kind() == CitBtnKind.IN_WH    ? 0x88CC88 : 0x888888;
+                String mcPrefix = b.kind() == CitBtnKind.CRAFTING ? "§6"
+                                : b.kind() == CitBtnKind.IN_WH    ? "§2" : "";
+                if (mcBtn)
+                    drawMcButtonAuto(g, bx, by, bw, bh, mcPrefix + b.label(), false, false);
+                else if (aeBtn)
+                {
+                    drawAeButtonBg(g, bx, by, bw, bh, AeBtnVis.DISABLED, _cl.alphaControl());
+                    drawCenteredNoShadow(g, b.label(), bx + bw / 2, by + 3, aeCol);
+                }
+                else
+                    drawCitizenFlatButton(g, b.label(), bx, by, bw, bh, 0xFF2A2A2A, flatCol);
+            }
+        }
+    }
+
+    private void drawCitizenActiveButton(GuiGraphics g, String label, int bx, int by, int bw, int bh, boolean hov,
+                                         boolean mcBtn, boolean aeBtn, int aeCol, int bgHov, int bg, int textCol)
+    {
+        if (mcBtn)
+            drawMcButtonAuto(g, bx, by, bw, bh, label, true, hov);
+        else if (aeBtn)
+            drawAeButton(g, bx, by, bw, bh, hov, true, label, aeCol);
+        else
+        {
+            g.fill(bx, by, bx + bw, by + bh, hov ? bgHov : bg);
+            g.fill(bx, by, bx + bw, by + 1, 0xFFFFFFFF);
+            g.fill(bx, by, bx + 1, by + bh, 0xFFFFFFFF);
+            g.fill(bx, by + bh - 1, bx + bw, by + bh, 0xFF222222);
+            g.fill(bx + bw - 1, by, bx + bw, by + bh, 0xFF222222);
+            g.drawCenteredString(this.font, label, bx + bw / 2, by + 3, textCol);
+        }
+    }
+
+    private void drawCitizenFlatButton(GuiGraphics g, String label, int bx, int by, int bw, int bh, int bg, int textCol)
+    {
+        g.fill(bx, by, bx + bw, by + bh, bg);
+        g.fill(bx, by, bx + bw, by + 1, 0xFF555555);
+        g.fill(bx, by, bx + 1, by + bh, 0xFF555555);
+        g.fill(bx, by + bh - 1, bx + bw, by + bh, 0xFF1A1A1A);
+        g.fill(bx + bw - 1, by, bx + bw, by + bh, 0xFF1A1A1A);
+        g.drawCenteredString(this.font, label, bx + bw / 2, by + 3, textCol);
     }
 
     public void updatePackageCount(int count)
@@ -436,12 +543,6 @@ public class ColonyLinkScreen extends Screen
     private static String stripItemName(String name)
     {
         return (name.startsWith("[") && name.endsWith("]")) ? name.substring(1, name.length() - 1) : name;
-    }
-
-    private static String sentKey(CitizensPacket.CitizenRequestEntry ce)
-    {
-        // v1.6.0 — prefixed format ("c|name|itemId"), shared with the server.
-        return ColonyLinkWandLinkableHandler.citizenSentKey(ce.citizenName(), ce.stack().getItem());
     }
 
     public void updateEntries(List<ColonyLinkPacket.ResourceEntry> newEntries, String builderName,
@@ -564,11 +665,10 @@ public class ColonyLinkScreen extends Screen
         super.init();
         int serverTabIndex = (activeTabIndex == CITIZENS_TAB_INDEX) ? 0 : activeTabIndex;
         PacketDistributor.sendToServer(new GuiStatePacket(true, builderPos, serverTabIndex));
-        // Lire le count packages + sent keys depuis la wand NBT côté client (read-only)
+        // Lire le count packages depuis la wand NBT côté client (read-only)
         net.minecraft.world.item.ItemStack initWand = getClientWand();
         if (!initWand.isEmpty())
             this.citizenPackageCount = ColonyLinkWandLinkableHandler.getCitizenPackages(initWand);
-        refreshSentCache();
 
         // Theme asset probes — ONCE per screen open (never per frame), silent
         // procedural fallbacks if an internal asset path is absent (never magenta).
@@ -2043,12 +2143,12 @@ public class ColonyLinkScreen extends Screen
                     if (itemName.startsWith("[") && itemName.endsWith("]"))
                         itemName = itemName.substring(1, itemName.length() - 1);
 
-                    // Bouton Craft ou Send selon disponibilité (warehouse card requise dans les deux cas)
-                    boolean ceHasWHlocal = hasWarehouseCard && !redirectorPos.equals(net.minecraft.core.BlockPos.ZERO);
-                    boolean ceCanSend  = ceHasWHlocal && ce.availableInME();
-                    boolean ceCanCraft = ceHasWHlocal && ce.craftableInME();
-                    boolean hasBtn     = ceCanSend || ceCanCraft;
-                    int btnW = 44, btnH = 14;
+                    // 1.7.0-beta.3 — one button per row from citizenButton(): MineColonies
+                    // state first, then our mark, Warehouse stock, Send / Craft (Send and
+                    // Craft still need the Warehouse card, as before).
+                    CitBtn citBtn  = citizenButton(ce);
+                    boolean hasBtn = citBtn != null;
+                    int btnW = hasBtn ? citizenButtonWidth(citBtn) : 44, btnH = 14;
                     int btnX = getGuiX() + 7 + listW - btnW - 2;
                     int btnY = ey + (ENTRY_HEIGHT - btnH) / 2;
                     boolean btnHov = hasBtn && mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH;
@@ -2071,74 +2171,8 @@ public class ColonyLinkScreen extends Screen
                         g.drawString(this.font, "§7" + ce.citizenName() + " §8· §7" + ce.jobName(),
                                 x + 29, ey + 12, 0xAAAAAA, false);
 
-                    boolean alreadySent = isCitizenSentDisplayed(sentKey(ce));
-                    boolean aeBtn = _cl.isAe() && aeButtonPresent;
-                    boolean mcBtn = mcButtonReady();
-                    if (alreadySent && hasBtn)
-                    {
-                        // Grisé — déjà envoyé, mais recliquable pour renvoyer
-                        if (mcBtn)
-                        {
-                            drawMcButtonAuto(g, btnX, btnY, btnW, btnH, Component.translatable("colonylink.screen.cit.sent").getString(), false, btnHov);
-                        }
-                        else if (aeBtn)
-                        {
-                            drawAeButtonBg(g, btnX, btnY, btnW, btnH, AeBtnVis.DISABLED, _cl.alphaControl());
-                            drawCenteredNoShadow(g, Component.translatable("colonylink.screen.cit.sent").getString(), btnX + btnW / 2, btnY + 3, _cl.semGray());
-                        }
-                        else
-                        {
-                            int btnBg = btnHov ? 0xFF3A3A3A : 0xFF2A2A2A;
-                            g.fill(btnX, btnY, btnX + btnW, btnY + btnH, btnBg);
-                            g.fill(btnX, btnY, btnX + btnW, btnY + 1, 0xFF555555);
-                            g.fill(btnX, btnY, btnX + 1, btnY + btnH, 0xFF555555);
-                            g.fill(btnX, btnY + btnH - 1, btnX + btnW, btnY + btnH, 0xFF1A1A1A);
-                            g.fill(btnX + btnW - 1, btnY, btnX + btnW, btnY + btnH, 0xFF1A1A1A);
-                            g.drawCenteredString(this.font, Component.translatable("colonylink.screen.cit.sent").getString(), btnX + btnW / 2, btnY + 3, 0x888888);
-                        }
-                    }
-                    else if (ceCanSend)
-                    {
-                        if (mcBtn)
-                        {
-                            drawMcButtonAuto(g, btnX, btnY, btnW, btnH, Component.translatable("colonylink.screen.btn.send").getString(), true, btnHov);
-                        }
-                        else if (aeBtn)
-                        {
-                            drawAeButton(g, btnX, btnY, btnW, btnH, btnHov, true, Component.translatable("colonylink.screen.btn.send").getString(), _cl.semBlue());
-                        }
-                        else
-                        {
-                            int btnBg = btnHov ? 0xFF0066CC : 0xFF004488;
-                            g.fill(btnX, btnY, btnX + btnW, btnY + btnH, btnBg);
-                            g.fill(btnX, btnY, btnX + btnW, btnY + 1, 0xFFFFFFFF);
-                            g.fill(btnX, btnY, btnX + 1, btnY + btnH, 0xFFFFFFFF);
-                            g.fill(btnX, btnY + btnH - 1, btnX + btnW, btnY + btnH, 0xFF222222);
-                            g.fill(btnX + btnW - 1, btnY, btnX + btnW, btnY + btnH, 0xFF222222);
-                            g.drawCenteredString(this.font, Component.translatable("colonylink.screen.btn.send").getString(), btnX + btnW / 2, btnY + 3, 0x4488FF);
-                        }
-                    }
-                    else if (ceCanCraft)
-                    {
-                        if (mcBtn)
-                        {
-                            drawMcButtonAuto(g, btnX, btnY, btnW, btnH, Component.translatable("colonylink.screen.btn.craft").getString(), true, btnHov);
-                        }
-                        else if (aeBtn)
-                        {
-                            drawAeButton(g, btnX, btnY, btnW, btnH, btnHov, true, Component.translatable("colonylink.screen.btn.craft").getString(), _cl.semGreen());
-                        }
-                        else
-                        {
-                            int btnBg = btnHov ? 0xFF007700 : 0xFF005500;
-                            g.fill(btnX, btnY, btnX + btnW, btnY + btnH, btnBg);
-                            g.fill(btnX, btnY, btnX + btnW, btnY + 1, 0xFFFFFFFF);
-                            g.fill(btnX, btnY, btnX + 1, btnY + btnH, 0xFFFFFFFF);
-                            g.fill(btnX, btnY + btnH - 1, btnX + btnW, btnY + btnH, 0xFF222222);
-                            g.fill(btnX + btnW - 1, btnY, btnX + btnW, btnY + btnH, 0xFF222222);
-                            g.drawCenteredString(this.font, Component.translatable("colonylink.screen.btn.craft").getString(), btnX + btnW / 2, btnY + 3, 0x00FF00);
-                        }
-                    }
+                    if (hasBtn)
+                        drawCitizenButton(g, citBtn, btnX, btnY, btnW, btnH, btnHov);
 
                     if (mx >= x + 7 && mx <= x + 7 + listW && my >= ey && my <= ey + ENTRY_HEIGHT)
                     {
@@ -2146,16 +2180,38 @@ public class ColonyLinkScreen extends Screen
                         tip.add(Component.literal("§f" + ce.count() + "x " + itemName));
                         tip.add(Component.translatable("colonylink.screen.tip.citizen", ce.citizenName()));
                         tip.add(Component.translatable("colonylink.screen.tip.job", ce.jobName()));
-                        if (btnHov && alreadySent)
+                        // 1.7.0-beta.3 — MineColonies state, Warehouse stock, who marked it.
+                        String stateKey = switch (ce.colonyState())
+                        {
+                            case CitizensPacket.STATE_DELIVERING   -> "colonylink.citizens.tip.delivering";
+                            case CitizensPacket.STATE_WAREHOUSE    -> "colonylink.citizens.tip.warehouse";
+                            case CitizensPacket.STATE_COLONY_CRAFT -> "colonylink.citizens.tip.colony_craft";
+                            case CitizensPacket.STATE_RETRYING     -> "colonylink.citizens.tip.retrying";
+                            default                                -> "colonylink.citizens.tip.player";
+                        };
+                        tip.add(Component.literal("§7").append(Component.translatable(stateKey)));
+                        if (ce.warehouseStock() >= 0)
+                            tip.add(Component.literal("§7").append(Component.translatable(
+                                    "colonylink.citizens.tip.wh_stock", ce.warehouseStock(), ce.count())));
+                        if (ce.mark() == CitizensPacket.MARK_CRAFTING)
+                        {
+                            tip.add(Component.literal("§6").append(Component.translatable("colonylink.citizens.tip.crafting")));
+                            if (!ce.markedBy().isEmpty())
+                                tip.add(Component.literal("§7").append(Component.translatable(
+                                        "colonylink.citizens.tip.crafted_by", ce.markedBy())));
+                        }
+                        else if (ce.mark() == CitizensPacket.MARK_SENT && !ce.markedBy().isEmpty())
+                            tip.add(Component.literal("§7").append(Component.translatable(
+                                    "colonylink.citizens.tip.sent_by", ce.markedBy())));
+                        if (btnHov && citBtn.kind() == CitBtnKind.SENT && citBtn.clickable())
                         {
                             tip.add(Component.translatable("colonylink.screen.tip.already_sent"));
                             tip.add(Component.translatable("colonylink.screen.tip.cost_2pkg"));
                         }
-                        else if (btnHov && ceCanSend)
+                        else if (btnHov && citBtn.kind() == CitBtnKind.SEND)
                             tip.add(Component.translatable("colonylink.screen.tip.send_wh"));
-                        else if (btnHov && ceCanCraft)
+                        else if (btnHov && citBtn.kind() == CitBtnKind.CRAFT)
                             tip.add(Component.translatable("colonylink.screen.tip.craft_ae2"));
-
                     }
                 }
 
@@ -2580,11 +2636,10 @@ public class ColonyLinkScreen extends Screen
                     citizensLoading  = true;
                     citizenEntries   = new java.util.ArrayList<>();
                     PacketDistributor.sendToServer(new CitizensRequestPacket());
-                    // Rafraîchir le count + sent keys depuis la wand NBT (read-only)
+                    // Rafraîchir le count depuis la wand NBT (read-only)
                     net.minecraft.world.item.ItemStack tabWand = getClientWand();
                     if (!tabWand.isEmpty())
                         this.citizenPackageCount = ColonyLinkWandLinkableHandler.getCitizenPackages(tabWand);
-                    refreshSentCache();
                 }
                 return true;
             }
@@ -2839,18 +2894,20 @@ public class ColonyLinkScreen extends Screen
                 return true;
             }
 
-            boolean ceHasWH = hasWarehouseCard && !redirectorPos.equals(net.minecraft.core.BlockPos.ZERO);
-            if (ceHasWH)
+            // 1.7.0-beta.3 — the clickable buttons are the ones citizenButton() marks so:
+            // Send, Craft, and a re-clickable "Sent ↺" (which already require the
+            // Warehouse card). Delivering / In Warehouse / Colony crafting / Crafting… /
+            // In WH (N) are display-only.
             {
                 int listW = GUI_WIDTH - 26, listY = getListStartY();
-                int btnW = 44, btnH = 14;
+                int btnH = 14;
                 int vis2 = Math.min(MAX_VISIBLE, citizenEntries.size() - scrollOffset);
                 for (int i = 0; i < vis2; i++)
                 {
                     var ce  = citizenEntries.get(i + scrollOffset);
-                    boolean canSend  = ce.availableInME();
-                    boolean canCraft = ce.craftableInME();
-                    if (!canSend && !canCraft) continue;
+                    CitBtn citBtn = citizenButton(ce);
+                    if (citBtn == null || !citBtn.clickable()) continue;
+                    int btnW = citizenButtonWidth(citBtn);
                     int ey  = listY + i * ENTRY_HEIGHT;
                     int btnX = getGuiX() + 7 + listW - btnW - 2;
                     int btnY = ey + (ENTRY_HEIGHT - btnH) / 2;
@@ -2862,21 +2919,19 @@ public class ColonyLinkScreen extends Screen
                                 this.minecraft.player.sendSystemMessage(net.minecraft.network.chat.Component.translatable("colonylink.screen.msg.no_packages"));
                             return true;
                         }
-                        boolean wasAlreadySent = isCitizenSentDisplayed(sentKey(ce));
-                        String ceKey = sentKey(ce);
                         String itemLabel = "§f" + ce.count() + "x " + stripItemName(ce.stack().getDisplayName().getString());
 
-                        if (!wasAlreadySent)
+                        if (citBtn.kind() != CitBtnKind.SENT)
                         {
-                            // Premier clic : action normale (Send ou Craft selon disponibilité).
-                            // v1.6.0 — ZERO client-side NBT write: the SERVER records the
-                            // key on success (PackageTokenPacket.handle). The in-memory
-                            // optimistic overlay keeps the row grey during the round-trip;
-                            // it expires if the server rejected (refund path → no key).
-                            optimisticCitizenSentUntil.put(ceKey,
-                                    System.currentTimeMillis() + PENDING_HOLD_MS);
+                            // Premier clic : Send ou Craft. The SERVER records the mark on
+                            // success (PackageTokenPacket → CitizenRequestMemory). The
+                            // optimistic overlay (by request UUID) shows it during the
+                            // round-trip and expires if the server rejected (no mark).
+                            boolean craft = citBtn.kind() == CitBtnKind.CRAFT;
+                            (craft ? optimisticCitizenCraftUntil : optimisticCitizenSentUntil)
+                                    .put(ce.requestId(), System.currentTimeMillis() + PENDING_HOLD_MS);
                             PacketDistributor.sendToServer(new PackageTokenPacket(
-                                    ce.stack(), ce.count(), redirectorPos, !canSend, ce.citizenName()));
+                                    ce.stack(), ce.count(), redirectorPos, craft, ce.requestId()));
                             citizenPackageCount = Math.max(0, citizenPackageCount - 1);
                         }
                         else
@@ -2890,10 +2945,10 @@ public class ColonyLinkScreen extends Screen
                             }
                             // Craft d'abord
                             PacketDistributor.sendToServer(new PackageTokenPacket(
-                                    ce.stack(), ce.count(), redirectorPos, true, ce.citizenName()));
+                                    ce.stack(), ce.count(), redirectorPos, true, ce.requestId()));
                             // Puis send
                             PacketDistributor.sendToServer(new PackageTokenPacket(
-                                    ce.stack(), ce.count(), redirectorPos, false, ce.citizenName()));
+                                    ce.stack(), ce.count(), redirectorPos, false, ce.requestId()));
                             citizenPackageCount = Math.max(0, citizenPackageCount - 2);
                             if (this.minecraft != null && this.minecraft.player != null)
                                 this.minecraft.player.sendSystemMessage(net.minecraft.network.chat.Component.translatable("colonylink.screen.msg.resending", itemLabel));

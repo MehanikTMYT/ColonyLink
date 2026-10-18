@@ -125,6 +125,32 @@ public class ColonyLinkServerTicker
         }
     }
 
+    // ── 1.7.0-beta.3 — Citizens "Sent" memory lifecycle ──────────────────────
+
+    /** Ticker passes between two CitizenRequestMemory.cleanupAll runs. */
+    private static final int CITIZEN_MEMORY_CLEANUP_PASSES = 20;
+    private static int citizenMemoryPass = 0;
+
+    /** The memory is static: on an integrated server it would outlive the world. */
+    @SubscribeEvent
+    public static void onServerStopping(net.neoforged.neoforge.event.server.ServerStoppingEvent event)
+    {
+        CitizenRequestMemory.clear();
+    }
+
+    /**
+     * Players with the Clipboard open on the Citizens tab (activeTabIndex
+     * Integer.MAX_VALUE). Used to push a forced rescan to every viewer after a Send.
+     */
+    public static List<UUID> citizensTabViewers()
+    {
+        List<UUID> out = new ArrayList<>();
+        activeViewers.forEach((uuid, state) -> {
+            if (state.activeTabIndex() == Integer.MAX_VALUE) out.add(uuid);
+        });
+        return out;
+    }
+
     // ── Immediate update ──────────────────────────────────────────────────────
 
     public static void sendImmediateUpdate(ServerPlayer player, BlockPos builderPos, int activeTabIndex)
@@ -164,6 +190,14 @@ public class ColonyLinkServerTicker
     {
         if (tickCounter.incrementAndGet() < getTickerInterval()) return;
         tickCounter.set(0);
+
+        // 1.7.0-beta.3 — Citizens memory: drop marks of finished requests, even while
+        // nobody has the Citizens tab open.
+        if (++citizenMemoryPass >= CITIZEN_MEMORY_CLEANUP_PASSES)
+        {
+            citizenMemoryPass = 0;
+            CitizenRequestMemory.cleanupAll(event.getServer());
+        }
 
         // Ticker les Parts actives (sync warehouse/ME vers les viewers)
         activeTerminalParts.removeIf(part -> {
