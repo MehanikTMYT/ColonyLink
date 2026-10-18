@@ -104,6 +104,7 @@ public class ColonyLink
         ColonyLinkRegistry.BLOCK_ITEMS.register(modEventBus);
         ColonyLinkRegistry.BLOCK_ENTITIES.register(modEventBus);
         ColonyLinkRegistry.MENUS.register(modEventBus);
+        ColonyLinkRegistry.DATA_COMPONENTS.register(modEventBus);
 
         ColonyLinkRecipes.RECIPE_SERIALIZERS.register(modEventBus);
 

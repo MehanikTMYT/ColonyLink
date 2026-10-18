@@ -153,6 +153,19 @@ public class WarehouseScanHandler
             return;
         }
 
+        // 1.7.0-beta.2 — the Warehouse comes from the card, which must belong to the
+        // Redirector's Builder colony, and to the colony of the Builder being scanned.
+        CardLinks.Resolved card = CardLinks.resolveForRedirector(level, (ColonyLinkRedirectorBlockEntity) be, player);
+        if (card.ok() && card.colony().getID() != colony.getID())
+            card = new CardLinks.Resolved(CardLinks.Status.OTHER_COLONY, card.link(), null, null);
+        if (!card.ok())
+        {
+            player.sendSystemMessage(card.message());
+            sendFailure(player, currentTick);
+            return;
+        }
+        com.minecolonies.core.colony.buildings.workerbuildings.BuildingWareHouse cardWarehouse = card.warehouse();
+
         AbstractBuildingStructureBuilder builderBuilding = findBuilderBuilding(colony, builderPos);
         if (builderBuilding == null)
         {
@@ -186,7 +199,7 @@ public class WarehouseScanHandler
         // Stock standard (agrégé par Item) + stock DO finaux (par ItemStack avec NBT)
         // v1.4.9 — fail-off strict : le warehouse doit être ENTIÈREMENT chargé.
         // Un scan sur des racks en chunks déchargés renverrait un stock incomplet en silence.
-        if (!ColonyLinkChunkUtil.colonyWarehousesFullyLoaded(level, colony))
+        if (!ColonyLinkChunkUtil.warehouseFullyLoaded(level, cardWarehouse))
         {
             player.sendSystemMessage(Component.translatable("colonylink.whs.warehouse_unloaded"));
             sendFailure(player, currentTick);
@@ -198,7 +211,7 @@ public class WarehouseScanHandler
 
         Map<Item, Long> warehouseStock = new HashMap<>();
         List<ItemStack> warehouseDomumStock = new ArrayList<>();
-        scanWarehouseRacks(colony, level, warehouseStock, warehouseDomumStock);
+        scanWarehouseRacks(cardWarehouse, level, warehouseStock, warehouseDomumStock);
 
         if (warehouseStock.isEmpty() && warehouseDomumStock.isEmpty())
         {
@@ -266,17 +279,16 @@ public class WarehouseScanHandler
      *                 pour permettre la comparaison par isSameItemSameComponents
      */
     private static void scanWarehouseRacks(
-            IColony colony,
+            com.minecolonies.core.colony.buildings.workerbuildings.BuildingWareHouse warehouse,
             ServerLevel level,
             Map<Item, Long> stock,
             List<ItemStack> domumStock)
     {
-        for (IBuilding building : colony.getServerBuildingManager().getBuildings().values())
+        // 1.7.0-beta.2 — only the card's Warehouse is scanned (it used to be every
+        // building of the colony whose class name contains "WareHouse"), so the scan
+        // shows the same Warehouse that Send and Craft pull from.
+        for (IBuilding building : List.<IBuilding>of(warehouse))
         {
-            if (!building.getClass().getSimpleName().contains("WareHouse")
-                    && !building.getClass().getSimpleName().contains("Warehouse"))
-                continue;
-
             try
             {
                 var containerList = building.getContainers();

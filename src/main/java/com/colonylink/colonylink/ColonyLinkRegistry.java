@@ -1,6 +1,7 @@
 package com.colonylink.colonylink;
 
 import appeng.api.AECapabilities;
+import net.minecraft.core.component.DataComponentType;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -20,6 +21,15 @@ public class ColonyLinkRegistry
             net.minecraft.core.registries.Registries.BLOCK_ENTITY_TYPE, ColonyLink.MODID);
     public static final DeferredRegister<MenuType<?>> MENUS = DeferredRegister.create(
             net.minecraft.core.registries.Registries.MENU, ColonyLink.MODID);
+    public static final DeferredRegister.DataComponents DATA_COMPONENTS =
+            DeferredRegister.createDataComponents(
+                    net.minecraft.core.registries.Registries.DATA_COMPONENT_TYPE, ColonyLink.MODID);
+
+    // ── 1.7.0-beta.2 — Warehouse Link Card: linked colony + Warehouse ─────────
+
+    public static final DeferredHolder<DataComponentType<?>, DataComponentType<CardLink>>
+            CARD_LINK = DATA_COMPONENTS.registerComponentType("card_link",
+            builder -> builder.persistent(CardLink.CODEC).networkSynchronized(CardLink.STREAM_CODEC));
 
     // ── AE2 Redirector ────────────────────────────────────────────────────────
 

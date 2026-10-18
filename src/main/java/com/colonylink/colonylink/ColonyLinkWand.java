@@ -277,6 +277,30 @@ public class ColonyLinkWand extends Item implements IAEItemPowerStorage
                 targetIndex = Math.min(activeTab, entries.size() - 1);
 
             BuilderEntry target = entries.get(targetIndex);
+
+            // 1.7.0-beta.2 — pairing decides the Redirector's colony (ColonyResolver
+            // .forRedirector reads the Builder written here), so it requires ACCESS_HUTS
+            // on the targeted Builder's colony, checked on this player. The colony is
+            // resolved in the Redirector's level, so a Builder entry of another
+            // dimension is refused first (its colony cannot be checked from here).
+            if (target.dimension() != null && !target.dimension().equals(level.dimension()))
+            {
+                player.sendSystemMessage(Component.translatable("colonylink.handler.cross_dimension",
+                        target.dimension().location().getPath()));
+                return net.minecraft.world.InteractionResult.FAIL;
+            }
+            IColony targetColony = ColonyResolver.forBuilder(level, target.builderPos());
+            if (targetColony == null)
+            {
+                player.sendSystemMessage(Component.translatable("colonylink.colony.not_found"));
+                return net.minecraft.world.InteractionResult.FAIL;
+            }
+            if (!targetColony.getPermissions().hasPermission(sp, Action.ACCESS_HUTS))
+            {
+                player.sendSystemMessage(Component.translatable("colonylink.wand.msg.no_permission_colony"));
+                return net.minecraft.world.InteractionResult.FAIL;
+            }
+
             redirector.setTargetInventoryPos(target.builderPos());
             redirector.setLinkedBuilderPos(target.builderPos());
             redirector.setLinkedBuilderName(target.builderName());

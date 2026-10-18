@@ -238,8 +238,18 @@ public class SendToBuilderHandler
             player.sendSystemMessage(Component.translatable("colonylink.handler.hut_unloaded"));
             return;
         }
-        if (redirector.hasWarehouseCard()
-                && !ColonyLinkChunkUtil.colonyWarehousesFullyLoaded(level, sendColony))
+        // 1.7.0-beta.2 — the Warehouse is the one written on the card, and the card must
+        // belong to the Builder's colony. A card that does not resolve (not linked,
+        // other colony, colony or Warehouse lost) is reported and the send goes on
+        // ME-only, exactly as without a card.
+        BuildingWareHouse cardWarehouse = null;
+        if (redirector.hasWarehouseCard())
+        {
+            CardLinks.Resolved card = CardLinks.resolveForRedirector(level, redirector, player);
+            if (card.ok()) cardWarehouse = card.warehouse();
+            else player.sendSystemMessage(card.message());
+        }
+        if (cardWarehouse != null && !ColonyLinkChunkUtil.warehouseFullyLoaded(level, cardWarehouse))
         {
             player.sendSystemMessage(Component.translatable("colonylink.handler.warehouse_unloaded"));
             return;
@@ -286,20 +296,20 @@ public class SendToBuilderHandler
         // ── Extraction selon la priorité du Redirector (v1.4.9) ───────────────
         // S'applique à TOUS les items, Domum inclus : un bloc Domum fini présent
         // dans la warehouse est livré directement (sans AE2), via pullFromWarehouse.
-        boolean warehouseEnabled  = redirector.hasWarehouseCard();
+        boolean warehouseEnabled  = cardWarehouse != null; // 1.7.0-beta.2 — a card that resolves
         boolean warehousePriority = warehouseEnabled && redirector.isWarehousePriority();
 
         if (warehouseEnabled && warehousePriority)
         {
             // Priorité warehouse : racks d'abord, puis ME.
-            remaining = pullFromWarehouse(player, level, stack, remaining, redirector, buildingHandlers);
+            remaining = pullFromWarehouse(player, level, stack, remaining, cardWarehouse, redirector, buildingHandlers);
             remaining = pullFromMe(player, aeKey, remaining, inventory, actionSource, redirector, buildingHandlers);
         }
         else if (warehouseEnabled)
         {
             // Carte présente sans priorité : ME d'abord, puis warehouse en fallback.
             remaining = pullFromMe(player, aeKey, remaining, inventory, actionSource, redirector, buildingHandlers);
-            remaining = pullFromWarehouse(player, level, stack, remaining, redirector, buildingHandlers);
+            remaining = pullFromWarehouse(player, level, stack, remaining, cardWarehouse, redirector, buildingHandlers);
         }
         else
         {
@@ -637,22 +647,21 @@ public class SendToBuilderHandler
      */
     private static int pullFromWarehouse(
             ServerPlayer player, ServerLevel level, ItemStack stack, int remaining,
+            BuildingWareHouse warehouse,
             ColonyLinkRedirectorBlockEntity redirector, List<IItemHandler> buildingHandlers)
     {
         if (remaining <= 0) return remaining;
 
-        // 1.7.0 — colony of the Redirector's linked Builder, never of the Redirector's
-        // own position (same colony the chunk-load guard in handleSendToBuilder checked).
-        IColony colony = ColonyResolver.forRedirector(level, redirector);
-        if (colony == null) return remaining;
+        // 1.7.0-beta.2 — the card's Warehouse, resolved by the caller (card colony ==
+        // the linked Builder's colony), instead of the first Warehouse of the building
+        // map of ColonyResolver.forRedirector's colony.
+        if (warehouse == null) return remaining;
 
-        for (IBuilding building : colony.getServerBuildingManager().getBuildings().values())
         {
-            if (!(building instanceof BuildingWareHouse warehouse)) continue;
             try
             {
                 var containerList = warehouse.getContainers();
-                if (containerList == null || containerList.isEmpty()) break;
+                if (containerList == null || containerList.isEmpty()) return remaining;
 
                 for (BlockPos rackPos : containerList)
                 {
@@ -692,7 +701,6 @@ public class SendToBuilderHandler
             {
                 ColonyLink.LOGGER.debug("[ColonyLink] Warehouse extraction error: {}", e.getMessage());
             }
-            break;
         }
         return remaining;
     }

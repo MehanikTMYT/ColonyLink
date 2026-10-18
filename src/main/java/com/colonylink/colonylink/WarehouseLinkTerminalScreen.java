@@ -837,7 +837,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
         // Slot survolé, calculé comme les tooltips (itemSlot) → highlight toujours
         // aligné sur le tooltip, à n'importe quel GUI Scale.
         int hovIdx = itemSlot(mx, my, panelX);
-        if (isWh && (!hasWarehouseCard || !whErrorMsg.isEmpty()))
+        if (isWh && !hasWarehouseCard)
         {
             // Overlay "pas de card"
             g.fill(panelX, guiY + Y_ITEMS,
@@ -858,9 +858,15 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
                     panelX + PANEL_COLS * SLOT_PITCH,
                     guiY + Y_ITEMS + visRows() * SLOT_PITCH,
                     C_NOCARD_OV);
-            g.drawCenteredString(font, whErrorMsg,
-                    panelX + (PANEL_COLS * SLOT_PITCH) / 2,
-                    guiY + Y_ITEMS + (visRows() * SLOT_PITCH) / 2, 0xFF8888BB);
+            // 1.7.0-beta.2 — the server sends a translation key (card status); wrapped
+            // to the panel width. A plain string is shown as-is (translatable falls back
+            // to the key itself).
+            java.util.List<net.minecraft.util.FormattedCharSequence> lines = font.split(
+                    Component.translatable(whErrorMsg), PANEL_COLS * SLOT_PITCH - 8);
+            int cx = panelX + (PANEL_COLS * SLOT_PITCH) / 2;
+            int cy = guiY + Y_ITEMS + (visRows() * SLOT_PITCH) / 2 - lines.size() * 5;
+            for (int i = 0; i < lines.size(); i++)
+                g.drawCenteredString(font, lines.get(i), cx, cy + i * 10, 0xFF8888BB);
             return;
         }
         if (!isWh && !menu.getPart().isAe2Active())

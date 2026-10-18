@@ -209,6 +209,21 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
         {
             @Override public boolean mayPlace(ItemStack s)
             { return s.getItem() instanceof WarehouseLinkCard; }
+
+            // 1.7.0-beta.2 — every player insertion goes through setByPlayer: a blank
+            // card is linked here, for the inserting player, to the colony where that
+            // player has hut access, Warehouse closest to this Terminal.
+            @Override public void setByPlayer(ItemStack newStack, ItemStack oldStack)
+            {
+                if (part != null && player instanceof net.minecraft.server.level.ServerPlayer sp
+                        && CardLinks.isUnlinkedCard(newStack))
+                {
+                    BlockEntity hostBe = part.getHostBlockEntity();
+                    if (hostBe != null)
+                        CardLinks.autoLink(newStack, sp, hostBe.getBlockPos(), null);
+                }
+                super.setByPlayer(newStack, oldStack);
+            }
         });
 
         // Slots 1-9 — Grille craft 3×3

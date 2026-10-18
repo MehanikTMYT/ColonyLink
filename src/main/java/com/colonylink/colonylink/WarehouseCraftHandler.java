@@ -142,12 +142,18 @@ public class WarehouseCraftHandler
             return;
         }
 
-        BuildingWareHouse warehouse = findWarehouse(colony);
-        if (warehouse == null)
+        // 1.7.0-beta.2 — the Warehouse is the one written on the card (instead of the
+        // first Warehouse of the building map). The card must belong to the Redirector's
+        // Builder colony and to the colony of this Clipboard entry's Builder.
+        CardLinks.Resolved card = CardLinks.resolveForRedirector(level, cardRedirector, player);
+        if (card.ok() && card.colony().getID() != colony.getID())
+            card = new CardLinks.Resolved(CardLinks.Status.OTHER_COLONY, card.link(), null, null);
+        if (!card.ok())
         {
-            player.sendSystemMessage(Component.translatable("colonylink.whc.no_warehouse"));
+            player.sendSystemMessage(card.message());
             return;
         }
+        BuildingWareHouse warehouse = card.warehouse();
 
         // v1.4.9 — fail-off strict : le warehouse doit être ENTIÈREMENT chargé avant
         // toute extraction (sinon racks null en silence → transferts partiels).
@@ -596,13 +602,6 @@ public class WarehouseCraftHandler
         catch (Exception e)
         { ColonyLink.LOGGER.debug("[ColonyLink] Warehouse rack extraction error: {}", e.getMessage()); }
         return totalExtracted;
-    }
-
-    private static BuildingWareHouse findWarehouse(IColony colony)
-    {
-        for (IBuilding building : colony.getServerBuildingManager().getBuildings().values())
-            if (building instanceof BuildingWareHouse wh) return wh;
-        return null;
     }
 
     private static ItemStack findWandInInventory(ServerPlayer player)

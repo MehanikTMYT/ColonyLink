@@ -1,6 +1,7 @@
 package com.colonylink.colonylink;
 
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -11,6 +12,7 @@ import net.neoforged.neoforge.items.SlotItemHandler;
 public class ColonyLinkRedirectorMenu extends AbstractContainerMenu
 {
     private final ColonyLinkRedirectorBlockEntity blockEntity;
+    private final ServerPlayer serverPlayer;
 
     public static final int BUFFER_COLS = ColonyLinkRedirectorBlockEntity.BUFFER_COLS;
     public static final int BUFFER_ROWS = ColonyLinkRedirectorBlockEntity.BUFFER_ROWS;
@@ -42,6 +44,12 @@ public class ColonyLinkRedirectorMenu extends AbstractContainerMenu
     {
         super(ColonyLinkRegistry.REDIRECTOR_MENU_TYPE.get(), containerId);
         this.blockEntity = blockEntity;
+        // 1.7.0-beta.2 — the player who opened the menu, server side only (null on the
+        // client): the card slot links a blank card for the player who inserts it.
+        this.serverPlayer = playerInventory.player instanceof ServerPlayer sp ? sp : null;
+        // A pre-beta.2 card already in the slot is linked on open to the Builder's
+        // colony, when the opening player has hut access there.
+        if (serverPlayer != null) CardLinks.migrateRedirectorCard(blockEntity, serverPlayer);
 
         // ── Slot Warehouse Link Card ─────────────────────────────────────────
         // Item area of the AE2 upgrade-cell box overflowing the top-right edge. The
@@ -55,6 +63,19 @@ public class ColonyLinkRedirectorMenu extends AbstractContainerMenu
             public boolean mayPlace(ItemStack stack)
             {
                 return stack.getItem() instanceof WarehouseLinkCard;
+            }
+
+            // 1.7.0-beta.2 — every player insertion (click, drag, shift-click via
+            // moveItemStackTo, hotbar swap) goes through setByPlayer. A blank card is
+            // linked here, for the inserting player: the Builder's colony first when
+            // the player has hut access there, Warehouse closest to this Redirector.
+            @Override
+            public void setByPlayer(ItemStack newStack, ItemStack oldStack)
+            {
+                if (serverPlayer != null && CardLinks.isUnlinkedCard(newStack))
+                    CardLinks.autoLink(newStack, serverPlayer, blockEntity.getBlockPos(),
+                            ColonyResolver.forRedirector(serverPlayer.level(), blockEntity));
+                super.setByPlayer(newStack, oldStack);
             }
         });
 

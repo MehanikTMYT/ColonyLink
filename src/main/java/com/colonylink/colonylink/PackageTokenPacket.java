@@ -197,6 +197,7 @@ public record PackageTokenPacket(
         // player's Clipboard (never the Redirector's own position), and an unresolvable
         // colony is refused before any Package is consumed (was permissive).
         IColony sendColony = null;
+        BuildingWareHouse sendWarehouse = null;
         if (!isCraft)
         {
             sendColony = ColonyResolver.forBuilder(level, linkedBuilderPos);
@@ -212,6 +213,20 @@ public record PackageTokenPacket(
                 player.sendSystemMessage(Component.translatable("colonylink.wand.msg.no_permission"));
                 return;
             }
+            // 1.7.0-beta.2 — deliver into the card's Warehouse (was: every Warehouse
+            // of the colony, in building-map order). The card must belong to the
+            // Redirector's Builder colony and to this Clipboard entry's colony.
+            // Checked before any Package is consumed.
+            CardLinks.Resolved card = CardLinks.resolveForRedirector(level, redirector, player);
+            if (card.ok() && card.colony().getID() != sendColony.getID())
+                card = new CardLinks.Resolved(CardLinks.Status.OTHER_COLONY, card.link(), null, null);
+            if (!card.ok())
+            {
+                resyncPackages(player, wand);
+                player.sendSystemMessage(card.message());
+                return;
+            }
+            sendWarehouse = card.warehouse();
         }
 
         // 5. Consommer 1 package AVANT l'action (point de non-retour)
@@ -222,7 +237,7 @@ public record PackageTokenPacket(
         if (isCraft)
             success = doCraft(player, stack, count, grid, wap);
         else
-            success = doSend(player, stack, count, sendColony, grid, wap, level, redirector);
+            success = doSend(player, stack, count, sendWarehouse, grid, wap, level, redirector);
 
         // 7. Feedback
         String itemName = stripBrackets(stack.getDisplayName().getString());
@@ -254,7 +269,7 @@ public record PackageTokenPacket(
     // ── Send : ME → Warehouse ─────────────────────────────────────────────────
 
     private static boolean doSend(ServerPlayer player, ItemStack stack, int count,
-                                  IColony colony, IGrid grid, IWirelessAccessPoint wap,
+                                  BuildingWareHouse warehouse, IGrid grid, IWirelessAccessPoint wap,
                                   ServerLevel level, ColonyLinkRedirectorBlockEntity redirector)
     {
         AEItemKey aeKey = AEItemKey.of(stack);
@@ -272,16 +287,16 @@ public record PackageTokenPacket(
 
         // 1.7.0 — colony resolved (and permission-checked) by the caller from the
         // Clipboard entry's Builder, not from the Redirector's position.
-        if (colony == null) return false;
+        // 1.7.0-beta.2 — the caller passes the card's Warehouse of that colony.
+        if (warehouse == null) return false;
 
         int remaining = Math.min(count, (int) inStock);
         int totalInserted = 0;
 
         outer:
-        for (IBuilding building : colony.getServerBuildingManager().getBuildings().values())
+        for (BuildingWareHouse wh : java.util.List.of(warehouse))
         {
-            if (!(building instanceof BuildingWareHouse warehouse)) continue;
-            var containers = warehouse.getContainers();
+            var containers = wh.getContainers();
             if (containers == null) continue;
             for (BlockPos rackPos : containers)
             {

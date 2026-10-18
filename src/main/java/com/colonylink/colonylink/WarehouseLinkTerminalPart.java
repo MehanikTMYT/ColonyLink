@@ -275,10 +275,23 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         if (this.getLevel() == null || this.getLevel().isClientSide()) return true;
         if (!(player instanceof ServerPlayer sp)) return true;
 
+        // 1.7.0-beta.2 — a pre-beta.2 card in this Terminal is linked on open, only when
+        // the Terminal is inside a colony claim (before the permission check, which
+        // then reads that colony from the card, as it read the closest colony before).
+        migrateOldCard();
+
         if (!checkPermission(sp))
         {
             sp.sendSystemMessage(Component.translatable("colonylink.terminal.no_permission"));
             return true;
+        }
+
+        // 1.7.0-beta.2 — a card that does not resolve (not linked, colony lost or
+        // reassigned, Warehouse gone…) is reported; the terminal still opens (ME side).
+        if (hasWarehouseCard())
+        {
+            CardLinks.Resolved card = resolveCard(sp.serverLevel());
+            if (!card.ok()) msg(sp, card.message());
         }
 
         BlockEntity hostBe = this.getBlockEntity();
@@ -437,11 +450,11 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     {
         if (!hasWarehouseCard()) return 0L;
 
-        IColony colony = findColony(level);
-        if (colony == null) return 1L;
-
-        BuildingWareHouse warehouse = findWarehouse(colony);
-        if (warehouse == null) return 2L;
+        // 1.7.0-beta.2 — colony + Warehouse come from the card. One distinct signature
+        // per failure status, so the panel re-syncs when the status changes.
+        CardLinks.Resolved card = resolveCard(level);
+        if (!card.ok()) return 1L + card.status().ordinal();
+        BuildingWareHouse warehouse = card.warehouse();
 
         long sig = 0xcbf29ce484222325L; // FNV offset basis
         final long FNV_PRIME = 0x100000001b3L;
@@ -537,13 +550,12 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         if (!hasCard)
             return new WarehouseTerminalSyncPacket(List.of(), false, hostPos, "");
 
-        IColony colony = findColony(level);
-        if (colony == null)
-            return new WarehouseTerminalSyncPacket(List.of(), true, hostPos, "No colony found");
-
-        BuildingWareHouse warehouse = findWarehouse(colony);
-        if (warehouse == null)
-            return new WarehouseTerminalSyncPacket(List.of(), true, hostPos, "No warehouse nearby");
+        // 1.7.0-beta.2 — the error is now a translation key (the Screen translates it);
+        // it replaces the hard-coded "No colony found" / "No warehouse nearby".
+        CardLinks.Resolved card = resolveCard(level);
+        if (!card.ok())
+            return new WarehouseTerminalSyncPacket(List.of(), true, hostPos, card.panelKey());
+        BuildingWareHouse warehouse = card.warehouse();
 
         java.util.Map<String, WarehouseTerminalSyncPacket.WarehouseItemEntry> aggregated = new java.util.LinkedHashMap<>();
 
@@ -667,10 +679,9 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         if (carried.isEmpty()) return;
 
         ServerLevel level = player.serverLevel();
-        IColony colony = findColony(level);
-        if (colony == null) { msg(player, Component.translatable("colonylink.terminal.no_colony")); return; }
-        BuildingWareHouse wh = findWarehouse(colony);
-        if (wh == null) { msg(player, Component.translatable("colonylink.terminal.no_warehouse")); return; }
+        CardLinks.Resolved card = resolveCard(level);
+        if (!card.ok()) { msg(player, card.message()); return; }
+        BuildingWareHouse wh = card.warehouse();
         // v1.4.9 — fail-off strict : warehouse entièrement chargé requis.
         if (!ColonyLinkChunkUtil.warehouseFullyLoaded(level, wh))
         {
@@ -744,10 +755,9 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     {
         if (!checkWarehouseAccess(player)) return;
         ServerLevel level = player.serverLevel();
-        IColony colony = findColony(level);
-        if (colony == null) { msg(player, Component.translatable("colonylink.terminal.no_colony")); return; }
-        BuildingWareHouse wh = findWarehouse(colony);
-        if (wh == null) { msg(player, Component.translatable("colonylink.terminal.no_warehouse")); return; }
+        CardLinks.Resolved card = resolveCard(level);
+        if (!card.ok()) { msg(player, card.message()); return; }
+        BuildingWareHouse wh = card.warehouse();
         // v1.4.9 — fail-off strict : warehouse entièrement chargé requis.
         if (!ColonyLinkChunkUtil.warehouseFullyLoaded(level, wh))
         {
@@ -883,10 +893,9 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     {
         if (!checkWarehouseAccess(player)) return 0;
         ServerLevel level = player.serverLevel();
-        IColony colony = findColony(level);
-        if (colony == null) { msg(player, Component.translatable("colonylink.terminal.no_colony")); return 0; }
-        BuildingWareHouse wh = findWarehouse(colony);
-        if (wh == null) { msg(player, Component.translatable("colonylink.terminal.no_warehouse")); return 0; }
+        CardLinks.Resolved card = resolveCard(level);
+        if (!card.ok()) { msg(player, card.message()); return 0; }
+        BuildingWareHouse wh = card.warehouse();
         // v1.4.9 — fail-off strict : warehouse entièrement chargé requis.
         if (!ColonyLinkChunkUtil.warehouseFullyLoaded(level, wh))
         {
@@ -957,10 +966,9 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     {
         if (!checkWarehouseAccess(player)) return 0;
         ServerLevel level = player.serverLevel();
-        IColony colony = findColony(level);
-        if (colony == null) { msg(player, Component.translatable("colonylink.terminal.no_colony")); return 0; }
-        BuildingWareHouse wh = findWarehouse(colony);
-        if (wh == null) { msg(player, Component.translatable("colonylink.terminal.no_warehouse")); return 0; }
+        CardLinks.Resolved card = resolveCard(level);
+        if (!card.ok()) { msg(player, card.message()); return 0; }
+        BuildingWareHouse wh = card.warehouse();
         // v1.4.9 — fail-off strict : warehouse entièrement chargé requis.
         if (!ColonyLinkChunkUtil.warehouseFullyLoaded(level, wh))
         {
@@ -1020,10 +1028,9 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     {
         if (!checkWarehouseAccess(player)) return 0;
         ServerLevel level = player.serverLevel();
-        IColony colony = findColony(level);
-        if (colony == null) { msg(player, Component.translatable("colonylink.terminal.no_colony")); return 0; }
-        BuildingWareHouse wh = findWarehouse(colony);
-        if (wh == null) { msg(player, Component.translatable("colonylink.terminal.no_warehouse")); return 0; }
+        CardLinks.Resolved card = resolveCard(level);
+        if (!card.ok()) { msg(player, card.message()); return 0; }
+        BuildingWareHouse wh = card.warehouse();
         // v1.4.9 — fail-off strict : warehouse entièrement chargé requis.
         if (!ColonyLinkChunkUtil.warehouseFullyLoaded(level, wh))
         {
@@ -1125,10 +1132,9 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     {
         if (!checkWarehouseAccess(player)) return 0;
         ServerLevel level = player.serverLevel();
-        IColony colony = findColony(level);
-        if (colony == null) return 0;
-        BuildingWareHouse wh = findWarehouse(colony);
-        if (wh == null) return 0;
+        CardLinks.Resolved card = resolveCard(level);
+        if (!card.ok()) return 0;
+        BuildingWareHouse wh = card.warehouse();
         // v1.4.9 — fail-off strict : warehouse entièrement chargé requis.
         if (!ColonyLinkChunkUtil.warehouseFullyLoaded(level, wh))
         {
@@ -1366,12 +1372,15 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         // (AE2 security), by resolvePart requiring the menu to be actually open, and
         // by the menu's range check — no colony binding to enforce here.
         if (!hasWarehouseCard()) return true;
-        ServerLevel level = player.serverLevel();
-        IColony colony = findColony(level);
-        // v1.6.2 — card present but no colony resolvable: deny warehouse ops instead
-        // of failing open. A bound card without a colony can only be an anomaly.
-        if (colony == null) return false;
-        return colony.getPermissions().hasPermission(player, Action.ACCESS_HUTS);
+        // 1.7.0-beta.2 — the colony is the one written on the card, checked live on
+        // this player. A card that resolves to no colony (not linked, other dimension,
+        // colony lost) unlocks nothing: the terminal then behaves exactly like the
+        // card-less ME terminal above, and every Warehouse action still fails on the
+        // card resolution with its own message (so the player can open the terminal,
+        // read the error and take the card out).
+        CardLinks.Resolved card = resolveCard(player.serverLevel());
+        if (card.colony() == null) return true;
+        return card.colony().getPermissions().hasPermission(player, Action.ACCESS_HUTS);
     }
 
     /**
@@ -1385,17 +1394,30 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         return hasWarehouseCard() && checkPermission(player);
     }
 
-    private IColony findColony(ServerLevel level)
+    /**
+     * 1.7.0-beta.2 — colony + Warehouse written on the card in the slot. Replaces
+     * findColony (closest colony to the Terminal, no radius) and findWarehouse (first
+     * Warehouse of the building map, unordered).
+     */
+    private CardLinks.Resolved resolveCard(ServerLevel level)
     {
-        BlockPos pos = this.getBlockEntity() != null ? this.getBlockEntity().getBlockPos() : BlockPos.ZERO;
-        return IColonyManager.getInstance().getClosestColony(level, pos);
+        return CardLinks.resolve(warehouseCardSlot.getStackInSlot(0), level);
     }
 
-    private BuildingWareHouse findWarehouse(IColony colony)
+    /**
+     * 1.7.0-beta.2 — migration of a pre-beta.2 (blank) card already in this Terminal:
+     * linked to the colony whose claim the Terminal stands in, Warehouse closest to
+     * the Terminal. Outside any claim nothing happens; a player re-inserting the card
+     * links it. Called when a player opens the terminal.
+     */
+    private void migrateOldCard()
     {
-        for (IBuilding b : colony.getServerBuildingManager().getBuildings().values())
-            if (b instanceof BuildingWareHouse wh) return wh;
-        return null;
+        ItemStack card = warehouseCardSlot.getStackInSlot(0);
+        BlockEntity hostBe = this.getBlockEntity();
+        if (hostBe == null || !CardLinks.isUnlinkedCard(card)) return;
+        ItemStack linked = card.copy();
+        if (CardLinks.migrateInTerritory(linked, this.getLevel(), hostBe.getBlockPos()))
+            warehouseCardSlot.setStackInSlot(0, linked);
     }
 
     private static ItemStack insertIntoHandler(IItemHandler handler, ItemStack stack)
@@ -1408,6 +1430,6 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
 
     private static void msg(ServerPlayer player, Component text)
     {
-        player.sendSystemMessage(text);
+        if (text != null) player.sendSystemMessage(text);
     }
 }
