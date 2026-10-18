@@ -93,6 +93,7 @@ public class WarehouseCraftHandler
         // validating builderPos). Without this, a modified client could point the craft
         // at any colony's warehouse and drain it into its own ME network.
         boolean redirectorLinked = false;
+        BuilderEntry linkedEntry = null; // 1.7.0-beta.4 — resolves the Redirector by UUID
         BlockPos linkedBuilderPos = null; // 1.7.0 — the colony comes from this Builder
         for (BuilderEntry e : ColonyLinkWandLinkableHandler.getBuilderEntries(wandStack))
         {
@@ -100,6 +101,7 @@ public class WarehouseCraftHandler
             {
                 redirectorLinked = true;
                 linkedBuilderPos = e.builderPos();
+                linkedEntry = e;
                 break;
             }
         }
@@ -112,7 +114,8 @@ public class WarehouseCraftHandler
         // 1.7.0 — server-side card guard. The client only sends this packet from a
         // fresh Warehouse Check snapshot, and that scan already requires the card
         // (WarehouseScanHandler); a modified client could skip it, so re-check here.
-        if (!(level.getBlockEntity(redirectorPos) instanceof ColonyLinkRedirectorBlockEntity cardRedirector))
+        // 1.7.0-beta.4 — by the entry's Redirector UUID first (follows a moved Redirector).
+        if (!(RedirectorRegistry.forEntry(level, linkedEntry) instanceof ColonyLinkRedirectorBlockEntity cardRedirector))
         {
             player.sendSystemMessage(Component.translatable("colonylink.stb.redirector_not_found"));
             return;

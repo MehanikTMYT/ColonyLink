@@ -284,6 +284,46 @@ public class ColonyLinkWandLinkableHandler implements IGridLinkableHandler
         return null;
     }
 
+    /**
+     * 1.7.0-beta.4 — fills the Redirector UUID of an entry from the Redirector at its
+     * stored position: entries paired before beta.4 (no UUID), and entries whose linked
+     * Redirector is gone (UUID not loaded anywhere) while a Redirector stands at the same
+     * spot (broken and placed again: new UUID). Only loaded positions are read (never
+     * loads a chunk); the Clipboard is rewritten only if something changed. SERVER-side.
+     */
+    public static void upgradeRedirectorIds(ItemStack stack, net.minecraft.world.level.Level level)
+    {
+        List<BuilderEntry> entries = getBuilderEntries(stack);
+        boolean changed = false;
+        for (int i = 0; i < entries.size(); i++)
+        {
+            BuilderEntry e = entries.get(i);
+            if (!e.hasRedirector() || !level.isLoaded(e.redirectorPos())) continue;
+            if (e.redirectorId() != null && RedirectorRegistry.resolve(e.redirectorId(), level) != null) continue;
+            if (level.getBlockEntity(e.redirectorPos()) instanceof ColonyLinkRedirectorBlockEntity r
+                    && !r.getRedirectorId().equals(e.redirectorId()))
+            {
+                entries.set(i, e.withRedirector(e.redirectorPos(), r.getRedirectorId()));
+                changed = true;
+            }
+        }
+        if (changed) setBuilderEntries(stack, entries);
+    }
+
+    /**
+     * 1.7.0-beta.4 — the entry whose Redirector the client designates by
+     * {@code redirectorPos} (the key it got from the Clipboard), or null. Resolve the
+     * block entity with {@link RedirectorRegistry#forEntry}: by UUID it follows a moved
+     * Redirector, while the client keeps sending the original position.
+     */
+    public static BuilderEntry findEntryByRedirectorPos(ItemStack stack, BlockPos redirectorPos)
+    {
+        if (redirectorPos == null) return null;
+        for (BuilderEntry e : getBuilderEntries(stack))
+            if (e.hasRedirector() && e.redirectorPos().equals(redirectorPos)) return e;
+        return null;
+    }
+
     public static BlockPos getActiveRedirectorPos(ItemStack stack)
     {
         BuilderEntry entry = getActiveEntry(stack);

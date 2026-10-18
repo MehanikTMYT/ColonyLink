@@ -117,6 +117,7 @@ public record PackageTokenPacket(
         // point the wand is available, before anything else is checked or consumed.
         boolean redirectorLinked = false;
         BlockPos linkedBuilderPos = null; // 1.7.0 — the colony comes from this Builder
+        BuilderEntry linkedEntry = null;  // 1.7.0-beta.4 — resolves the Redirector by UUID
         for (BuilderEntry e : ColonyLinkWandLinkableHandler.getBuilderEntries(wand))
         {
             if (e.hasRedirector() && e.redirectorPos().equals(redirectorPos))
@@ -127,6 +128,7 @@ public record PackageTokenPacket(
                     break;
                 redirectorLinked = true;
                 linkedBuilderPos = e.builderPos();
+                linkedEntry = e;
                 break;
             }
         }
@@ -148,7 +150,8 @@ public record PackageTokenPacket(
 
         // 3. Vérifier le redirector et la warehouse card
         ServerLevel level = player.serverLevel();
-        var be = level.getBlockEntity(redirectorPos);
+        // 1.7.0-beta.4 — by the entry's Redirector UUID first (follows a moved Redirector).
+        var be = RedirectorRegistry.forEntry(level, linkedEntry);
         if (!(be instanceof ColonyLinkRedirectorBlockEntity redirector))
         {
             resyncPackages(player, wand);

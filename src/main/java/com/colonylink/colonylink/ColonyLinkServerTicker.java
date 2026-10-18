@@ -136,6 +136,7 @@ public class ColonyLinkServerTicker
     public static void onServerStopping(net.neoforged.neoforge.event.server.ServerStoppingEvent event)
     {
         CitizenRequestMemory.clear();
+        RedirectorRegistry.clear(); // 1.7.0-beta.4
     }
 
     /**
@@ -370,6 +371,7 @@ public class ColonyLinkServerTicker
 
         String rState = "N/A"; boolean hasCard = false, whPrio = false;
         BlockPos rPos = null;
+        BuilderEntry rEntry = null; // 1.7.0-beta.4 — resolves the Redirector by UUID
         if (!allEntries.isEmpty())
         {
             // v1.6.2 — last-resort clamp (low + high): activeTabIndex is client-sourced
@@ -377,12 +379,15 @@ public class ColonyLinkServerTicker
             // GuiStatePacket sanitisation. Integer.MAX_VALUE (Citizens) collapses to size-1.
             int st = Math.max(0, Math.min(activeTabIndex, allEntries.size() - 1));
             BuilderEntry ae = allEntries.get(st);
-            if (ae.hasRedirector()) rPos = ae.redirectorPos();
+            if (ae.hasRedirector()) { rPos = ae.redirectorPos(); rEntry = ae; }
         }
 
         if (rPos != null)
         {
-            var rbe = level.getBlockEntity(rPos);
+            // 1.7.0-beta.4 — by the entry's Redirector UUID first (follows a moved
+            // Redirector). rPos stays the key sent to the client (it designates the
+            // entry in later packets).
+            var rbe = RedirectorRegistry.forEntry(level, rEntry);
             if (rbe instanceof ColonyLinkRedirectorBlockEntity r)
             {
                 r.updateState();

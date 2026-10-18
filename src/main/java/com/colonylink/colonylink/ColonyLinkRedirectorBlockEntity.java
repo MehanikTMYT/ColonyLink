@@ -61,6 +61,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
@@ -104,7 +105,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  *       création + getGridNode(UP) → null. DOWN + 4 côtés inchangés.
  */
 public class ColonyLinkRedirectorBlockEntity extends BlockEntity
-        implements IInWorldGridNodeHost, ICraftingProvider, IActionHost, MenuProvider
+        implements IInWorldGridNodeHost, ICraftingProvider, IActionHost, MenuProvider,
+                   net.minecraft.world.Clearable
 {
     // ── Constantes buffer ─────────────────────────────────────────────────────
 
@@ -268,6 +270,31 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
     public ColonyLinkRedirectorBlockEntity(BlockPos pos, BlockState state)
     {
         super(ColonyLinkRegistry.REDIRECTOR_BLOCK_ENTITY.get(), pos, state);
+    }
+
+    // ── 1.7.0-beta.4 — stable Redirector UUID ─────────────────────────────────
+    //
+    // Saved in the block entity NBT ("RedirectorId"), so it follows the block when a
+    // mod moves it with its NBT (Create: Aeronautics / Sable ship reassembly gives the
+    // block a new position). Clipboard entries store it and RedirectorRegistry resolves
+    // it. A Redirector saved before beta.4 gets one on load (and is marked dirty so it
+    // is persisted); a Redirector placed by a player gets a fresh one (setPlacedBy), so
+    // a creative copy with block-entity data never shares its source's UUID.
+
+    private UUID redirectorId = UUID.randomUUID();
+    /** True until a saved RedirectorId was read: the UUID must be written on next save. */
+    private boolean redirectorIdUnsaved = true;
+
+    public UUID getRedirectorId() { return redirectorId; }
+
+    /** New UUID (player placement). Re-registers when already loaded. */
+    public void regenerateRedirectorId()
+    {
+        if (level != null && !level.isClientSide()) RedirectorRegistry.unregister(redirectorId, this);
+        redirectorId = UUID.randomUUID();
+        redirectorIdUnsaved = false;
+        setChanged();
+        if (level != null && !level.isClientSide() && !isRemoved()) RedirectorRegistry.register(redirectorId, this);
     }
 
     // ── MenuProvider ──────────────────────────────────────────────────────────
@@ -857,14 +884,41 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
         {
             gridNode.create(level, worldPosition);
             level.scheduleTick(worldPosition, getBlockState().getBlock(), 1);
+            // 1.7.0-beta.4 — index by stable UUID; persist a freshly generated one.
+            RedirectorRegistry.register(redirectorId, this);
+            if (redirectorIdUnsaved) setChanged();
         }
     }
 
+    /**
+     * 1.7.0-beta.4 — Clearable: block movers (Sable SubLevelAssemblyHelper.moveBlocks,
+     * Create) save the NBT, then call Clearable.tryClear on the old block entity before
+     * removing the block, so its contents exist only in the copy. Also used by vanilla
+     * /setblock, like any container.
+     */
     @Override
-    public void onChunkUnloaded() { super.onChunkUnloaded(); gridNode.destroy(); }
+    public void clearContent()
+    {
+        for (int slot = 0; slot < buffer.getSlots(); slot++)
+            buffer.setStackInSlot(slot, ItemStack.EMPTY);
+        warehouseCardSlot.setStackInSlot(0, ItemStack.EMPTY);
+    }
 
     @Override
-    public void setRemoved() { super.setRemoved(); gridNode.destroy(); }
+    public void onChunkUnloaded()
+    {
+        super.onChunkUnloaded();
+        gridNode.destroy();
+        if (level != null && !level.isClientSide()) RedirectorRegistry.unregister(redirectorId, this);
+    }
+
+    @Override
+    public void setRemoved()
+    {
+        super.setRemoved();
+        gridNode.destroy();
+        if (level != null && !level.isClientSide()) RedirectorRegistry.unregister(redirectorId, this);
+    }
 
     @Override
     public @Nullable IGridNode getGridNode(Direction dir)
@@ -1189,6 +1243,8 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
     {
         super.saveAdditional(tag, provider);
         gridNode.saveToNBT(tag);
+        tag.putUUID("RedirectorId", redirectorId); // 1.7.0-beta.4
+        redirectorIdUnsaved = false;
         tag.put("buffer", buffer.serializeNBT(provider));
         tag.put("warehouse_card_slot", warehouseCardSlot.serializeNBT(provider));
         tag.putBoolean("warehouse_priority", warehousePriority);
@@ -1228,6 +1284,20 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
     {
         super.loadAdditional(tag, provider);
         gridNode.loadFromNBT(tag);
+        // 1.7.0-beta.4 — absent on Redirectors saved before beta.4: keep the generated one.
+        if (tag.hasUUID("RedirectorId"))
+        {
+            UUID loaded = tag.getUUID("RedirectorId");
+            // A live block entity receiving NBT (level already set): this is how Sable's
+            // moveBlocks fills the copy, AFTER its onLoad registered the throwaway UUID.
+            // Swap the registration to the loaded UUID. Chunk loading from disk runs with
+            // level == null and registers in onLoad instead.
+            boolean live = level != null && !level.isClientSide() && !isRemoved();
+            if (live && !loaded.equals(redirectorId)) RedirectorRegistry.unregister(redirectorId, this);
+            redirectorId = loaded;
+            redirectorIdUnsaved = false;
+            if (live) RedirectorRegistry.register(redirectorId, this);
+        }
         if (tag.contains("buffer"))          buffer.deserializeNBT(provider, tag.getCompound("buffer"));
         if (tag.contains("warehouse_card_slot")) warehouseCardSlot.deserializeNBT(provider, tag.getCompound("warehouse_card_slot"));
         if (tag.contains("warehouse_priority")) warehousePriority = tag.getBoolean("warehouse_priority");

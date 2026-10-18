@@ -186,6 +186,24 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
      * addAdditionalDrops est la méthode AE2 (IPart) pour les drops additionnels d'une Part.
      * @MustBeInvokedByOverriders → appel super obligatoire.
      */
+    /**
+     * 1.7.0-beta.4 — AE2's CableBusBlockEntity is Clearable and clears every part. Block
+     * movers (Sable ship assembly, Create) save the NBT, call Clearable.tryClear, then
+     * remove the block, and AEBaseEntityBlock.onRemove calls addAdditionalDrops without
+     * an isMoving check: our slots must be empty by then, or their contents duplicate.
+     */
+    @Override
+    public void clearContent()
+    {
+        super.clearContent();
+        warehouseCardSlot.setStackInSlot(0, ItemStack.EMPTY);
+        domumTargetSlot.setStackInSlot(0, ItemStack.EMPTY);
+        blankPatternSlot.setStackInSlot(0, ItemStack.EMPTY);
+        domumOutputSlot.setStackInSlot(0, ItemStack.EMPTY);
+        for (int i = 0; i < craftingGridSlot.getSlots(); i++)
+            craftingGridSlot.setStackInSlot(i, ItemStack.EMPTY);
+    }
+
     @Override
     public void addAdditionalDrops(java.util.List<ItemStack> drops, boolean wrenched)
     {

@@ -206,7 +206,8 @@ public class SendToBuilderHandler
         }
 
         ColonyLinkRedirectorBlockEntity redirector = null;
-        var be = level.getBlockEntity(redirectorPos);
+        // 1.7.0-beta.4 — active entry's Redirector, by UUID first (follows a moved Redirector).
+        var be = RedirectorRegistry.forEntry(level, ColonyLinkWandLinkableHandler.getActiveEntry(wandStack));
         if (be instanceof ColonyLinkRedirectorBlockEntity r) redirector = r;
 
         if (redirector == null)

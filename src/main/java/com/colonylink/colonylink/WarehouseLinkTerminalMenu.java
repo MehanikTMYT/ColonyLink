@@ -212,7 +212,8 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
 
             // 1.7.0-beta.2 — every player insertion goes through setByPlayer: a blank
             // card is linked here, for the inserting player, to the colony where that
-            // player has hut access, Warehouse closest to this Terminal.
+            // player has hut access, Warehouse closest to the PLAYER (1.7.0-beta.4: a Terminal on a
+            // Sable ship sits at a far-away plot position; the player stands near it).
             @Override public void setByPlayer(ItemStack newStack, ItemStack oldStack)
             {
                 if (part != null && player instanceof net.minecraft.server.level.ServerPlayer sp
@@ -220,7 +221,7 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
                 {
                     BlockEntity hostBe = part.getHostBlockEntity();
                     if (hostBe != null)
-                        CardLinks.autoLink(newStack, sp, hostBe.getBlockPos(), null);
+                        CardLinks.autoLink(newStack, sp, sp.blockPosition(), null);
                 }
                 super.setByPlayer(newStack, oldStack);
             }
@@ -395,15 +396,33 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
     @Override
     public boolean stillValid(Player p)
     {
-        if (part == null) return false;
+        if (part == null) return stillValidFail(p, "part null");
         BlockEntity hostBe = part.getHostBlockEntity();
-        if (hostBe == null || hostBe.isRemoved()) return false;
+        if (hostBe == null) return stillValidFail(p, "host block entity null");
+        if (hostBe.isRemoved()) return stillValidFail(p, "host block entity removed");
 
         // v1.6.2 — range check: the terminal closes when the player walks away.
         // Combined with resolvePart's open-menu requirement, this stops
         // packet-driven transfers on a distant or someone else's terminal.
         // 1.7.0 — vanilla reach test (honours mods that patch it, e.g. Sable ships).
-        return p.canInteractWithBlock(hostBe.getBlockPos(), ColonyLinkRedirectorMenu.MENU_REACH_BUFFER);
+        if (!p.canInteractWithBlock(hostBe.getBlockPos(), ColonyLinkRedirectorMenu.MENU_REACH_BUFFER))
+            return stillValidFail(p, "out of reach (block " + hostBe.getBlockPos().toShortString()
+                    + ", player eyes " + p.getEyePosition() + ")");
+        return true;
+    }
+
+    /** 1.7.0-beta.4 — logs once per menu (DEBUG) why stillValid closed it; returns false. */
+    private boolean loggedStillValidFail = false;
+
+    private boolean stillValidFail(Player p, String reason)
+    {
+        if (!loggedStillValidFail)
+        {
+            loggedStillValidFail = true;
+            ColonyLink.LOGGER.debug("[ColonyLink] Warehouse Link Terminal menu closed for {}: {}",
+                    p.getName().getString(), reason);
+        }
+        return false;
     }
 
     // ── quickMoveStack ────────────────────────────────────────────────────────

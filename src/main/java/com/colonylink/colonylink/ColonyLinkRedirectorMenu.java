@@ -35,8 +35,12 @@ public class ColonyLinkRedirectorMenu extends AbstractContainerMenu
     // Client side constructor
     public ColonyLinkRedirectorMenu(int containerId, Inventory playerInventory, FriendlyByteBuf buf)
     {
-        this(containerId, playerInventory, (ColonyLinkRedirectorBlockEntity) playerInventory.player.level()
-                .getBlockEntity(buf.readBlockPos()));
+        // 1.7.0-beta.4 — the block entity may be missing on the client (chunk not there
+        // yet, e.g. a ship's plot): pass null instead of a ClassCastException / NPE, the
+        // menu then runs on placeholder handlers like the Terminal does with part == null.
+        this(containerId, playerInventory,
+                playerInventory.player.level().getBlockEntity(buf.readBlockPos())
+                        instanceof ColonyLinkRedirectorBlockEntity be ? be : null);
     }
 
     // Server side constructor
@@ -51,13 +55,19 @@ public class ColonyLinkRedirectorMenu extends AbstractContainerMenu
         // colony, when the opening player has hut access there.
         if (serverPlayer != null) CardLinks.migrateRedirectorCard(blockEntity, serverPlayer);
 
+        // Placeholder handlers when the block entity is missing (client only, see above).
+        net.neoforged.neoforge.items.IItemHandler cardHandler = blockEntity != null
+                ? blockEntity.warehouseCardSlot : new net.neoforged.neoforge.items.ItemStackHandler(1);
+        net.neoforged.neoforge.items.IItemHandler bufferHandler = blockEntity != null
+                ? blockEntity.buffer : new net.neoforged.neoforge.items.ItemStackHandler(BUFFER_ROWS * BUFFER_COLS);
+
         // ── Slot Warehouse Link Card ─────────────────────────────────────────
         // Item area of the AE2 upgrade-cell box overflowing the top-right edge. The
         // Screen DERIVES the box origin from this slot (box = slot - cell item offset
         // (1,6)), so moving the slot moves the whole cell + fallback + JEI zone + tooltip.
         // Nudged 2px left (177→175) so the cell's open left flank tucks under the panel's
         // right frame → a continuous border all the way around (Fab's on-capture call).
-        this.addSlot(new SlotItemHandler(blockEntity.warehouseCardSlot, 0, 175, 12)
+        this.addSlot(new SlotItemHandler(cardHandler, 0, 175, 12)
         {
             @Override
             public boolean mayPlace(ItemStack stack)
@@ -68,12 +78,13 @@ public class ColonyLinkRedirectorMenu extends AbstractContainerMenu
             // 1.7.0-beta.2 — every player insertion (click, drag, shift-click via
             // moveItemStackTo, hotbar swap) goes through setByPlayer. A blank card is
             // linked here, for the inserting player: the Builder's colony first when
-            // the player has hut access there, Warehouse closest to this Redirector.
+            // the player has hut access there, Warehouse closest to the PLAYER (1.7.0-beta.4: the
+            // block can sit at a far-away Sable ship plot position; the player stands near it).
             @Override
             public void setByPlayer(ItemStack newStack, ItemStack oldStack)
             {
-                if (serverPlayer != null && CardLinks.isUnlinkedCard(newStack))
-                    CardLinks.autoLink(newStack, serverPlayer, blockEntity.getBlockPos(),
+                if (serverPlayer != null && blockEntity != null && CardLinks.isUnlinkedCard(newStack))
+                    CardLinks.autoLink(newStack, serverPlayer, serverPlayer.blockPosition(),
                             ColonyResolver.forRedirector(serverPlayer.level(), blockEntity));
                 super.setByPlayer(newStack, oldStack);
             }
@@ -85,7 +96,7 @@ public class ColonyLinkRedirectorMenu extends AbstractContainerMenu
             for (int col = 0; col < BUFFER_COLS; col++)
             {
                 this.addSlot(new SlotItemHandler(
-                        blockEntity.buffer,
+                        bufferHandler,
                         row * BUFFER_COLS + col,
                         8 + col * 18,
                         38 + row * 18
@@ -114,10 +125,28 @@ public class ColonyLinkRedirectorMenu extends AbstractContainerMenu
     {
         // v1.6.2 — range check (like a chest, 8 blocks) instead of always-true: the
         // buffer GUI closes if the player walks away or the redirector is removed.
-        if (blockEntity == null || blockEntity.isRemoved()) return false;
+        if (blockEntity == null) return stillValidFail(player, "block entity null");
+        if (blockEntity.isRemoved()) return stillValidFail(player, "block entity removed");
         // 1.7.0 — vanilla reach test instead of a hand-rolled distance, so mods that
         // patch Player.canInteractWithBlock (e.g. Sable ships) are honoured.
-        return player.canInteractWithBlock(blockEntity.getBlockPos(), MENU_REACH_BUFFER);
+        if (!player.canInteractWithBlock(blockEntity.getBlockPos(), MENU_REACH_BUFFER))
+            return stillValidFail(player, "out of reach (block " + blockEntity.getBlockPos().toShortString()
+                    + ", player eyes " + player.getEyePosition() + ")");
+        return true;
+    }
+
+    /** 1.7.0-beta.4 — logs once per menu (DEBUG) why stillValid closed it; returns false. */
+    private boolean loggedStillValidFail = false;
+
+    private boolean stillValidFail(Player player, String reason)
+    {
+        if (!loggedStillValidFail)
+        {
+            loggedStillValidFail = true;
+            ColonyLink.LOGGER.debug("[ColonyLink] Redirector menu closed for {}: {}",
+                    player.getName().getString(), reason);
+        }
+        return false;
     }
 
     @Override

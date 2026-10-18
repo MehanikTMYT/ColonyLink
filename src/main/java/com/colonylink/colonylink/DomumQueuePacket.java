@@ -82,6 +82,7 @@ public record DomumQueuePacket(
             return;
         }
         boolean redirectorLinked = false;
+        BuilderEntry linkedEntry = null; // 1.7.0-beta.4 — resolves the Redirector by UUID
         for (BuilderEntry e : ColonyLinkWandLinkableHandler.getBuilderEntries(wand))
         {
             if (e.hasRedirector() && e.redirectorPos().equals(packet.redirectorPos()))
@@ -91,6 +92,7 @@ public record DomumQueuePacket(
                 if (e.dimension() != null && !e.dimension().equals(level.dimension()))
                     break;
                 redirectorLinked = true;
+                linkedEntry = e;
                 break;
             }
         }
@@ -106,7 +108,7 @@ public record DomumQueuePacket(
         // sur TOUS les terminaux du reseau, pas seulement un. La queue partagee est la source
         // de verite ; chaque terminal garde une copie NBT comme filet de persistance.
         IGrid redirectorGrid = null;
-        if (level.getBlockEntity(packet.redirectorPos()) instanceof ColonyLinkRedirectorBlockEntity redirector)
+        if (RedirectorRegistry.forEntry(level, linkedEntry) instanceof ColonyLinkRedirectorBlockEntity redirector)
         {
             IGridNode rnode = redirector.getActionableNode();
             if (rnode != null) redirectorGrid = rnode.getGrid();

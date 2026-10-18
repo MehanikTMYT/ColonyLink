@@ -259,7 +259,9 @@ public class ColonyLinkWand extends Item implements IAEItemPowerStorage
 
             for (BuilderEntry e : entries)
             {
-                if (e.redirectorPos().equals(pos))
+                // 1.7.0-beta.4 — same Redirector by position, or by UUID (it moved).
+                if (e.redirectorPos().equals(pos)
+                        || redirector.getRedirectorId().equals(e.redirectorId()))
                 {
                     player.sendSystemMessage(Component.translatable("colonylink.wand.msg.redirector_paired", e.builderName()));
                     return net.minecraft.world.InteractionResult.FAIL;
@@ -305,7 +307,7 @@ public class ColonyLinkWand extends Item implements IAEItemPowerStorage
             redirector.setLinkedBuilderPos(target.builderPos());
             redirector.setLinkedBuilderName(target.builderName());
             redirector.updateState();
-            entries.set(targetIndex, target.withRedirector(pos));
+            entries.set(targetIndex, target.withRedirector(pos, redirector.getRedirectorId())); // 1.7.0-beta.4 — + UUID
             ColonyLinkWandLinkableHandler.setBuilderEntries(wandStack, entries);
 
             player.sendSystemMessage(Component.translatable("colonylink.wand.msg.redirector_linked", target.builderName(), target.builderPos().toShortString()));
@@ -434,6 +436,10 @@ public class ColonyLinkWand extends Item implements IAEItemPowerStorage
         ICraftingService cs = grid.getCraftingService();
         int cpus = 0; for (var cpu : cs.getCpus()) if (!cpu.isBusy()) cpus++;
 
+        // 1.7.0-beta.4 — entries paired before beta.4 learn their Redirector's UUID
+        // (loaded Redirectors still at the stored position), so they survive a move.
+        ColonyLinkWandLinkableHandler.upgradeRedirectorIds(wandStack, sl);
+
         List<BuilderEntry> allEntries = ColonyLinkWandLinkableHandler.getBuilderEntries(wandStack);
         BuilderEntry ae = allEntries.isEmpty() ? null
                 : allEntries.get(Math.min(activeTabIndex, allEntries.size() - 1));
@@ -442,7 +448,8 @@ public class ColonyLinkWand extends Item implements IAEItemPowerStorage
         String rState = "N/A"; boolean hasCard = false, whPrio = false;
         if (rPos != null)
         {
-            var rbe = sl.getBlockEntity(rPos);
+            // 1.7.0-beta.4 — by the entry's Redirector UUID first (it may have moved).
+            var rbe = RedirectorRegistry.forEntry(sl, ae);
             if (rbe instanceof ColonyLinkRedirectorBlockEntity r)
             {
                 var rn = r.getManagedGridNode().getNode();

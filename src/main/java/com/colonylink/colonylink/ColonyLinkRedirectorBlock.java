@@ -109,6 +109,21 @@ public class ColonyLinkRedirectorBlock extends Block implements EntityBlock
      * Cela permet aux câbles déjà présents de détecter le nouveau nœud
      * et de former une connexion en appelant getGridNode() sur ce BE.
      */
+    /**
+     * 1.7.0-beta.4 — a Redirector placed by a player gets its own UUID, even if the item
+     * carried block-entity data (creative copy): two Redirectors must never share one.
+     * Block movers (Sable, Create) do not call setPlacedBy, so a moved Redirector keeps
+     * its UUID.
+     */
+    @Override
+    public void setPlacedBy(Level level, BlockPos pos, BlockState state,
+                            @Nullable net.minecraft.world.entity.LivingEntity placer, ItemStack stack)
+    {
+        super.setPlacedBy(level, pos, state, placer, stack);
+        if (!level.isClientSide() && level.getBlockEntity(pos) instanceof ColonyLinkRedirectorBlockEntity be)
+            be.regenerateRedirectorId();
+    }
+
     @Override
     public void onPlace(BlockState state, Level level, BlockPos pos,
                         BlockState oldState, boolean movedByPiston)
@@ -122,6 +137,16 @@ public class ColonyLinkRedirectorBlock extends Block implements EntityBlock
     public void onRemove(BlockState state, Level level, BlockPos pos,
                          BlockState newState, boolean movedByPiston)
     {
+        // 1.7.0-beta.4 — the block is being MOVED, not broken (Sable / Create: Aeronautics
+        // ship assembly, Create contraptions…: they pass isMoving=true and have already
+        // copied the block entity NBT to the new position). Dropping the contents here
+        // duplicated the patterns and the card. Vanilla pistons never move a block entity,
+        // so no legitimate drop is skipped. super still removes the block entity.
+        if (movedByPiston)
+        {
+            super.onRemove(state, level, pos, newState, movedByPiston);
+            return;
+        }
         if (!state.hasBlockEntity() || state.getBlock() == newState.getBlock())
         {
             super.onRemove(state, level, pos, newState, movedByPiston);

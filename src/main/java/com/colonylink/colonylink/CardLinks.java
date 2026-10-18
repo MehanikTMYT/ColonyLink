@@ -95,10 +95,13 @@ public final class CardLinks
     /**
      * Auto-link on insert: writes the link onto {@code card} (in place) for the colony
      * the inserting player has ACCESS_HUTS in, and that colony's Warehouse closest to
-     * {@code blockPos}. {@code preferred} (the Redirector's Builder colony) is used
+     * {@code nearPos}. {@code preferred} (the Redirector's Builder colony) is used
      * first when the player has hut access there. Tells the player the outcome.
+     * 1.7.0-beta.4 — callers pass the PLAYER's position, not the block's: on a Create:
+     * Aeronautics ship the block sits at a Sable plot ~20.5M blocks away, the player
+     * stands next to the ship's visible position, near the colony.
      */
-    public static void autoLink(ItemStack card, ServerPlayer player, BlockPos blockPos, IColony preferred)
+    public static void autoLink(ItemStack card, ServerPlayer player, BlockPos nearPos, IColony preferred)
     {
         IColony colony = hasHutAccess(preferred, player) ? preferred : colonyForPlayer(player);
         if (colony == null)
@@ -106,7 +109,7 @@ public final class CardLinks
             player.sendSystemMessage(Component.translatable("colonylink.card.msg.no_colony_access"));
             return;
         }
-        BuildingWareHouse warehouse = nearestWarehouse(colony, blockPos);
+        BuildingWareHouse warehouse = nearestWarehouse(colony, nearPos);
         if (warehouse == null)
         {
             player.sendSystemMessage(Component.translatable("colonylink.card.msg.no_warehouse", colony.getName()));
@@ -261,7 +264,7 @@ public final class CardLinks
         if (!isUnlinkedCard(card)) return false;
         IColony colony = ColonyResolver.forRedirector(redirector.getLevel(), redirector);
         if (!hasHutAccess(colony, player)) return false;
-        BuildingWareHouse warehouse = nearestWarehouse(colony, redirector.getBlockPos());
+        BuildingWareHouse warehouse = nearestWarehouse(colony, player.blockPosition());
         if (warehouse == null) return false;
         ItemStack linked = card.copy();
         writeLink(linked, player, colony, warehouse);

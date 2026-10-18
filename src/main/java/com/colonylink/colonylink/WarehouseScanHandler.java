@@ -125,7 +125,8 @@ public class WarehouseScanHandler
             return;
         }
 
-        var be = level.getBlockEntity(redirectorPos);
+        // 1.7.0-beta.4 — active entry's Redirector, by UUID first (follows a moved Redirector).
+        var be = RedirectorRegistry.forEntry(level, ColonyLinkWandLinkableHandler.getActiveEntry(wandStack));
         boolean hasCard = false;
         if (be instanceof ColonyLinkRedirectorBlockEntity redirector) hasCard = redirector.hasWarehouseCard();
         if (!hasCard)
