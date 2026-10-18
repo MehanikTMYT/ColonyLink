@@ -21,6 +21,15 @@ public class ColonyLinkRedirectorMenu extends AbstractContainerMenu
      */
     public static final int WAREHOUSE_CARD_SLOT_INDEX = 0;
 
+    /**
+     * Extra reach passed to Player.canInteractWithBlock by the ColonyLink menus
+     * (Redirector and Warehouse Link Terminal). Vanilla reach is 4.5 blocks from
+     * the eyes to the block's box, so 5.0 gives 9.5. That covers every position
+     * the pre-1.7.0 check accepted (feet to block centre <= 8, worst case straight
+     * above: 8 + 1.62 eye height - 0.5 half block = 9.12).
+     */
+    public static final double MENU_REACH_BUFFER = 5.0;
+
     // Client side constructor
     public ColonyLinkRedirectorMenu(int containerId, Inventory playerInventory, FriendlyByteBuf buf)
     {
@@ -85,11 +94,9 @@ public class ColonyLinkRedirectorMenu extends AbstractContainerMenu
         // v1.6.2 — range check (like a chest, 8 blocks) instead of always-true: the
         // buffer GUI closes if the player walks away or the redirector is removed.
         if (blockEntity == null || blockEntity.isRemoved()) return false;
-        var hp = blockEntity.getBlockPos();
-        double dx = hp.getX() + 0.5 - player.getX();
-        double dy = hp.getY() + 0.5 - player.getY();
-        double dz = hp.getZ() + 0.5 - player.getZ();
-        return (dx * dx + dy * dy + dz * dz) <= 64.0;
+        // 1.7.0 — vanilla reach test instead of a hand-rolled distance, so mods that
+        // patch Player.canInteractWithBlock (e.g. Sable ships) are honoured.
+        return player.canInteractWithBlock(blockEntity.getBlockPos(), MENU_REACH_BUFFER);
     }
 
     @Override

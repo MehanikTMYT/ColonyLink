@@ -219,6 +219,7 @@
   "colonylink.whc.me_insertion_failed": "§c[ColonyLink] Échec de l'insertion dans le ME !",
   "colonylink.whc.missing_material": "§c[ColonyLink] Matériau manquant pour le composant : %s",
   "colonylink.whc.no_colony": "§c[ColonyLink] Aucune colonie trouvée près du redirecteur !",
+  "colonylink.colony.not_found": "§c[ColonyLink] Impossible de trouver la colonie de la Cabane du bâtisseur liée.",
   "colonylink.whc.no_pattern_not_found": "§c[ColonyLink] Aucun modèle AE2 et objet introuvable dans l'entrepôt !",
   "colonylink.whc.no_warehouse": "§c[ColonyLink] Aucun entrepôt trouvé dans la colonie !",
   "colonylink.whc.transferred_no_pattern": "§a[ColonyLink] %sx %s transféré(s) de l'entrepôt → ME (aucun modèle AE2)",

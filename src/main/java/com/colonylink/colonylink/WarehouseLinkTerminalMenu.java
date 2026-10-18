@@ -384,14 +384,11 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
         BlockEntity hostBe = part.getHostBlockEntity();
         if (hostBe == null || hostBe.isRemoved()) return false;
 
-        // v1.6.2 — range check (like a chest, 8 blocks): the terminal closes when the
-        // player walks away. Combined with resolvePart's open-menu requirement, this
-        // stops packet-driven transfers on a distant or someone else's terminal.
-        var hp = hostBe.getBlockPos();
-        double dx = hp.getX() + 0.5 - p.getX();
-        double dy = hp.getY() + 0.5 - p.getY();
-        double dz = hp.getZ() + 0.5 - p.getZ();
-        return (dx * dx + dy * dy + dz * dz) <= 64.0;
+        // v1.6.2 — range check: the terminal closes when the player walks away.
+        // Combined with resolvePart's open-menu requirement, this stops
+        // packet-driven transfers on a distant or someone else's terminal.
+        // 1.7.0 — vanilla reach test (honours mods that patch it, e.g. Sable ships).
+        return p.canInteractWithBlock(hostBe.getBlockPos(), ColonyLinkRedirectorMenu.MENU_REACH_BUFFER);
     }
 
     // ── quickMoveStack ────────────────────────────────────────────────────────

@@ -661,7 +661,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
      */
     public void depositToWarehouse(ServerPlayer player, int count)
     {
-        if (!checkPermission(player)) return;
+        if (!checkWarehouseAccess(player)) return;
 
         ItemStack carried = player.containerMenu.getCarried();
         if (carried.isEmpty()) return;
@@ -742,7 +742,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
 
     public void pickupFromWarehouse(ServerPlayer player, ItemStack template, int requestCount)
     {
-        if (!checkPermission(player)) return;
+        if (!checkWarehouseAccess(player)) return;
         ServerLevel level = player.serverLevel();
         IColony colony = findColony(level);
         if (colony == null) { msg(player, Component.translatable("colonylink.terminal.no_colony")); return; }
@@ -852,7 +852,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     {
         ItemStack carried = player.containerMenu.getCarried();
         if (carried.isEmpty()) return;
-        if (!checkPermission(player)) return;
+        if (!checkWarehouseAccess(player)) return;
         int inserted = transferPlayerToWarehouse(player, carried.copy());
         carried.shrink(inserted);
         player.containerMenu.setCarried(carried.isEmpty() ? ItemStack.EMPTY : carried);
@@ -881,7 +881,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
      */
     public int transferWarehouseToMe(ServerPlayer player, ItemStack template, int count)
     {
-        if (!checkPermission(player)) return 0;
+        if (!checkWarehouseAccess(player)) return 0;
         ServerLevel level = player.serverLevel();
         IColony colony = findColony(level);
         if (colony == null) { msg(player, Component.translatable("colonylink.terminal.no_colony")); return 0; }
@@ -955,7 +955,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
      */
     public int transferWarehouseToInventory(ServerPlayer player, ItemStack template, int count)
     {
-        if (!checkPermission(player)) return 0;
+        if (!checkWarehouseAccess(player)) return 0;
         ServerLevel level = player.serverLevel();
         IColony colony = findColony(level);
         if (colony == null) { msg(player, Component.translatable("colonylink.terminal.no_colony")); return 0; }
@@ -1018,7 +1018,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
      */
     public int transferMeToWarehouse(ServerPlayer player, ItemStack template, int count)
     {
-        if (!checkPermission(player)) return 0;
+        if (!checkWarehouseAccess(player)) return 0;
         ServerLevel level = player.serverLevel();
         IColony colony = findColony(level);
         if (colony == null) { msg(player, Component.translatable("colonylink.terminal.no_colony")); return 0; }
@@ -1123,7 +1123,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     /** Insère un item depuis l'inventaire du joueur vers le WH. */
     public int transferPlayerToWarehouse(ServerPlayer player, ItemStack stack)
     {
-        if (!checkPermission(player)) return 0;
+        if (!checkWarehouseAccess(player)) return 0;
         ServerLevel level = player.serverLevel();
         IColony colony = findColony(level);
         if (colony == null) return 0;
@@ -1372,6 +1372,17 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         // of failing open. A bound card without a colony can only be an anomaly.
         if (colony == null) return false;
         return colony.getPermissions().hasPermission(player, Action.ACCESS_HUTS);
+    }
+
+    /**
+     * 1.7.0 — guard for every Warehouse-touching action. checkPermission alone
+     * returns true without a card (so the plain ME actions keep working), which
+     * left the Warehouse transfers reachable card-less by a modified client, with
+     * no colony permission at all. The GUI never offers them without a card.
+     */
+    private boolean checkWarehouseAccess(ServerPlayer player)
+    {
+        return hasWarehouseCard() && checkPermission(player);
     }
 
     private IColony findColony(ServerLevel level)

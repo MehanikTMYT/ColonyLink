@@ -88,11 +88,15 @@ public class SendToBuilderHandler
         // ── v1.6.0 — colony permission check, server-side, before any RF charge.
         // getClosestColony can resolve a colony the player has zero rights in;
         // ACCESS_HUTS is the same action the ticker and the wand already require.
+        // 1.7.0 — an unresolvable colony is refused (was silently permissive).
         {
-            IColony permColony = IColonyManager.getInstance()
-                    .getClosestColony(player.serverLevel(), builderPos);
-            if (permColony != null
-                    && !permColony.getPermissions().hasPermission(player, Action.ACCESS_HUTS))
+            IColony permColony = ColonyResolver.forBuilder(player.serverLevel(), builderPos);
+            if (permColony == null)
+            {
+                player.sendSystemMessage(Component.translatable("colonylink.colony.not_found"));
+                return;
+            }
+            if (!permColony.getPermissions().hasPermission(player, Action.ACCESS_HUTS))
             {
                 player.sendSystemMessage(Component.translatable("colonylink.wand.msg.no_permission"));
                 return;
@@ -637,7 +641,9 @@ public class SendToBuilderHandler
     {
         if (remaining <= 0) return remaining;
 
-        IColony colony = IColonyManager.getInstance().getClosestColony(level, redirector.getBlockPos());
+        // 1.7.0 — colony of the Redirector's linked Builder, never of the Redirector's
+        // own position (same colony the chunk-load guard in handleSendToBuilder checked).
+        IColony colony = ColonyResolver.forRedirector(level, redirector);
         if (colony == null) return remaining;
 
         for (IBuilding building : colony.getServerBuildingManager().getBuildings().values())

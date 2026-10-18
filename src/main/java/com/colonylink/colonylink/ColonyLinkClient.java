@@ -12,6 +12,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.InputEvent;
+import net.neoforged.neoforge.client.event.RecipesUpdatedEvent;
 import net.neoforged.neoforge.client.event.ModelEvent;
 import net.neoforged.neoforge.client.event.RegisterColorHandlersEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
@@ -150,6 +151,19 @@ public final class ColonyLinkClient
         // Consume the key and send the packet to the server
         KEY_OPEN_CLIPBOARD.consumeClick();
         PacketDistributor.sendToServer(new OpenWandGuiPacket());
+    }
+
+    // ── Recipe sync ───────────────────────────────────────────────────────────
+
+    /**
+     * 1.7.0 — the client refreshes its RecipeManager IN PLACE when the server sends
+     * recipes (join, /reload), so the identity-keyed Domum yield cache cannot notice
+     * it by itself. Registered on the NeoForge event bus inside the dist.isClient()
+     * guard in the ColonyLink constructor.
+     */
+    public static void onRecipesUpdated(RecipesUpdatedEvent event)
+    {
+        DomumRecipeHelper.invalidate();
     }
 
     // ── Internal helpers ──────────────────────────────────────────────────────

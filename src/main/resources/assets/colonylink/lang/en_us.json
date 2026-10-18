@@ -196,6 +196,7 @@
   "colonylink.whs.scan_complete": "§a[ColonyLink] Warehouse scan complete — %s item type(s) found in racks.",
   "colonylink.whc.clipboard_not_found": "§cClipboard not found!",
   "colonylink.whc.no_colony": "§c[ColonyLink] No colony found near redirector!",
+  "colonylink.colony.not_found": "§c[ColonyLink] Could not find the colony of the linked Builder's Hut.",
   "colonylink.whc.no_warehouse": "§c[ColonyLink] No Warehouse found in colony!",
   "colonylink.whc.clipboard_not_linked": "§cClipboard not linked!",
   "colonylink.whc.transferred_no_pattern": "§a[ColonyLink] Transferred %sx %s from Warehouse → ME (no AE2 pattern)",

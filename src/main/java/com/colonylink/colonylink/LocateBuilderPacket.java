@@ -3,6 +3,7 @@ package com.colonylink.colonylink;
 import com.minecolonies.api.colony.IColony;
 import com.minecolonies.api.colony.IColonyManager;
 import com.minecolonies.api.colony.buildings.IBuilding;
+import com.minecolonies.api.colony.permissions.Action;
 import com.minecolonies.core.colony.buildings.AbstractBuildingStructureBuilder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -75,12 +76,38 @@ public record LocateBuilderPacket(BlockPos builderPos) implements CustomPacketPa
             ServerLevel level = serverPlayer.serverLevel();
             BlockPos builderPos = packet.builderPos();
 
+            // 1.7.0 — the client is not authoritative on builderPos: it must be a
+            // builder linked to THIS player's Clipboard (same check as SendToWarehousePacket).
+            net.minecraft.world.item.ItemStack wandStack = ColonyLinkServerTicker.findWandInInventory(serverPlayer);
+            if (wandStack == null)
+            {
+                serverPlayer.sendSystemMessage(Component.translatable("colonylink.whc.clipboard_not_found"));
+                return;
+            }
+            boolean builderLinked = false;
+            for (BuilderEntry e : ColonyLinkWandLinkableHandler.getBuilderEntries(wandStack))
+            {
+                if (e.builderPos().equals(builderPos)) { builderLinked = true; break; }
+            }
+            if (!builderLinked)
+            {
+                serverPlayer.sendSystemMessage(Component.translatable("colonylink.stw.invalid_request"));
+                return;
+            }
+
             // ── Trouve la colonie ─────────────────────────────────────────────
             IColony colony = IColonyManager.getInstance().getClosestColony(level, builderPos);
             if (colony == null)
             {
                 serverPlayer.sendSystemMessage(
                         Component.translatable("colonylink.whs.no_colony"));
+                return;
+            }
+
+            // 1.7.0 — colony permission, same action as the other Clipboard handlers.
+            if (!colony.getPermissions().hasPermission(serverPlayer, Action.ACCESS_HUTS))
+            {
+                serverPlayer.sendSystemMessage(Component.translatable("colonylink.wand.msg.no_permission"));
                 return;
             }
 

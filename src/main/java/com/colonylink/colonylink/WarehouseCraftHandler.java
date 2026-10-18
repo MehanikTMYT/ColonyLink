@@ -93,11 +93,13 @@ public class WarehouseCraftHandler
         // validating builderPos). Without this, a modified client could point the craft
         // at any colony's warehouse and drain it into its own ME network.
         boolean redirectorLinked = false;
+        BlockPos linkedBuilderPos = null; // 1.7.0 — the colony comes from this Builder
         for (BuilderEntry e : ColonyLinkWandLinkableHandler.getBuilderEntries(wandStack))
         {
             if (e.hasRedirector() && e.redirectorPos().equals(redirectorPos))
             {
                 redirectorLinked = true;
+                linkedBuilderPos = e.builderPos();
                 break;
             }
         }
@@ -107,11 +109,27 @@ public class WarehouseCraftHandler
             return;
         }
 
+        // 1.7.0 — server-side card guard. The client only sends this packet from a
+        // fresh Warehouse Check snapshot, and that scan already requires the card
+        // (WarehouseScanHandler); a modified client could skip it, so re-check here.
+        if (!(level.getBlockEntity(redirectorPos) instanceof ColonyLinkRedirectorBlockEntity cardRedirector))
+        {
+            player.sendSystemMessage(Component.translatable("colonylink.stb.redirector_not_found"));
+            return;
+        }
+        if (!cardRedirector.hasWarehouseCard())
+        {
+            player.sendSystemMessage(Component.translatable("colonylink.whs.no_card"));
+            return;
+        }
+
         // ── Trouve la Warehouse de la colonie ─────────────────────────────────
-        IColony colony = IColonyManager.getInstance().getClosestColony(level, redirectorPos);
+        // 1.7.0 — colony of the Builder linked to this Redirector in the player's
+        // Clipboard, never of the Redirector's own position.
+        IColony colony = ColonyResolver.forBuilder(level, linkedBuilderPos);
         if (colony == null)
         {
-            player.sendSystemMessage(Component.translatable("colonylink.whc.no_colony"));
+            player.sendSystemMessage(Component.translatable("colonylink.colony.not_found"));
             return;
         }
 

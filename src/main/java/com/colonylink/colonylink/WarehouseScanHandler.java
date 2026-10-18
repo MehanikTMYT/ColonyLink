@@ -8,6 +8,7 @@ import com.ldtteam.domumornamentum.block.IMateriallyTexturedBlock;
 import com.ldtteam.domumornamentum.block.IMateriallyTexturedBlockComponent;
 import com.ldtteam.domumornamentum.client.model.data.MaterialTextureData;
 import com.minecolonies.api.colony.IColony;
+import com.minecolonies.api.colony.permissions.Action;
 import com.minecolonies.api.colony.IColonyManager;
 import com.minecolonies.api.colony.IColonyManager;
 import com.minecolonies.api.colony.buildings.IBuilding;
@@ -139,6 +140,15 @@ public class WarehouseScanHandler
         if (colony == null)
         {
             player.sendSystemMessage(Component.translatable("colonylink.whs.no_colony"));
+            sendFailure(player, currentTick);
+            return;
+        }
+
+        // 1.7.0 — colony permission (the scan reads the colony's Warehouse racks),
+        // same action as the other Clipboard handlers.
+        if (!colony.getPermissions().hasPermission(player, Action.ACCESS_HUTS))
+        {
+            player.sendSystemMessage(Component.translatable("colonylink.wand.msg.no_permission"));
             sendFailure(player, currentTick);
             return;
         }

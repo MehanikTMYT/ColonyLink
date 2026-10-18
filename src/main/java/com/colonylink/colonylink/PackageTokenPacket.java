@@ -115,6 +115,7 @@ public record PackageTokenPacket(
         // Same predicate/dimension guard as CancelRequestPacket. Done at the earliest
         // point the wand is available, before anything else is checked or consumed.
         boolean redirectorLinked = false;
+        BlockPos linkedBuilderPos = null; // 1.7.0 — the colony comes from this Builder
         for (BuilderEntry e : ColonyLinkWandLinkableHandler.getBuilderEntries(wand))
         {
             if (e.hasRedirector() && e.redirectorPos().equals(redirectorPos))
@@ -124,6 +125,7 @@ public record PackageTokenPacket(
                 if (e.dimension() != null && !e.dimension().equals(player.serverLevel().dimension()))
                     break;
                 redirectorLinked = true;
+                linkedBuilderPos = e.builderPos();
                 break;
             }
         }
@@ -190,15 +192,21 @@ public record PackageTokenPacket(
 
         // A4 — colony permission (ACCESS_HUTS), non-craft path only. doCraft touches no
         // colony (it launches a craft on the player's own grid), so permission is moot
-        // there. This resolves the colony a second time (doSend resolves it again from
-        // the same redirectorPos): intentional, to avoid changing doSend's signature or
-        // body — the cost is negligible. Do NOT "deduplicate" this getClosestColony call.
-        // colony == null stays permissive: doSend already returns false in that case,
-        // which triggers the refund path.
+        // there.
+        // 1.7.0 — the colony is the one of the Builder linked to this Redirector in the
+        // player's Clipboard (never the Redirector's own position), and an unresolvable
+        // colony is refused before any Package is consumed (was permissive).
+        IColony sendColony = null;
         if (!isCraft)
         {
-            IColony colony = IColonyManager.getInstance().getClosestColony(level, redirectorPos);
-            if (colony != null && !colony.getPermissions().hasPermission(player, Action.ACCESS_HUTS))
+            sendColony = ColonyResolver.forBuilder(level, linkedBuilderPos);
+            if (sendColony == null)
+            {
+                resyncPackages(player, wand);
+                player.sendSystemMessage(Component.translatable("colonylink.colony.not_found"));
+                return;
+            }
+            if (!sendColony.getPermissions().hasPermission(player, Action.ACCESS_HUTS))
             {
                 resyncPackages(player, wand);
                 player.sendSystemMessage(Component.translatable("colonylink.wand.msg.no_permission"));
@@ -214,7 +222,7 @@ public record PackageTokenPacket(
         if (isCraft)
             success = doCraft(player, stack, count, grid, wap);
         else
-            success = doSend(player, stack, count, redirectorPos, grid, wap, level, redirector);
+            success = doSend(player, stack, count, sendColony, grid, wap, level, redirector);
 
         // 7. Feedback
         String itemName = stripBrackets(stack.getDisplayName().getString());
@@ -246,7 +254,7 @@ public record PackageTokenPacket(
     // ── Send : ME → Warehouse ─────────────────────────────────────────────────
 
     private static boolean doSend(ServerPlayer player, ItemStack stack, int count,
-                                  BlockPos redirectorPos, IGrid grid, IWirelessAccessPoint wap,
+                                  IColony colony, IGrid grid, IWirelessAccessPoint wap,
                                   ServerLevel level, ColonyLinkRedirectorBlockEntity redirector)
     {
         AEItemKey aeKey = AEItemKey.of(stack);
@@ -262,7 +270,8 @@ public record PackageTokenPacket(
             return false;
         }
 
-        IColony colony = IColonyManager.getInstance().getClosestColony(level, redirectorPos);
+        // 1.7.0 — colony resolved (and permission-checked) by the caller from the
+        // Clipboard entry's Builder, not from the Redirector's position.
         if (colony == null) return false;
 
         int remaining = Math.min(count, (int) inStock);

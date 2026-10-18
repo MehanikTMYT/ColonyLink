@@ -117,6 +117,8 @@ public class ColonyLink
 
         if (net.neoforged.fml.loading.FMLEnvironment.dist.isClient())
             NeoForge.EVENT_BUS.addListener(ColonyLinkClient::onKeyInput);
+        if (net.neoforged.fml.loading.FMLEnvironment.dist.isClient())
+            NeoForge.EVENT_BUS.addListener(ColonyLinkClient::onRecipesUpdated);
         NeoForge.EVENT_BUS.addListener(ColonyLink::onRightClickBlock);
 
         // v1.6.0 — SERVER config: synced to clients on login, lockable by modpacks.
