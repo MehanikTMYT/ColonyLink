@@ -55,7 +55,7 @@ public class CraftHandler
                 || stacks.isEmpty() || realCounts.size() != stacks.size())
             return;
 
-        // ── v1.1.3 : Vérification RF avant de lancer quoi que ce soit ─────────
+        // v1.1.3 — RF check before starting anything
         long craftCost = ColonyLinkConfig.CRAFT_COST_RF.get();
         if (craftCost > 0 && !ColonyLinkServerTicker.tryConsumeRF(player, craftCost))
         {
@@ -110,7 +110,7 @@ public class CraftHandler
             int successCount = 0;
             int failCount    = 0;
             int skipped      = 0;
-            int cpuSlot      = 0; // nb de CPUs utilisés par ce batch
+            int cpuSlot      = 0; // CPUs used by this batch
 
             for (int idx = 0; idx < stacks.size(); idx++)
             {
@@ -121,7 +121,7 @@ public class CraftHandler
 
                 if (!craftingService.isCraftable(aeKey)) { failCount++; continue; }
 
-                // #9 : on s'arrête quand on a rempli tous les CPUs libres
+                // #9 — stop once all free CPUs are filled
                 if (cpuSlot >= maxCrafts) { skipped += (stacks.size() - idx); break; }
 
                 try

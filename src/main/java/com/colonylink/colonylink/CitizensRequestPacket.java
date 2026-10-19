@@ -8,8 +8,8 @@ import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
- * Packet C→S : le client demande les données de l'onglet Citizens.
- * Envoyé quand le joueur clique sur la tab Citizens.
+ * C→S packet: the client requests the Citizens tab data.
+ * Sent when the player clicks the Citizens tab.
  */
 public record CitizensRequestPacket() implements CustomPacketPayload
 {

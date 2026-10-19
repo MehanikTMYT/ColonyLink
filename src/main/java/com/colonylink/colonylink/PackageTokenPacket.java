@@ -27,17 +27,17 @@ import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
- * Packet C→S : action Citizens (Send ou Craft) avec vérification et consommation
- * d'un ColonyLink Package côté serveur.
+ * Packet C→S: Citizens action (Send or Craft) with server-side validation and
+ * consumption of a ColonyLink Package.
  *
- * action = SEND  → extrait du ME et insère dans le warehouse (comme SendToWarehousePacket)
- * action = CRAFT → lance un craft AE2 (comme CraftRequestPacket isDomum=false)
+ * action = SEND  → extract from ME and insert into the warehouse (like SendToWarehousePacket)
+ * action = CRAFT → launch an AE2 craft (like CraftRequestPacket isDomum=false)
  *
- * Pré-conditions vérifiées côté serveur :
- *   1. Clipboard présent dans l'inventaire
- *   2. Au moins 1 Package stocké dans la wand (NBT "citizen_packages")
- *   3. Warehouse card dans le redirector lié
- *   Si l'une échoue → message d'erreur, aucune consommation.
+ * Server-side pre-conditions:
+ *   1. Clipboard present in the inventory
+ *   2. At least 1 Package stored in the wand (NBT "citizen_packages")
+ *   3. Warehouse card in the linked redirector
+ *   If any fails → error message, nothing consumed.
  *
  * v1.6.0 — the payload gained {@code citizenName} so the SERVER can record the
  * sent-request key ("c|name|itemId") in the wand NBT on success. Before this,
@@ -88,7 +88,7 @@ public record PackageTokenPacket(
         });
     }
 
-    // ── Logique principale ────────────────────────────────────────────────────
+    // Main logic
 
     private static void handlePackageAction(ServerPlayer player, ItemStack stack,
                                             int count, BlockPos redirectorPos, boolean isCraft,
@@ -102,7 +102,7 @@ public record PackageTokenPacket(
             return;
         }
 
-        // 1. Trouver la wand
+        // 1. Find the wand
         ItemStack wand = findWandInInventory(player);
         if (wand == null)
         {
@@ -139,7 +139,7 @@ public record PackageTokenPacket(
             return;
         }
 
-        // 2. Vérifier le stock de packages
+        // 2. Check the package stock
         int stored = ColonyLinkWandLinkableHandler.getCitizenPackages(wand);
         if (stored <= 0)
         {
@@ -148,7 +148,7 @@ public record PackageTokenPacket(
             return;
         }
 
-        // 3. Vérifier le redirector et la warehouse card
+        // 3. Check the redirector and warehouse card
         ServerLevel level = player.serverLevel();
         // 1.7.0-beta.4 — by the entry's Redirector UUID first (follows a moved Redirector).
         var be = RedirectorRegistry.forEntry(level, linkedEntry);
@@ -165,7 +165,7 @@ public record PackageTokenPacket(
             return;
         }
 
-        // 4. Connexion AE2
+        // 4. AE2 connection
         GlobalPos linkedPos = ColonyLinkWandLinkableHandler.getLinkedPos(wand);
         if (linkedPos == null)
         {
@@ -264,10 +264,10 @@ public record PackageTokenPacket(
             }
         }
 
-        // 5. Consommer 1 package AVANT l'action (point de non-retour)
+        // 5. Consume 1 package BEFORE the action (point of no return)
         ColonyLinkWandLinkableHandler.consumeCitizenPackage(wand);
 
-        // 6. Exécuter l'action
+        // 6. Execute the action
         boolean success;
         if (isCraft)
             success = doCraft(player, stack, count, grid, wap);
@@ -299,17 +299,17 @@ public record PackageTokenPacket(
         }
         else
         {
-            // Rembourser le package si l'action a échoué
+            // Refund the package if the action failed
             ColonyLinkWandLinkableHandler.addCitizenPackages(wand, 1);
             player.sendSystemMessage(Component.translatable("colonylink.pkg_token.refunded"));
         }
 
-        // 8. Sync du nouveau count au client
+        // 8. Sync the new count to the client
         net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(player,
                 new PackageTokenSyncPacket(ColonyLinkWandLinkableHandler.getCitizenPackages(wand)));
     }
 
-    // ── Send : ME → Warehouse ─────────────────────────────────────────────────
+    // Send: ME → Warehouse
 
     private static boolean doSend(ServerPlayer player, ItemStack stack, int count,
                                   BuildingWareHouse warehouse, IGrid grid, IWirelessAccessPoint wap,
@@ -374,7 +374,7 @@ public record PackageTokenPacket(
         return totalInserted > 0;
     }
 
-    // ── Craft : AE2 ──────────────────────────────────────────────────────────
+    // Craft: AE2
 
     private static boolean doCraft(ServerPlayer player, ItemStack stack, int count,
                                    IGrid grid, IWirelessAccessPoint wap)
@@ -384,12 +384,12 @@ public record PackageTokenPacket(
         AEItemKey aeKey = AEItemKey.of(stack);
         if (aeKey == null || !cs.isCraftable(aeKey)) return false;
 
-        // Délégue à CraftHandler qui gère le calcul du plan et le submit
+        // Delegates to CraftHandler, which computes the plan and submits
         CraftHandler.handleCraftRequest(player, stack, count);
         return true;
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // Helpers
 
     /**
      * Pushes the authoritative package count back to the client. The client decrements

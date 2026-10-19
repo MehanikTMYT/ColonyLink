@@ -8,35 +8,34 @@ import java.io.*;
 import java.nio.file.Path;
 
 /**
- * Configuration visuelle du GUI ColonyLink — persistée côté client uniquement.
- * Fichier : .minecraft/config/colonylink_gui.json
+ * ColonyLink GUI visual config — persisted client-side only.
+ * File: .minecraft/config/colonylink_gui.json
  *
- * Paramètres :
- *   bgColor       — couleur ARGB du fond du GUI (sans la barre de titre)
- *   titleColor    — couleur ARGB de la barre de titre
- *   borderColor   — couleur ARGB des bordures
- *   borderWidth   — épaisseur des bordures (1–4 px)
- *   opacity       — opacité globale du GUI (0.2–1.0, appliquée sur bgColor + titleColor)
- *   scale         — facteur de zoom du GUI (0.5–1.5)
+ * Fields:
+ *   bgColor      — ARGB of the GUI body (excluding the title bar)
+ *   titleColor   — ARGB of the title bar
+ *   borderColor  — ARGB of the borders
+ *   borderWidth  — border thickness (1-4 px)
+ *   opacity      — global GUI opacity (0.2-1.0, applied to bgColor + titleColor)
+ *   scale        — GUI zoom factor (0.5-1.5)
  *
- * Les couleurs sont stockées en int ARGB (0xAARRGGBB).
- * L'opacité modifie le canal alpha avant le rendu (multiplicateur sur l'alpha des couleurs).
- * Le scale est appliqué via PoseStack.scale() centré sur le GUI.
+ * Colors are stored as int ARGB (0xAARRGGBB). Opacity scales the alpha channel
+ * before rendering; scale is applied via PoseStack.scale() centered on the GUI.
  *
- * Singleton — accès via ColonyLinkGuiConfig.get().
+ * Singleton — access via ColonyLinkGuiConfig.get().
  */
 public class ColonyLinkGuiConfig
 {
-    // ── Thème d'apparence ─────────────────────────────────────────────────────
-    // DEFAULT      = apparence historique du Clipboard, pilotée par bg/title/border.
-    // AE           = réplique du look Warehouse Link Terminal (palette extraite de
+    // Appearance theme
+    // DEFAULT      = historical Clipboard look, driven by bg/title/border.
+    // AE           = replica of the Warehouse Link Terminal look (palette from
     //                TerminalSkin/WarehouseLinkTerminalScreen).
-    // MINECOLONIES = réplique du look "parchemin" MineColonies (fond blitté depuis
-    //                minecolonies:textures/gui/citizen/colonist_paper.png à l'exécution).
-    // Appearance-only : aucun comportement, packet ou logique n'en dépend.
+    // MINECOLONIES = replica of the MineColonies "parchment" look (background blitted
+    //                from minecolonies:textures/gui/citizen/colonist_paper.png at runtime).
+    // Appearance-only: no behavior, packet or logic depends on it.
     public enum Theme { DEFAULT, AE, MINECOLONIES }
 
-    // ── Defaults ──────────────────────────────────────────────────────────────
+    // Defaults
     public static final int   DEFAULT_BG_COLOR     = 0xFF8B8B8B;
     public static final int   DEFAULT_TITLE_COLOR  = 0xFF6B6B6B;
     public static final int   DEFAULT_BORDER_COLOR = 0xFFFFFFFF;
@@ -49,7 +48,7 @@ public class ColonyLinkGuiConfig
     // background is made very transparent. Effective control alpha = max(opacity, this).
     public static final float MIN_CONTROL_OPACITY  = 0.50f;
 
-    // ── Champs (sérialisés par Gson) ──────────────────────────────────────────
+    // Fields (serialized by Gson)
     public int   bgColor     = DEFAULT_BG_COLOR;
     public int   titleColor  = DEFAULT_TITLE_COLOR;
     public int   borderColor = DEFAULT_BORDER_COLOR;
@@ -58,7 +57,7 @@ public class ColonyLinkGuiConfig
     public float scale       = DEFAULT_SCALE;
     public Theme theme       = DEFAULT_THEME;
 
-    // ── Singleton ─────────────────────────────────────────────────────────────
+    // Singleton
     private static ColonyLinkGuiConfig INSTANCE = null;
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -75,7 +74,7 @@ public class ColonyLinkGuiConfig
         INSTANCE = load();
     }
 
-    // ── Persistance ───────────────────────────────────────────────────────────
+    // Persistence
 
     private static Path configPath()
     {
@@ -124,7 +123,7 @@ public class ColonyLinkGuiConfig
         }
     }
 
-    /** Applique les bornes minimales/maximales sur tous les champs. */
+    /** Clamps all fields to their min/max bounds. */
     public void clamp()
     {
         borderWidth = Math.max(1, Math.min(4, borderWidth));
@@ -132,14 +131,12 @@ public class ColonyLinkGuiConfig
         scale       = Math.max(0.5f, Math.min(1.5f, scale));
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    // PALETTE AE — valeurs structurelles extraites du Warehouse Link Terminal
-    // (TerminalSkin.PAL_BG + constantes C_* de WarehouseLinkTerminalScreen). Ne
-    // couvre QUE le chrome (fonds, cadres, bevels, tabs neutres, scrollbar,
-    // séparateurs, icônes neutres). Les couleurs sémantiques (vert/rouge/bleu/
-    // gris-désactivé + getWorkerStatusColor) NE PASSENT JAMAIS par ici.
-    // Les valeurs marquées "eye-tune" sont des candidates de départ (Phase C).
-    // ══════════════════════════════════════════════════════════════════════════
+    // AE palette — structural values from the Warehouse Link Terminal
+    // (TerminalSkin.PAL_BG + C_* constants of WarehouseLinkTerminalScreen). Covers
+    // ONLY the chrome (backgrounds, frames, bevels, neutral tabs, scrollbar,
+    // separators, neutral icons). Semantic colors (green/red/blue/disabled-grey +
+    // getWorkerStatusColor) NEVER go through here.
+    // Values marked "eye-tune" are starting candidates (Phase C).
     private static final int AE_FRAME_BG      = 0xFFADB0C4; // PAL_BG[0]
     private static final int AE_TITLE_BG      = 0xFF878FA5; // PAL_BG[6]
     private static final int AE_TITLE_HI      = 0xFFCBCCD4; // PAL_BG[1]
@@ -170,20 +167,19 @@ public class ColonyLinkGuiConfig
     private static final int AE_ICON_NEUTRAL    = 0xFFCBCCD4; // PAL_BG[1]
     private static final int AE_ICON_DIM        = 0xFF9A9FB4; // PAL_BG[2]
 
-    // ── Cadre AE fin — séquences EXACTES extraites de TerminalSkin.BG (décodé
-    // pixel-perfect sur 6 positions propres, hors slot central x=202..217). Ordre
-    // extérieur → intérieur. Épaisseurs : haut/gauche/droit = 2px, bas = 4px.
-    // Haut/gauche/droit sont IDENTIQUES : 0xFF413F54 → 0xFFF2F2F2. Le 0xCBCCD4 n'y
-    // figure PAS (c'est le champ intérieur, géré par la palette de contenu). Les
-    // coins restent nets (l'anti-aliasing alpha de la skin n'est pas reproductible
-    // proprement en g.fill) — limite connue.
+    // AE thin frame — EXACT sequences from TerminalSkin.BG (decoded pixel-perfect on
+    // 6 clean positions, excluding the central slot x=202..217). Outer → inner order.
+    // Thickness: top/left/right = 2px, bottom = 4px. Top/left/right are IDENTICAL:
+    // 0xFF413F54 → 0xFFF2F2F2. 0xCBCCD4 is NOT here (it's the inner field, handled by
+    // the content palette). Corners stay sharp (the skin's alpha anti-aliasing can't
+    // be cleanly reproduced with g.fill) — known limitation.
     private static final int[] AE_FRAME_TOP    = { 0xFF413F54, 0xFFF2F2F2 };
     private static final int[] AE_FRAME_LEFT   = { 0xFF413F54, 0xFFF2F2F2 };
     private static final int[] AE_FRAME_RIGHT  = { 0xFF413F54, 0xFFF2F2F2 };
     private static final int[] AE_FRAME_BOTTOM = { 0xFF413F54, 0xFF878FA5, 0xFF878FA5, 0xFFF2F2F2 };
 
-    // ── Defaults structurels du thème DEFAULT (valeurs historiques du Clipboard) ─
-    // Exposés via accesseurs pour que le rendu Défaut reste identique au bit près.
+    // Structural defaults for the DEFAULT theme (historical Clipboard values).
+    // Exposed via accessors so the Default rendering stays bit-identical.
     private static final int DEF_TITLE_TEXT    = 0x404040;
     private static final int DEF_WELL_BG       = 0xFF3A3A3A;
     private static final int DEF_LIST_BG       = 0xFF373737;
@@ -210,7 +206,6 @@ public class ColonyLinkGuiConfig
     private static final int DEF_ICON_NEUTRAL    = 0xFFE0E0E0;
     private static final int DEF_ICON_DIM        = 0xFF888888;
 
-    // ══════════════════════════════════════════════════════════════════════════
     // AE SEMANTIC TINTS — status/label colors calibrated for the AE light body.
     // Named by MEANING (not usage) so they can be reused for colored button labels
     // (layer 4). These REPLACE the bright, dark-background-calibrated colors ONLY in
@@ -227,7 +222,7 @@ public class ColonyLinkGuiConfig
     private static final int AE_BODY_TEXT  = 0xFF413F54; // normal text on the AE light body (= AE2 palette DEFAULT_TEXT)
     private static final int AE_MUTED_TEXT = 0xFF878FA5; // secondary / muted text (= AE2 palette MUTED)
 
-    // ── MineColonies theme — body text ────────────────────────────────────────
+    // MineColonies theme — body text
     // MineColonies GUIs draw pure-black text on the light parchment body (XML
     // color="black" → BlockUI Color 0xFF000000). Chrome/status colors are shared
     // with the AE light palette (see light() below); only the body text differs.
@@ -245,16 +240,16 @@ public class ColonyLinkGuiConfig
      */
     private boolean light() { return theme == Theme.AE || theme == Theme.MINECOLONIES; }
 
-    /** Vrai si le thème AE est actif — pour les widgets bespoke à texture AE du Screen. */
+    /** True if the AE theme is active — for the Screen's bespoke AE-textured widgets. */
     public boolean isAe() { return ae(); }
 
-    /** Vrai si le thème MineColonies est actif — pour le fond parchemin du Screen. */
+    /** True if the MineColonies theme is active — for the Screen's parchment background. */
     public boolean isMineColonies() { return mc(); }
 
-    /** Vrai si le thème a un corps clair (AE ou MineColonies) — texte sombre, chrome clair. */
+    /** True if the theme has a light body (AE or MineColonies) — dark text, light chrome. */
     public boolean isLightBody() { return light(); }
 
-    // ── Helpers couleur ───────────────────────────────────────────────────────
+    // Color helpers
 
     /** Background alpha factor (0..1): the raw slider opacity, 10%-100%. */
     public float alphaBackground() { return opacity; }
@@ -271,8 +266,8 @@ public class ColonyLinkGuiConfig
     }
 
     /**
-     * Applique l'opacité configurée sur une couleur ARGB (catégorie fond, opacité pleine).
-     * Conservée pour les appelants existants ; équivalente à {@link #applyBackground(int)}.
+     * Applies the configured opacity to an ARGB color (background category, full opacity).
+     * Kept for existing callers; equivalent to {@link #applyBackground(int)}.
      */
     public int applyOpacity(int argb) { return applyAlpha(argb, alphaBackground()); }
 
@@ -282,18 +277,18 @@ public class ColonyLinkGuiConfig
     /** Control-category alpha (floored at MIN_CONTROL_OPACITY). */
     public int applyControl(int argb) { return applyAlpha(argb, alphaControl()); }
 
-    // ── Chrome principal (thème-conscient, opacité appliquée) ──────────────────
+    // Main chrome (theme-aware, opacity applied)
 
-    /** Fond du GUI — thémé, avec opacité. */
+    /** GUI background — themed, with opacity. */
     public int bg()    { return applyOpacity(ae() ? AE_FRAME_BG   : bgColor); }
 
-    /** Barre de titre — thémée, avec opacité. */
+    /** Title bar — themed, with opacity. */
     public int title() { return applyOpacity(ae() ? AE_TITLE_BG   : titleColor); }
 
-    /** Bordure claire (haut/gauche) — thémée, avec opacité. */
+    /** Light border (top/left) — themed, with opacity. */
     public int border() { return applyOpacity(ae() ? AE_BORDER_LIGHT : borderColor); }
 
-    /** Couleur "shadow" des bordures (côté sombre). En AE : valeur fixe de la palette. */
+    /** Border "shadow" color (dark side). In AE: fixed palette value. */
     public int borderShadow()
     {
         if (ae()) return applyOpacity(AE_BORDER_DARK);
@@ -306,35 +301,35 @@ public class ColonyLinkGuiConfig
     }
 
     /**
-     * Épaisseur de bordure effective. En AE, le cadre définit sa propre géométrie
-     * (pixel-perfect) → largeur fixe indépendante du slider (verrouillé en config).
+     * Effective border width. In AE the frame defines its own (pixel-perfect)
+     * geometry → fixed width independent of the slider (locked in config).
      */
     public int frameBorderWidth() { return ae() ? 2 : borderWidth; }
 
-    // ── Séquences de liserés du cadre AE (extérieur → intérieur, lecture seule) ─
+    // AE frame edge sequences (outer → inner, read-only)
     public int[] aeFrameTop()    { return AE_FRAME_TOP; }
     public int[] aeFrameLeft()   { return AE_FRAME_LEFT; }
     public int[] aeFrameRight()  { return AE_FRAME_RIGHT; }
     public int[] aeFrameBottom() { return AE_FRAME_BOTTOM; }
 
-    // ── Accesseurs palette structurelle ────────────────────────────────────────
-    // Renvoient la couleur BRUTE thème-correcte (sans opacité). Les appelants
-    // (ColonyLinkScreen) enveloppent avec applyOpacity() là où le code d'origine
-    // le faisait, préservant le rendu Défaut à l'identique.
+    // Structural palette accessors
+    // Return the RAW theme-correct color (no opacity). Callers (ColonyLinkScreen)
+    // wrap with applyOpacity() where the original code did, keeping the Default
+    // rendering identical.
 
-    /** Liseré clair en haut de la barre de titre (raw). */
+    /** Light edge at the top of the title bar (raw). */
     public int titleHi()      { return ae() ? AE_TITLE_HI   : lighten(titleColor, 1.3f); }
-    /** Couleur du texte de titre (raw). */
+    /** Title text color (raw). */
     public int titleText()    { return ae() ? AE_TITLE_TEXT : DEF_TITLE_TEXT; }
 
-    /** Onglet actif — fond (raw). Défaut = bgColor éclairci. */
+    /** Active tab — background (raw). Default = lightened bgColor. */
     public int tabActiveBg()  { return ae() ? AE_TAB_ACTIVE_BG : (lighten(bgColor, 1.1f) | 0xFF000000); }
 
     // Content panels/lists sit BEHIND body text → they follow the light body (AE +
     // MineColonies share the AE light tints) so black/dark text stays legible.
     // DEFAULT keeps its dark tints unchanged (light() == false).
     public int wellBg()       { return light() ? AE_WELL_BG      : DEF_WELL_BG; }
-    /** Fond du panneau liste (0xFF373737 en Défaut ≠ wellBg 0xFF3A3A3A). */
+    /** List panel background (0xFF373737 in Default ≠ wellBg 0xFF3A3A3A). */
     public int listBg()       { return light() ? AE_WELL_BG      : DEF_LIST_BG; }
     public int wellLight()    { return light() ? AE_WELL_LIGHT   : DEF_WELL_LIGHT; }
     public int wellDark()     { return light() ? AE_WELL_DARK    : DEF_WELL_DARK; }
@@ -347,7 +342,7 @@ public class ColonyLinkGuiConfig
 
     public int separator()    { return light() ? AE_SEPARATOR    : DEF_SEPARATOR; }
 
-    /** Points de la poignée de drag (raw). {@code hover} → variante claire. */
+    /** Drag handle dots (raw). {@code hover} → light variant. */
     public int handleDot(boolean hover)
     { return hover ? (ae() ? AE_HANDLE_HI : DEF_HANDLE_HI) : (ae() ? AE_HANDLE : DEF_HANDLE); }
 
@@ -355,26 +350,26 @@ public class ColonyLinkGuiConfig
     public int reqLight()     { return light() ? AE_REQ_LIGHT : DEF_REQ_LIGHT; }
     public int reqDark()      { return light() ? AE_REQ_DARK  : DEF_REQ_DARK; }
 
-    /** Bevel clair/sombre des boutons (chrome, pas la face sémantique). */
+    /** Light/dark button bevel (chrome, not the semantic face). */
     public int btnBevelLight() { return ae() ? AE_BTN_LIGHT : DEF_BTN_LIGHT; }
     public int btnBevelDark()  { return ae() ? AE_BTN_DARK  : DEF_BTN_DARK; }
 
-    /** Fond des boutons neutres (config, etc.). {@code hover} → variante claire. */
+    /** Neutral button background (config, etc.). {@code hover} → light variant. */
     public int neutralBtnBg(boolean hover)
     { return hover ? (ae() ? AE_NEUTRAL_BG_HI : DEF_NEUTRAL_BG_HI) : (ae() ? AE_NEUTRAL_BG : DEF_NEUTRAL_BG); }
 
     public int tabInactiveBg()    { return ae() ? AE_TAB_INACT_BG    : DEF_TAB_INACT_BG; }
-    /** Onglet inactif avec état hover (onglet Citizens). */
+    /** Inactive tab with hover state (Citizens tab). */
     public int tabInactiveBg(boolean hover)
     { return hover ? (ae() ? AE_TAB_INACT_LIGHT : DEF_TAB_INACT_HOVER) : (ae() ? AE_TAB_INACT_BG : DEF_TAB_INACT_BG); }
     public int tabInactiveLight() { return ae() ? AE_TAB_INACT_LIGHT : DEF_TAB_INACT_LIGHT; }
     public int tabInactiveDark()  { return ae() ? AE_TAB_INACT_DARK  : DEF_TAB_INACT_DARK; }
 
-    /** Icônes neutres (engrenage/bonhomme/config). {@code dim} → variante atténuée. */
+    /** Neutral icons (gear/person/config). {@code dim} → dimmed variant. */
     public int iconNeutral(boolean dim)
     { return dim ? (ae() ? AE_ICON_DIM : DEF_ICON_DIM) : (ae() ? AE_ICON_NEUTRAL : DEF_ICON_NEUTRAL); }
 
-    // ── AE semantic text tints (raw AE constants; callers guard with isAe() and
+    // AE semantic text tints (raw AE constants; callers guard with isAe() and
     //    supply the DEFAULT-theme color themselves, so the DEFAULT rendering is
     //    untouched). bodyText() is fully theme-aware (its DEFAULT is always white).
     public int semGreen()  { return AE_SEM_GREEN; }
@@ -390,7 +385,7 @@ public class ColonyLinkGuiConfig
     /** Muted/secondary text tint for the AE light body (raw; guard with isAe()). */
     public int mutedText() { return mc() ? MC_MUTED_TEXT : AE_MUTED_TEXT; }
 
-    /** Éclaircit une couleur ARGB par un facteur (helper local, cf. ColonyLinkScreen). */
+    /** Lightens an ARGB color by a factor (local helper, cf. ColonyLinkScreen). */
     private static int lighten(int argb, float f)
     {
         int a  = (argb >> 24) & 0xFF;
@@ -401,10 +396,10 @@ public class ColonyLinkGuiConfig
     }
 
     /**
-     * Dessine les bordures du GUI selon la config/thème.
-     * Remplace les 4 fills hardcodés (clair haut/gauche, sombre bas/droite).
-     * En AE, {@link #border()}/{@link #borderShadow()}/{@link #frameBorderWidth()}
-     * renvoient déjà les valeurs de la palette → cadre AE sans changer ce code.
+     * Draws the GUI borders per config/theme.
+     * Replaces the 4 hardcoded fills (light top/left, dark bottom/right).
+     * In AE, {@link #border()}/{@link #borderShadow()}/{@link #frameBorderWidth()}
+     * already return palette values → AE frame without changing this code.
      */
     public void drawBorders(net.minecraft.client.gui.GuiGraphics g, int x, int y, int w, int h)
     {
@@ -412,17 +407,13 @@ public class ColonyLinkGuiConfig
         int shadow = borderShadow();
         int bw     = frameBorderWidth();
 
-        // Haut
         g.fill(x, y, x + w, y + bw, light);
-        // Gauche
         g.fill(x, y, x + bw, y + h, light);
-        // Bas
         g.fill(x, y + h - bw, x + w, y + h, shadow);
-        // Droite
         g.fill(x + w - bw, y, x + w, y + h, shadow);
     }
 
-    // ── Reset ─────────────────────────────────────────────────────────────────
+    // Reset
 
     public void reset()
     {

@@ -20,24 +20,24 @@ import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
- * C→S — annule la Priority Request affichée pour le builder ciblé.
+ * C→S — cancels the Priority Request shown for the targeted builder.
  *
- * Modèle de sécurité : identique à {@link WarehouseCraftHandler} (PAS
- * {@link RestartBuilderPacket}, qui ne fait que ACCESS_HUTS). Le client n'est
- * jamais autoritatif : {@code redirectorPos} DOIT correspondre à un redirector
- * réellement lié à la wand de CE joueur. L'entry ainsi validé fournit le
- * {@code builderPos} — on ne fait pas confiance à une position brute du client.
+ * Security model: same as {@link WarehouseCraftHandler} (NOT
+ * {@link RestartBuilderPacket}, which only does ACCESS_HUTS). The client is never
+ * authoritative: {@code redirectorPos} MUST match a redirector actually linked to
+ * THIS player's wand. The validated entry supplies the {@code builderPos} — we do
+ * not trust a raw position from the client.
  *
- * La request annulée est re-dérivée serveur (première open request non
- * CANCELLED/OVERRULED de type IDeliverable), exactement comme la passe 1 de
- * {@code ColonyLinkServerTicker.fetchBuilderRequest}. On ne matche JAMAIS par
- * l'item affiché : si la substitution d'outils est active, l'item affiché est le
- * substitut, pas l'item de la request. Le bouton est sur la ligne prioritaire =
- * la première open request, donc la cible reste cohérente.
+ * The cancelled request is re-derived server-side (first open request not
+ * CANCELLED/OVERRULED of type IDeliverable), exactly like pass 1 of
+ * {@code ColonyLinkServerTicker.fetchBuilderRequest}. We NEVER match by the
+ * displayed item: with tool substitution active, the displayed item is the
+ * substitute, not the request's item. The button is on the priority line = the
+ * first open request, so the target stays consistent.
  *
- * L'appel d'annulation mirror 1:1 le message natif du GUI builder
- * (UpdateRequestStateMessage → updateRequestState(token, CANCELLED)). Le
- * IRequestManager interne gère la cascade (child-requests, resolver).
+ * The cancel call mirrors the native builder GUI message 1:1
+ * (UpdateRequestStateMessage → updateRequestState(token, CANCELLED)). The internal
+ * IRequestManager handles the cascade (child-requests, resolver).
  */
 public record CancelRequestPacket(BlockPos redirectorPos) implements CustomPacketPayload
 {
@@ -65,7 +65,7 @@ public record CancelRequestPacket(BlockPos redirectorPos) implements CustomPacke
             ServerLevel level = serverPlayer.serverLevel();
             BlockPos redirectorPos = packet.redirectorPos();
 
-            // ── Détection wand (inclut Curios) ────────────────────────────────
+            // Wand detection (includes Curios)
             ItemStack wandStack = ColonyLinkServerTicker.findWandInInventory(serverPlayer);
             if (wandStack == null || !ColonyLinkWandLinkableHandler.isLinked(wandStack))
             {
@@ -74,16 +74,16 @@ public record CancelRequestPacket(BlockPos redirectorPos) implements CustomPacke
                 return;
             }
 
-            // ── Validation redirector↔wand (client NON autoritatif) ───────────
-            // redirectorPos doit être un redirector réellement lié à CETTE wand.
-            // L'entry validé nous donne le builderPos — on ne fait pas confiance
-            // à une position de builder envoyée par le client.
+            // Validation redirector↔wand (client NOT authoritative)
+            // redirectorPos must be a redirector actually linked to THIS wand.
+            // The validated entry gives us the builderPos — we never trust a
+            // builder position sent by the client.
             BlockPos builderPos = null;
             for (BuilderEntry e : ColonyLinkWandLinkableHandler.getBuilderEntries(wandStack))
             {
                 if (e.hasRedirector() && e.redirectorPos().equals(redirectorPos))
                 {
-                    // Garde dimension : refuse un cancel cross-dimension mal résolu.
+                    // Dimension guard: refuse a mis-resolved cross-dimension cancel.
                     if (e.dimension() != null && !e.dimension().equals(level.dimension()))
                         break;
                     builderPos = e.builderPos();
@@ -97,7 +97,7 @@ public record CancelRequestPacket(BlockPos redirectorPos) implements CustomPacke
                 return;
             }
 
-            // ── Colonie (résolue via le builderPos wand-validé) ───────────────
+            // Colony (resolved via the wand-validated builderPos)
             IColony colony = IColonyManager.getInstance().getClosestColony(level, builderPos);
             if (colony == null)
             {
@@ -106,7 +106,7 @@ public record CancelRequestPacket(BlockPos redirectorPos) implements CustomPacke
                 return;
             }
 
-            // ── Permission colonie, côté serveur ──────────────────────────────
+            // Colony permission, server-side
             if (!colony.getPermissions().hasPermission(serverPlayer, Action.ACCESS_HUTS))
             {
                 serverPlayer.sendSystemMessage(
@@ -114,7 +114,7 @@ public record CancelRequestPacket(BlockPos redirectorPos) implements CustomPacke
                 return;
             }
 
-            // ── Résolution du Builder's Hut ───────────────────────────────────
+            // Builder's Hut resolution
             IBuilding building = null;
             for (IBuilding b : colony.getServerBuildingManager().getBuildings().values())
             {
@@ -133,9 +133,9 @@ public record CancelRequestPacket(BlockPos redirectorPos) implements CustomPacke
 
             try
             {
-                // Re-dérive la Priority Request = première open request non
-                // CANCELLED/OVERRULED de type IDeliverable (mirror fetchBuilderRequest
-                // passe 1). PAS de match par item (évite le décalage substitution).
+                // Re-derive the Priority Request = first open request not
+                // CANCELLED/OVERRULED of type IDeliverable (mirror fetchBuilderRequest
+                // pass 1). NO item match (avoids the substitution mismatch).
                 IRequest<?> target = null;
                 if (!builderBuilding.getAllAssignedCitizen().isEmpty())
                 {
@@ -166,8 +166,8 @@ public record CancelRequestPacket(BlockPos redirectorPos) implements CustomPacke
                     return;
                 }
 
-                // Annulation native 1:1 (UpdateRequestStateMessage → CANCELLED).
-                // Le IRequestManager gère la cascade (child-requests, resolver).
+                // Native 1:1 cancel (UpdateRequestStateMessage → CANCELLED).
+                // The IRequestManager handles the cascade (child-requests, resolver).
                 colony.getRequestManager().updateRequestState(target.getId(), RequestState.CANCELLED);
                 building.markDirty();
 

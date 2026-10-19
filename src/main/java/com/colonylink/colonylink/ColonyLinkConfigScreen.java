@@ -8,20 +8,20 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * GUI de configuration visuelle du ColonyLink — ouvert depuis le bouton engrenage.
+ * ColonyLink visual config GUI — opened from the gear button.
  *
- * Paramètres :
- *  - Couleur fond (RGB via 3 sliders R/G/B + preview)
- *  - Couleur barre de titre (RGB)
- *  - Couleur bordures (RGB)
- *  - Épaisseur bordures (1–4, slider discret)
- *  - Opacité (0.2–1.0, slider)
+ * Settings:
+ *  - Background color (RGB via 3 R/G/B sliders + preview)
+ *  - Title bar color (RGB)
+ *  - Border color (RGB)
+ *  - Border width (1–4, discrete slider)
+ *  - Opacity (0.2–1.0, slider)
  *  - Scale (0.5–1.5, slider)
  *
- * Navigation : tabs "Background | Title | Border | Layout"
- * Boutons : [Reset] [Cancel] [Apply & Save]
+ * Navigation: tabs "Background | Title | Border | Layout".
+ * Buttons: [Reset] [Cancel] [Apply & Save].
  *
- * Prévisualisation live : un mini-GUI ColonyLink factice dessiné à droite.
+ * Live preview: a dummy mini ColonyLink GUI drawn on the right.
  */
 public class ColonyLinkConfigScreen extends Screen
 {
@@ -32,7 +32,7 @@ public class ColonyLinkConfigScreen extends Screen
     private static final String[] TABS = {"colonylink.cfg.tab_bg", "colonylink.cfg.tab_title", "colonylink.cfg.tab_border", "colonylink.cfg.tab_layout"};
     private int activeTab = 0;
 
-    // Working copy (modifiée live, appliquée seulement sur "Apply & Save")
+    // Working copy (edited live, applied only on "Apply & Save")
     private int   wBgColor;
     private int   wTitleColor;
     private int   wBorderColor;
@@ -42,17 +42,16 @@ public class ColonyLinkConfigScreen extends Screen
     private ColonyLinkGuiConfig.Theme wTheme;
 
     // Slider drag
-    private int   draggingSlider = -1; // index du slider en cours de drag
+    private int   draggingSlider = -1; // index of the slider being dragged
     private final Screen parent;
 
-    // Sliders : [rx, ry, rw, rh, min, max, isFloat]
-    // On les calcule dans render() dynamiquement selon la tab active
+    // Sliders: [rx, ry, rw, rh, min, max, isFloat]
+    // Computed dynamically in render() for the active tab
 
     public ColonyLinkConfigScreen(Screen parent)
     {
         super(Component.translatable("colonylink.cfg.title"));
         this.parent = parent;
-        // Copie de travail depuis la config actuelle
         ColonyLinkGuiConfig cfg = ColonyLinkGuiConfig.get();
         wBgColor     = cfg.bgColor;
         wTitleColor  = cfg.titleColor;
@@ -63,28 +62,28 @@ public class ColonyLinkConfigScreen extends Screen
         wTheme       = cfg.theme;
     }
 
-    /** Les contrôles de couleur (bg/title/border + épaisseur) sont verrouillés en thème AE. */
+    /** Color controls (bg/title/border + width) are locked in non-DEFAULT themes. */
     // Colors are driven by the theme's own texture/palette in AE and MineColonies,
     // so the R/G/B sliders are locked for both (only DEFAULT exposes them).
     private boolean colorsLocked() { return wTheme != ColonyLinkGuiConfig.Theme.DEFAULT; }
 
-    // ── Coordonnées ───────────────────────────────────────────────────────────
+    // Coordinates
 
     private int gx() { return (this.width  - W) / 2; }
     private int gy() { return (this.height - H) / 2; }
 
-    // Zone sliders (gauche)
+    // Slider area (left)
     private int sliderAreaX() { return gx() + 10; }
     private int sliderAreaY() { return gy() + 55; }
     private int sliderW()     { return 210; }
 
-    // Zone preview (droite)
+    // Preview area (right)
     private int previewX()    { return gx() + 235; }
     private int previewY()    { return gy() + 50; }
     private int previewW()    { return 140; }
     private int previewH()    { return 160; }
 
-    // ── Render ────────────────────────────────────────────────────────────────
+    // Render
 
     @Override
     public void renderBackground(GuiGraphics g, int mx, int my, float pt) {}
@@ -92,41 +91,41 @@ public class ColonyLinkConfigScreen extends Screen
     @Override
     public void render(GuiGraphics g, int mx, int my, float pt)
     {
-        // Fond sombre semi-transparent
+        // Dark semi-transparent overlay
         g.fill(0, 0, this.width, this.height, 0xAA000000);
 
         int x = gx(), y = gy();
 
-        // Fond GUI config
+        // Config GUI background
         g.fill(x, y, x + W, y + H, 0xFF2A2A2A);
         g.fill(x, y, x + W, y + 2, 0xFF888888);
         g.fill(x, y, x + 2, y + H, 0xFF888888);
         g.fill(x, y + H - 2, x + W, y + H, 0xFF111111);
         g.fill(x + W - 2, y, x + W, y + H, 0xFF111111);
 
-        // Barre de titre
+        // Title bar
         g.fill(x + 2, y + 2, x + W - 2, y + 20, 0xFF3A3A3A);
         g.drawCenteredString(this.font, Component.translatable("colonylink.cfg.header").getString(), x + W / 2 - 50, y + 6, 0xFFFFAA);
 
-        // Sélecteur de thème (toujours actif, dans le bandeau, à droite)
+        // Theme selector (always active, in the header bar, right)
         drawThemeSelector(g, mx, my);
 
         // Tabs
         drawTabs(g, mx, my);
 
-        // Contenu tab
+        // Tab content
         drawTabContent(g, mx, my);
 
         // Preview
         drawPreview(g);
 
-        // Boutons bas
+        // Bottom buttons
         drawBottomButtons(g, mx, my);
 
         super.render(g, mx, my, pt);
     }
 
-    // ── Sélecteur de thème ─────────────────────────────────────────────────────
+    // Theme selector
     private int themeBtnX() { return gx() + W - 104; }
     private int themeBtnY() { return gy() + 3; }
     private int themeBtnW() { return 98; }
@@ -139,7 +138,7 @@ public class ColonyLinkConfigScreen extends Screen
         boolean ae = wTheme == ColonyLinkGuiConfig.Theme.AE;
         boolean mc = wTheme == ColonyLinkGuiConfig.Theme.MINECOLONIES;
 
-        // Fond : teinte AE (lavande) en AE, beige parchemin en MineColonies, gris sinon.
+        // Background: AE lavender for AE, parchment beige for MineColonies, grey otherwise.
         int bg, bevelLight, bevelDark, textCol;
         String name;
         if (ae)
@@ -173,7 +172,7 @@ public class ColonyLinkConfigScreen extends Screen
     private void drawTabs(GuiGraphics g, int mx, int my)
     {
         int x = gx() + 10, y = gy() + 22;
-        // tw dynamique : largeur du GUI / nombre de tabs avec marges
+        // dynamic tw: GUI width / tab count, with margins
         int tw = (W - 20) / TABS.length - 2, th = 16, sp = 2;
         for (int i = 0; i < TABS.length; i++)
         {
@@ -201,8 +200,8 @@ public class ColonyLinkConfigScreen extends Screen
     }
 
     /**
-     * Dessine 3 sliders R/G/B pour une couleur.
-     * sliderBase = index de base dans le système de slots (0, 3 ou 6).
+     * Draws 3 R/G/B sliders for a color.
+     * sliderBase = base index in the slot system (0, 3 or 6).
      */
     private void drawColorSliders(GuiGraphics g, int mx, int my,
                                   int sx, int sy, String label, int color, int sliderBase)
@@ -224,7 +223,7 @@ public class ColonyLinkConfigScreen extends Screen
                     names[i] + " §f" + vals[i], colors[i], sliderBase + i, enabled);
         }
 
-        // Bandeau de verrouillage — thème-conscient (AE ou MineColonies).
+        // Lock banner — theme-aware (AE or MineColonies).
         if (!enabled)
         {
             boolean mc = wTheme == ColonyLinkGuiConfig.Theme.MINECOLONIES;
@@ -240,26 +239,26 @@ public class ColonyLinkConfigScreen extends Screen
     {
         g.drawString(this.font, Component.translatable("colonylink.cfg.section_layout").getString(), sx, sy - 8, 0xCCCCCC, false);
 
-        // Opacity : slot 9 — toujours actif (géométrique)
+        // Opacity: slot 9 — always active (geometric)
         int opPct = Math.round(wOpacity * 100);
         drawSlider(g, mx, my, sx, sy, sliderW(), 10, 100, opPct,
                 Component.translatable("colonylink.cfg.opacity", opPct, (opPct <= 10 ? Component.translatable("colonylink.cfg.opacity_min").getString() : opPct < 30 ? Component.translatable("colonylink.cfg.opacity_verylow").getString() : "")).getString(),
                 0xFFCC44, 9, true);
 
-        // Scale : slot 10 (50–150 = 0.5–1.5 stocké ×100) — toujours actif
+        // Scale: slot 10 (50–150 = 0.5–1.5 stored ×100) — always active
         int scalePct = Math.round(wScale * 100);
         drawSlider(g, mx, my, sx, sy + 36, sliderW(), 50, 150, scalePct,
                 Component.translatable("colonylink.cfg.scale", (scalePct / 100), String.format("%02d", scalePct % 100)).getString(),
                 0xFFCC44, 10, true);
 
-        // Border width : slot 11 — verrouillé en AE (le cadre AE a sa propre géométrie)
+        // Border width: slot 11 — locked in AE (the AE frame has its own geometry)
         drawSlider(g, mx, my, sx, sy + 72, sliderW(), 1, 4, wBorderWidth,
                 Component.translatable("colonylink.cfg.border_width", wBorderWidth).getString(), 0xFFCC44, 11, !colorsLocked());
     }
 
     /**
-     * Dessine un slider horizontal.
-     * slotId : identifiant unique pour le drag.
+     * Draws a horizontal slider.
+     * slotId: unique id for dragging.
      */
     private void drawSlider(GuiGraphics g, int mx, int my,
                             int sx, int sy, int sw,
@@ -269,14 +268,14 @@ public class ColonyLinkConfigScreen extends Screen
         int trackY = sy + 16;
         int trackH = 6;
 
-        // Label (grisé si désactivé)
+        // Label (greyed when disabled)
         g.drawString(this.font, label, sx, sy + 2, enabled ? 0xDDDDDD : 0xFF666666, false);
 
-        // Track fond
+        // Track background
         g.fill(sx, trackY, sx + sw, trackY + trackH, 0xFF1A1A1A);
         g.fill(sx, trackY, sx + sw, trackY + 1, 0xFF555555);
 
-        // Track rempli (grisé si désactivé)
+        // Filled track (greyed when disabled)
         int filled = (value - min) * sw / Math.max(1, max - min);
         if (enabled)
         {
@@ -295,7 +294,6 @@ public class ColonyLinkConfigScreen extends Screen
         int thumbCol = !enabled ? 0xFF555555 : (hov || draggingSlider == slotId ? 0xFFFFFFFF : 0xFFCCCCCC);
         g.fill(thumbX - 3, trackY - 2, thumbX + 3, trackY + trackH + 2, thumbCol);
 
-        // Si en drag sur ce slot (et actif), update la valeur
         if (enabled && draggingSlider == slotId)
         {
             int newVal = min + (mx - sx) * (max - min) / sw;
@@ -304,7 +302,7 @@ public class ColonyLinkConfigScreen extends Screen
         }
     }
 
-    /** Applique la valeur d'un slider sur la copie de travail. */
+    /** Applies a slider value to the working copy. */
     private void applySliderValue(int slotId, int val)
     {
         switch (slotId)
@@ -335,8 +333,8 @@ public class ColonyLinkConfigScreen extends Screen
         // Label
         g.drawString(this.font, Component.translatable("colonylink.cfg.preview").getString(), px, py - 10, 0x888888, false);
 
-        // Calcul couleurs avec opacité de travail — AE : palette lavande ;
-        // MineColonies : parchemin beige ; DEFAULT : couleurs config.
+        // Compute colors with working opacity — AE: lavender palette;
+        // MineColonies: parchment beige; DEFAULT: config colors.
         boolean ae = wTheme == ColonyLinkGuiConfig.Theme.AE;
         boolean mc = wTheme == ColonyLinkGuiConfig.Theme.MINECOLONIES;
         int srcBg     = ae ? 0xFFADB0C4 : (mc ? 0xFFE8DCC0 : wBgColor);
@@ -348,20 +346,20 @@ public class ColonyLinkConfigScreen extends Screen
                          : (mc ? applyOpacity(0xFF4A3320, wOpacity) : darken(borderC, 0.5f));
         int bw      = ae ? 2 : (mc ? 2 : wBorderWidth);
 
-        // Fond
+        // Background
         g.fill(px + bw, py + bw, px + pw - bw, py + ph - bw, bgC);
 
-        // Bordures
+        // Borders
         g.fill(px, py, px + pw, py + bw, borderC);
         g.fill(px, py, px + bw, py + ph, borderC);
         g.fill(px, py + ph - bw, px + pw, py + ph, shadowC);
         g.fill(px + pw - bw, py, px + pw, py + ph, shadowC);
 
-        // Barre de titre
+        // Title bar
         int titleH = 16;
         g.fill(px + bw, py + bw, px + pw - bw, py + bw + titleH, titleC);
 
-        // Lignes simulées (contenu)
+        // Simulated content lines
         int lineY = py + bw + titleH + 4;
         int[] lineColors = {0x66FFFFFF, 0x44FFFFFF, 0x55FFFFFF, 0x33FFFFFF};
         int[] lineWidths = {60, 45, 70, 30};
@@ -371,7 +369,7 @@ public class ColonyLinkConfigScreen extends Screen
             lineY += 10;
         }
 
-        // Mini bouton simulé
+        // Simulated mini button
         int btnY = py + ph - bw - 14;
         g.fill(px + bw + 4, btnY, px + bw + 40, btnY + 10, 0x88004488);
         g.fill(px + bw + 4, btnY, px + bw + 40, btnY + 1, 0x88FFFFFF);
@@ -403,14 +401,14 @@ public class ColonyLinkConfigScreen extends Screen
         g.drawCenteredString(this.font, label, bx + bw / 2, by + 4, tc);
     }
 
-    // ── Mouse ─────────────────────────────────────────────────────────────────
+    // Mouse
 
     @Override
     public boolean mouseClicked(double mx, double my, int btn)
     {
         int x = gx(), y = gy();
 
-        // Sélecteur de thème (toujours actif)
+        // Theme selector (always active)
         {
             int bx = themeBtnX(), by = themeBtnY(), bw = themeBtnW(), bh = themeBtnH();
             if (mx >= bx && mx <= bx + bw && my >= by && my <= by + bh)
@@ -431,11 +429,11 @@ public class ColonyLinkConfigScreen extends Screen
             { activeTab = i; return true; }
         }
 
-        // Sliders — détecte si le clic est sur un track
+        // Sliders — detect whether the click hit a track
         draggingSlider = detectSliderClick(mx, my);
         if (draggingSlider >= 0) return true;
 
-        // Boutons bas
+        // Bottom buttons
         int by = y + H - 30;
         if (my >= by && my <= by + 20)
         {
@@ -470,7 +468,7 @@ public class ColonyLinkConfigScreen extends Screen
     {
         if (draggingSlider >= 0)
         {
-            // applySliderValue est appelé dans drawSlider lors du prochain render
+            // applySliderValue runs in drawSlider on the next render
             return true;
         }
         return super.mouseDragged(mx, my, btn, dx, dy);
@@ -484,8 +482,8 @@ public class ColonyLinkConfigScreen extends Screen
     }
 
     /**
-     * Détecte si le clic tombe sur l'un des tracks de sliders de la tab active.
-     * Retourne le slotId du slider cliqué, ou -1.
+     * Detects whether the click lands on one of the active tab's slider tracks.
+     * Returns the clicked slider's slotId, or -1.
      */
     private int detectSliderClick(double mx, double my)
     {
@@ -496,7 +494,7 @@ public class ColonyLinkConfigScreen extends Screen
         for (int[] slot : slots)
         {
             int slotId = slot[0], trackY = slot[1];
-            // Slots verrouillés en AE (couleurs 0-8 + épaisseur 11) : non cliquables
+            // Slots locked in AE (colors 0-8 + width 11): not clickable
             if (colorsLocked() && (slotId <= 8 || slotId == 11)) continue;
             if (mx >= sx && mx <= sx + sw && my >= trackY - 2 && my <= trackY + trackH + 2)
                 return slotId;
@@ -504,7 +502,7 @@ public class ColonyLinkConfigScreen extends Screen
         return -1;
     }
 
-    /** Retourne les [slotId, trackY] des sliders de la tab active. */
+    /** Returns [slotId, trackY] for the active tab's sliders. */
     private List<int[]> getSlotsForTab()
     {
         List<int[]> slots = new ArrayList<>();
@@ -524,7 +522,7 @@ public class ColonyLinkConfigScreen extends Screen
         return slots;
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // Helpers
 
     private void applyAndSave()
     {
@@ -557,8 +555,8 @@ public class ColonyLinkConfigScreen extends Screen
     }
 
     /**
-     * Appelé par ColonyLinkPacket.handle() quand ce screen est ouvert par-dessus
-     * le GUI wand. Met à jour le parent ColonyLinkScreen sans fermer ce screen.
+     * Called by ColonyLinkPacket.handle() when this screen is open over the wand GUI.
+     * Updates the parent ColonyLinkScreen without closing this screen.
      */
     public void updateParentPacket(ColonyLinkPacket packet)
     {

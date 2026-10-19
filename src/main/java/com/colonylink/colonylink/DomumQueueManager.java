@@ -14,20 +14,19 @@ import java.util.function.Supplier;
 /**
  * DomumQueueManager — v1.6.1
  *
- * Queue Domum PARTAGEE par reseau AE2 (grille). Une seule liste par IGrid, cote serveur.
- * Tous les Warehouse Link Terminals d'une meme grille lisent et ecrivent cette liste
- * unique : un item mis en file apparait donc sur TOUS les terminaux du reseau (cable
- * commun, Quantum Ring, etc.), pas seulement celui qui a recu le clic.
+ * Domum queue SHARED per AE2 network (grid): one list per IGrid, server-side. Every
+ * Warehouse Link Terminal on the same grid reads and writes this single list, so a
+ * queued item shows on ALL terminals of the network (shared cable, Quantum Ring, etc.),
+ * not just the one that was clicked.
  *
- * Persistance : chaque terminal garde une copie NBT de la liste (champ domumQueue),
- * utilisee comme FILET pour re-semer le manager si la grille se reforme (reconnexion,
- * rechargement du monde, (re)connexion d'un Quantum Ring) — l'identite d'un IGrid n'est
- * pas stable. WeakHashMap : quand une grille meurt (plus aucune reference forte, ex.
- * apres un unload de monde), son entree est evacuee automatiquement par le GC.
+ * Persistence: each terminal keeps an NBT copy of the list (field domumQueue), used as a
+ * NET to reseed the manager if the grid reforms (reconnection, world reload, Quantum Ring
+ * (re)connection) — an IGrid identity is not stable. WeakHashMap: when a grid dies (no
+ * strong reference left, e.g. after a world unload) its entry is evicted by the GC.
  *
- * Server-thread only ; methodes synchronized par prudence (plusieurs terminaux tickent).
- * Le seed est un Supplier : il n'est evalue QUE lors du premier acces a une grille
- * (computeIfAbsent), donc aucun cout quand la liste partagee existe deja.
+ * Server-thread only; methods synchronized defensively (several terminals tick).
+ * The seed is a Supplier: evaluated ONLY on first access to a grid (computeIfAbsent),
+ * so there is no cost when the shared list already exists.
  */
 public final class DomumQueueManager
 {
@@ -66,14 +65,14 @@ public final class DomumQueueManager
         });
     }
 
-    /** Copie de la queue partagee (affichage / sync / persistance NBT). */
+    /** Copy of the shared queue (display / sync / NBT persistence). */
     public static synchronized List<ItemStack> snapshot(IGrid grid, Supplier<List<ItemStack>> seed)
     {
         if (grid == null) return new ArrayList<>();
         return new ArrayList<>(queueFor(grid, seed));
     }
 
-    /** Vrai si la grille n'a pas (encore) de liste ou si elle est vide. Ne seme pas. */
+    /** True if the grid has no list yet or it is empty. Does not seed. */
     public static synchronized boolean isEmpty(IGrid grid)
     {
         if (grid == null) return true;
@@ -89,7 +88,7 @@ public final class DomumQueueManager
         return false;
     }
 
-    /** Vrai si la queue de cette grille a atteint le plafond. Ne seme pas. */
+    /** True if this grid's queue has hit the cap. Does not seed. */
     public static synchronized boolean isFull(IGrid grid)
     {
         if (grid == null) return false;
@@ -97,7 +96,7 @@ public final class DomumQueueManager
         return q != null && q.size() >= MAX_QUEUE_SIZE;
     }
 
-    /** Ajoute si absent. Retourne true si ajoute (false = deja en file OU queue pleine). */
+    /** Adds if absent. Returns true if added (false = already queued OR queue full). */
     public static synchronized boolean add(IGrid grid, Supplier<List<ItemStack>> seed, ItemStack stack)
     {
         if (grid == null || stack.isEmpty()) return false;
@@ -112,7 +111,7 @@ public final class DomumQueueManager
         return true;
     }
 
-    /** Retire par index (encode pattern / retrait manuel). */
+    /** Removes by index (pattern encode / manual removal). */
     public static synchronized void removeAt(IGrid grid, Supplier<List<ItemStack>> seed, int index)
     {
         if (grid == null) return;
@@ -120,7 +119,7 @@ public final class DomumQueueManager
         if (index >= 0 && index < q.size()) q.remove(index);
     }
 
-    /** Retire tous les items devenus craftables sur la grille. Retourne true si change. */
+    /** Removes all items that became craftable on the grid. Returns true if changed. */
     public static synchronized boolean pruneCraftable(IGrid grid, Supplier<List<ItemStack>> seed, ICraftingService crafting)
     {
         if (grid == null || crafting == null) return false;

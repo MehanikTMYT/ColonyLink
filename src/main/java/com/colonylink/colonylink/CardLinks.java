@@ -149,7 +149,7 @@ public final class CardLinks
                     colony.getName(), warehouse.getPosition().toShortString()));
     }
 
-    // ── Resolution: card → colony + Warehouse ─────────────────────────────────
+    // Resolution: card → colony + Warehouse
 
     public enum Status
     {

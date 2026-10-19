@@ -16,25 +16,24 @@ import java.util.Optional;
 /**
  * ColonyLinkJeiPlugin — v1.6.6
  *
- * Intégration JEI minimale et non intrusive : survol d'un item dans les panneaux
- * Warehouse/ME du terminal → R affiche les recettes, U les utilisations (comme sur
- * un vrai slot). Rien d'autre : pas de catégorie de recette, pas de transfert, pas
- * de ghost, pas de drag-and-drop.
+ * Minimal, non-intrusive JEI integration: hovering an item in the terminal's
+ * Warehouse/ME panels → R shows recipes, U shows uses (like a real slot). Nothing
+ * else: no recipe category, no transfer, no ghost, no drag-and-drop.
  *
- * {@code @JeiPlugin} est auto-découvert par JEI ; cette classe n'est chargée que si
- * JEI est présent (dépendance {@code optional} côté CLIENT + {@code compileOnly}),
- * donc le mod boote normalement sans JEI.
+ * {@code @JeiPlugin} is auto-discovered by JEI; this class loads only when JEI is
+ * present (CLIENT {@code optional} + {@code compileOnly} dependency), so the mod
+ * boots normally without JEI.
  *
- * L'ingrédient survolé et sa zone de surlignage viennent d'une seule source de
- * hit-test dans {@link WarehouseLinkTerminalScreen} ({@code panelHitAt}), en
- * coordonnées ÉCRAN : {@link WarehouseLinkTerminalScreen#getPanelStackAt} pour le
- * stack, {@link WarehouseLinkTerminalScreen#getPanelSlotArea} pour la case 16×16.
+ * The hovered ingredient and its highlight area come from a single hit-test source
+ * in {@link WarehouseLinkTerminalScreen} ({@code panelHitAt}), in SCREEN
+ * coordinates: {@link WarehouseLinkTerminalScreen#getPanelStackAt} for the stack,
+ * {@link WarehouseLinkTerminalScreen#getPanelSlotArea} for the 16×16 cell.
  */
 @JeiPlugin
 public class ColonyLinkJeiPlugin implements IModPlugin
 {
     private static final ResourceLocation UID =
-            ResourceLocation.fromNamespaceAndPath(ColonyLink.MODID, "jei"); // colonylink:jei
+            ResourceLocation.fromNamespaceAndPath(ColonyLink.MODID, "jei");
 
     @Override
     public ResourceLocation getPluginUid()
@@ -64,7 +63,7 @@ public class ColonyLinkJeiPlugin implements IModPlugin
                     }
                 });
 
-        // UI passe 1 — the Redirector's upgrade-cell box overflows the panel's
+        // UI pass 1 — the Redirector's upgrade-cell box overflows the panel's
         // right edge (AE2 UpgradesPanel style): declare it as an extra area so the
         // JEI overlay never overlaps it (mirror of AE2's addExclusionZones).
         reg.addGuiContainerHandler(ColonyLinkRedirectorScreen.class,

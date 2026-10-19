@@ -12,12 +12,12 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Packet S→C : liste des requêtes ouvertes de tous les citoyens NON-builders.
- * Envoyé par le ticker quand la tab Citizens est active, ou par réponse à CitizensRequestPacket.
+ * S→C packet: open requests of all NON-builder citizens.
+ * Sent by the ticker while the Citizens tab is active, or in reply to CitizensRequestPacket.
  */
 public record CitizensPacket(List<CitizenRequestEntry> entries) implements CustomPacketPayload
 {
-    // ── 1.7.0-beta.3 — who handles the request in MineColonies (colonyState) ──
+    // 1.7.0-beta.3 — who handles the request in MineColonies (colonyState)
     /** The player has to provide it. */
     public static final byte STATE_PLAYER       = 0;
     /** MineColonies retries it periodically; in practice still for the player. */
@@ -29,18 +29,18 @@ public record CitizensPacket(List<CitizenRequestEntry> entries) implements Custo
     /** Another resolver (a colony crafter…) works on it. */
     public static final byte STATE_COLONY_CRAFT = 4;
 
-    // ── 1.7.0-beta.3 — ColonyLink's own mark (CitizenRequestMemory) ───────────
+    // 1.7.0-beta.3 — ColonyLink's own mark (CitizenRequestMemory)
     public static final byte MARK_NONE     = 0;
     public static final byte MARK_SENT     = 1;
     public static final byte MARK_CRAFTING = 2;
 
     /**
-     * Une requête d'un citoyen non-builder.
+     * A request from a non-builder citizen.
      *
-     * @param stack          item demandé (avec count)
-     * @param citizenName    nom du citoyen
-     * @param jobName        nom du job (ex. "Farmer", "Miner"...)
-     * @param count          quantité demandée
+     * @param stack          requested item (with count)
+     * @param citizenName    citizen name
+     * @param jobName        job name (e.g. "Farmer", "Miner"...)
+     * @param count          requested quantity
      * @param requestId      1.7.0-beta.3 — UUID of the MineColonies request
      * @param colonyState    1.7.0-beta.3 — STATE_* above
      * @param warehouseStock 1.7.0-beta.3 — matching items in all the colony's Warehouses,
@@ -53,8 +53,8 @@ public record CitizensPacket(List<CitizenRequestEntry> entries) implements Custo
             String citizenName,
             String jobName,
             int count,
-            boolean availableInME,  // true si l'item est en stock dans le ME (bouton Send actif)
-            boolean craftableInME,  // true si un pattern existe dans le ME (bouton Craft actif)
+            boolean availableInME,  // true if the item is in ME stock (Send button active)
+            boolean craftableInME,  // true if a pattern exists in the ME (Craft button active)
             UUID requestId,
             byte colonyState,
             int warehouseStock,

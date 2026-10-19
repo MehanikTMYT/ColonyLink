@@ -67,48 +67,37 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 /**
  * ColonyLinkRedirectorBlockEntity — v1.4.9
  *
- * Historique :
- *   v1.4.2 :
- *     - Implémente ICraftingProvider → expose les DomumPatterns du buffer au réseau AE2
- *     - pushPattern() → met le craft Domum en queue, exécuté au tick suivant
- *     - isBusy() → true si une craft est en cours (1 craft à la fois par Redirector)
- *     - buffer.isItemValid() → filtre : accepte uniquement DomumPatternItem
- *     - notifyPatternChange() → ICraftingProvider.requestUpdate() quand le buffer change
+ * History:
+ *   v1.4.2: implements ICraftingProvider to expose the buffer's DomumPatterns to the
+ *     AE2 network; pushPattern() queues a Domum craft run on the next tick; isBusy() is
+ *     true while a craft runs (one at a time per Redirector); the buffer accepts only
+ *     DomumPatternItem; notifyPatternChange() calls ICraftingProvider.requestUpdate()
+ *     when the buffer changes.
  *
- *   v1.4.9 — Sécurité chunk-load & zéro voiding (Option A) :
- *     - pushPattern() refuse (return false) si le node AE2 est inactif OU si la file
- *       est saturée. AE2 conserve alors les matériaux dans le réseau et réessaie plus
- *       tard. Plus aucune prise de possession sans garantie de restitution.
- *     - isBusy() reflète la saturation (file pleine OU sorties en attente d'injection).
- *     - injectIntoME() lit le retour de insert() et renvoie le reliquat non inséré.
- *     - pendingOutputs : tampon de SORTIES déjà produites mais pas (encore) réinjectées
- *       dans le ME (ME plein / réseau hors-ligne). Réessayé à chaque tick jusqu'à succès.
- *     - craftQueue ET pendingOutputs sont PERSISTÉS en NBT : un déchargement de chunk
- *       entre la réception du pattern et son exécution (ou pendant que le ME est plein)
- *       ne perd plus rien — l'état est rejoué au rechargement (idempotent : les
- *       matériaux n'ont été prélevés qu'une seule fois par AE2).
- *     - Borne configurable : ColonyLinkConfig.REDIRECTOR_CRAFT_QUEUE_MAX.
+ *   v1.4.9 — chunk-load safety & zero voiding (Option A): pushPattern() refuses (returns
+ *     false) when the AE2 node is inactive or the queue is saturated, so AE2 keeps the
+ *     materials and retries — nothing is taken without a guaranteed return. isBusy()
+ *     reflects saturation. injectIntoME() returns the uninserted remainder. pendingOutputs
+ *     holds outputs produced but not yet reinjected (ME full / network offline), retried
+ *     each tick. craftQueue and pendingOutputs are persisted in NBT so a chunk unload
+ *     loses nothing — the state is replayed on reload (idempotent: materials pulled once
+ *     by AE2). Bound: ColonyLinkConfig.REDIRECTOR_CRAFT_QUEUE_MAX.
  *
- *   Passe 2 (rendu) :
- *     - getUpdatePacket()/onDataPacket() : la sync live du BE fonctionne enfin
- *       (sendBlockUpdated envoyait un packet nul par défaut).
- *     - workingLinger (5 ticks) + capture du renderStack dans processOneCraft() :
- *       les crafts résolus en 1 tick restent visibles ~0.25 s.
- *     - clientTickSawdust() : sciure d'épicéa au point de contact lame/item
- *       (ticker client, jamais exécuté côté serveur logique).
+ *   Pass 2 (rendering): getUpdatePacket()/onDataPacket() make live BE sync work (the
+ *     default returned a null packet); workingLinger (5 ticks) + renderStack capture keep
+ *     1-tick crafts visible ~0.25s; clientTickSawdust() emits spruce sawdust at the
+ *     blade/item contact (client ticker, never run on the logical server).
  *
- *   Passe 3 :
- *     - Volet A : aeJobActive (ICraftingService.isRequesting sur les outputs de
- *       nos patterns, throttle 5 ticks, cache des clés) maintient l'animation
- *       pendant tout un job AE2, gaps et changements de recette compris.
- *     - Volet B : node AE2 non exposé sur UP (vitre) — setExposedOnSides à la
- *       création + getGridNode(UP) → null. DOWN + 4 côtés inchangés.
+ *   Pass 3: (A) aeJobActive keeps the animation alive for a whole AE2 job (gaps and recipe
+ *     changes included), backed by ICraftingService.isRequesting on our outputs, throttled
+ *     5 ticks with a key cache; (B) the AE2 node is not exposed on UP (glass) via
+ *     setExposedOnSides + getGridNode(UP) → null; DOWN + 4 sides unchanged.
  */
 public class ColonyLinkRedirectorBlockEntity extends BlockEntity
         implements IInWorldGridNodeHost, ICraftingProvider, IActionHost, MenuProvider,
                    net.minecraft.world.Clearable
 {
-    // ── Constantes buffer ─────────────────────────────────────────────────────
+    // Buffer constants
 
     // v1.6.2 — buffer size is frozen at 3×9 = 27 slots. It must match both the menu
     // slot layout (ColonyLinkRedirectorMenu) and the fixed GUI texture, so it is no
@@ -118,7 +107,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
     public static final int BUFFER_COLS = 9;
     public static final int BUFFER_SIZE = BUFFER_ROWS * BUFFER_COLS;
 
-    // ── État ──────────────────────────────────────────────────────────────────
+    // State
 
     private BlockPos targetInventoryPos = null;
     private BlockPos linkedBuilderPos   = null;
@@ -129,30 +118,28 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
     private boolean warehousePriorityClientCache = false;
 
     /**
-     * File d'attente des crafts Domum à exécuter (un par tick).
-     * Persistée en NBT (v1.4.9) : les matériaux y figurant ont déjà été prélevés
-     * du réseau AE2 par pushPattern(), donc ils ne doivent jamais être perdus.
+     * Queue of Domum crafts to run (one per tick). Persisted in NBT (v1.4.9): the
+     * materials in it were already pulled from the AE2 network by pushPattern(), so
+     * they must never be lost.
      */
     private final Queue<PendingDomumCraft> craftQueue = new ConcurrentLinkedQueue<>();
 
     /**
-     * Sorties Domum déjà produites mais pas (encore) réinjectées dans le ME
-     * (ME plein, réseau hors-ligne, pas de canal…). Réessayé à chaque tick.
-     * Persisté en NBT (v1.4.9) — zéro voiding même au déchargement de chunk.
-     * Accédé uniquement depuis le thread serveur (ticker + save/load).
+     * Domum outputs already produced but not (yet) reinjected into the ME (ME full,
+     * network offline, no channel…). Retried each tick. Persisted in NBT (v1.4.9) —
+     * zero voiding even on chunk unload. Server thread only (ticker + save/load).
      */
     private final List<ItemStack> pendingOutputs = new ArrayList<>();
 
-    // ── Couche 0 : miroir client pour le rendu animé ──────────────────────────
-    // Ces trois champs ne sont PAS persistés en NBT (saveAdditional/loadAdditional
-    // ne les touchent pas) : ils sont recalculés à chaque tick serveur et ne sont
-    // synchronisés au client que via getUpdateTag()/handleUpdateTag(). Le mot-clé
-    // transient documente l'intention (aucune sérialisation Java n'est utilisée ici).
+    // Client mirror for the animated render.
+    // These three fields are NOT persisted in NBT (saveAdditional/loadAdditional ignore
+    // them): recomputed each server tick, synced to the client only via getUpdateTag()/
+    // handleUpdateTag(). transient documents the intent (no Java serialization is used here).
     private transient boolean working = false;
     private transient ItemStack renderStack = ItemStack.EMPTY;
     private transient int shuffleProgress = 0;
 
-    // ── Passe 2 : linger visuel + sciure ─────────────────────────────────────
+    // Pass 2: visual linger + sawdust
 
     /** How long the block stays visually "working" after the last processed craft (Fab: ~0.25s). */
     private static final int WORKING_LINGER_TICKS = 5;
@@ -170,7 +157,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
     private static final BlockParticleOption SAWDUST =
             new BlockParticleOption(ParticleTypes.BLOCK, Blocks.SPRUCE_PLANKS.defaultBlockState());
 
-    // ── Passe 3 : AE job awareness (visual only, never persisted) ─────────────
+    // Pass 3: AE job awareness (visual only, never persisted)
 
     /** Visual-only: true while an AE2 crafting job still requests one of our patterns' outputs.
      *  Backed by ICraftingService.isRequesting(key) — the set of keys active CPU jobs are
@@ -192,15 +179,14 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
      *  buffer changes (notifyPatternChange() is the single choke point for that). */
     private transient Set<AEItemKey> patternOutputKeys = null;
 
-    // ── Buffer — accepte UNIQUEMENT les DomumPatternItem ─────────────────────
+    // Buffer: accepts ONLY DomumPatternItem
 
     public final ItemStackHandler buffer = new ItemStackHandler(BUFFER_SIZE)
     {
         @Override
         public boolean isItemValid(int slot, ItemStack stack)
         {
-            // Seuls les DomumPatternItem sont acceptés dans ce buffer.
-            // Les Encoded Patterns AE2 standard sont rejetés.
+            // Only DomumPatternItem accepted; standard AE2 encoded patterns are rejected.
             return stack.isEmpty() || stack.getItem() instanceof DomumPatternItem;
         }
 
@@ -208,7 +194,6 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
         protected void onContentsChanged(int slot)
         {
             setChanged();
-            // Notifie AE2 que la liste de patterns disponibles a changé
             notifyPatternChange();
         }
     };
@@ -230,13 +215,13 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
         }
     };
 
-    // ── États Redirector ──────────────────────────────────────────────────────
+    // Redirector states
 
     public enum RedirectorState { NOT_LINKED, LINKED, STANDBY, NO_CONTROLLER }
 
     private RedirectorState state = RedirectorState.NO_CONTROLLER;
 
-    // ── Grid node ─────────────────────────────────────────────────────────────
+    // Grid node
 
     private final IManagedGridNode gridNode = GridHelper.createManagedNode(this,
                     new IGridNodeListener<ColonyLinkRedirectorBlockEntity>()
@@ -251,7 +236,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
                         { owner.onGridStateChanged(); }
                     })
             .setInWorldNode(true)
-            // Passe 3 (volet B) — the top face is pure glass: the AE2 node must never
+            // Pass3 (PartB) — the top face is pure glass: the AE2 node must never
             // be reachable from UP. DOWN + the 4 horizontal sides stay connectable
             // (fixed set, independent of the horizontal FACING). Configured on the
             // managed node BEFORE create() runs in onLoad(), so the node is born with
@@ -262,17 +247,17 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
             .setFlags(GridFlags.REQUIRE_CHANNEL)
             .setVisualRepresentation(ColonyLinkRegistry.REDIRECTOR_BLOCK_ITEM.get())
             .setIdlePowerUsage(1.0)
-            // ICraftingProvider : expose les DomumPatterns au réseau AE2
+            // ICraftingProvider: expose the Domum patterns to the AE2 network
             .addService(ICraftingProvider.class, this);
 
-    // ── Constructeur ──────────────────────────────────────────────────────────
+    // Constructor
 
     public ColonyLinkRedirectorBlockEntity(BlockPos pos, BlockState state)
     {
         super(ColonyLinkRegistry.REDIRECTOR_BLOCK_ENTITY.get(), pos, state);
     }
 
-    // ── 1.7.0-beta.4 — stable Redirector UUID ─────────────────────────────────
+    // 1.7.0-beta.4 — stable Redirector UUID
     //
     // Saved in the block entity NBT ("RedirectorId"), so it follows the block when a
     // mod moves it with its NBT (Create: Aeronautics / Sable ship reassembly gives the
@@ -297,7 +282,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
         if (level != null && !level.isClientSide() && !isRemoved()) RedirectorRegistry.register(redirectorId, this);
     }
 
-    // ── MenuProvider ──────────────────────────────────────────────────────────
+    // MenuProvider
 
     @Override
     public Component getDisplayName() { return Component.translatable("colonylink.redir.title"); }
@@ -306,12 +291,11 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
     public @Nullable AbstractContainerMenu createMenu(int containerId, Inventory playerInventory, Player player)
     { return new ColonyLinkRedirectorMenu(containerId, playerInventory, this); }
 
-    // ── ICraftingProvider — exposition des patterns au réseau AE2 ─────────────
+    // ICraftingProvider: expose patterns to the AE2 network
 
     /**
-     * Retourne la liste de tous les DomumPatternDetails disponibles dans le buffer.
-     * AE2 appelle cette méthode pour construire le plan de craft.
-     * Appelée depuis le server thread uniquement.
+     * Returns all DomumPatternDetails available in the buffer. AE2 calls this to build
+     * the craft plan. Server thread only.
      */
     @Override
     public List<IPatternDetails> getAvailablePatterns()
@@ -336,16 +320,14 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
     }
 
     /**
-     * AE2 envoie un craft à exécuter.
-     * inputs[0] = les matériaux extraits du ME (déjà prélevés par AE2).
+     * AE2 submits a craft to run; inputs[0] = the materials already extracted from the ME.
      *
-     * v1.4.9 — Contrat AE2 respecté : si on retourne {@code false}, AE2 conserve
-     * (ré-injecte) les matériaux dans le réseau. On refuse donc tant que :
-     *   - le node AE2 n'est pas actif (pas de réseau pour réinjecter la sortie), ou
-     *   - la file est saturée / des sorties sont déjà en attente (back-pressure).
-     * Ainsi, accepter un pattern garantit qu'on pourra produire et rendre la sortie.
+     * v1.4.9 — AE2 contract: returning {@code false} makes AE2 keep (reinject) the
+     * materials into the network. We refuse while the AE2 node is inactive (no network to
+     * reinject the output into) or the queue is saturated / outputs are pending
+     * (back-pressure), so accepting a pattern guarantees we can produce and render it.
      *
-     * @return true si le craft a été accepté (matériaux pris en charge), false sinon
+     * @return true if the craft was accepted (materials taken on), false otherwise
      */
     @Override
     public boolean pushPattern(IPatternDetails patternDetails, KeyCounter[] inputs)
@@ -354,14 +336,13 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
         if (!(patternDetails instanceof DomumPatternDetails domumPattern)) return false;
         if (!domumPattern.isValid()) return false;
 
-        // Refuse si le réseau est indisponible ou si on est déjà saturé.
-        // AE2 garde alors les matériaux et réessaiera : aucun voiding possible.
+        // Refuse when the network is unavailable or we are already saturated: AE2 then
+        // keeps the materials and retries, so no voiding is possible.
         IGridNode node = gridNode.getNode();
         if (node == null || !node.isActive()) return false;
         if (isBusy()) return false;
 
-        // Construit la liste des matériaux extraits depuis les KeyCounters.
-        // KeyCounter implémente Iterable<Object2LongMap.Entry<AEKey>>.
+        // KeyCounter implements Iterable<Object2LongMap.Entry<AEKey>>.
         List<ItemStack> extractedMaterials = new ArrayList<>();
         for (KeyCounter counter : inputs)
         {
@@ -374,7 +355,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
             }
         }
 
-        // Lit le count depuis les outputs du pattern (ex: shingles=4)
+        // Output count from the pattern (e.g. shingles=4)
         long outputCount = 1L;
         if (!domumPattern.getOutputs().isEmpty())
             outputCount = domumPattern.getOutputs().get(0).amount();
@@ -385,37 +366,37 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
                 (int) Math.max(1L, outputCount)
         ));
 
-        // Persiste immédiatement la file (matériaux déjà prélevés par AE2).
+        // Persist the queue now (materials already pulled by AE2).
         setChanged();
         return true;
     }
 
     /**
-     * AE2 demande si ce medium peut recevoir un craft.
-     * On se déclare occupé tant que des sorties restent à injecter (ME plein /
-     * réseau down) ou que la file a atteint sa borne — back-pressure propre.
+     * AE2 asks whether this medium can accept a craft. We report busy while outputs
+     * remain to be injected (ME full / network down) or the queue has reached its bound
+     * — clean back-pressure.
      */
     @Override
     public boolean isBusy()
     {
         if (level == null || level.isClientSide()) return true;
-        // Des sorties non injectées => on draine d'abord, on n'accepte plus de travail.
+        // Uninjected outputs => drain first, accept no new work.
         if (!pendingOutputs.isEmpty()) return true;
         return craftQueue.size() >= ColonyLinkConfig.REDIRECTOR_CRAFT_QUEUE_MAX.get();
     }
 
-    // ── IActionHost ───────────────────────────────────────────────────────────
+    // IActionHost
 
     @Override
     public IGridNode getActionableNode() { return gridNode.getNode(); }
 
-    // ── Ticker — exécution des crafts + drain des sorties en attente ──────────
+    // Ticker: run crafts + drain pending outputs
 
     public static <T extends BlockEntity> BlockEntityTicker<T> createTicker(Level level, BlockEntityType<T> serverType)
     {
         if (level.isClientSide())
         {
-            // Passe 2 (Fix 3) — client ticker: sawdust particles ONLY. No server
+            // Pass2 (Fix 3) — client ticker: sawdust particles ONLY. No server
             // logic (crafts, sync, linger) may run here. It keys off the WORKING
             // blockstate property, which is natively synced by setBlockAndUpdate(),
             // so it does not depend on the BE data packet (Fix 1) to work.
@@ -430,18 +411,18 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
             if (be instanceof ColonyLinkRedirectorBlockEntity redirector)
             {
                 redirector.onFirstTick(lvl, pos);
-                // 1) Toujours tenter de vider les sorties en attente d'abord.
+                // 1) Drain pending outputs first.
                 redirector.flushPendingOutputs(lvl);
-                // 2) Puis exécuter au plus un craft de la file.
+                // 2) Then run at most one queued craft.
                 redirector.processOneCraft(lvl);
-                // 3) Couche 0 : recalcul de l'état d'affichage + sync client.
+                // 3) Recompute display state + sync to client.
                 redirector.updateShuffleAndSync(lvl);
             }
         };
     }
 
     /**
-     * Passe 2 (Fix 3) — client ticker body: emits spruce-plank "sawdust" crumbs
+     * Pass2 (Fix 3) — client ticker body: emits spruce-plank "sawdust" crumbs
      * around the blade/item contact point while the block is visually working
      * (which includes the 5-tick linger, since it drives the WORKING property).
      *
@@ -483,26 +464,24 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
     }
 
     /**
-     * Couche 0 — Met à jour l'état d'affichage (working / renderStack /
-     * shuffleProgress) et le pousse au client. Appelé chaque tick serveur.
+     * Updates the display state (working / renderStack / shuffleProgress) and pushes it
+     * to the client. Called each server tick.
      *
-     * Note de sync : le prompt d'origine ne déclenchait sendBlockUpdated() que sur
-     * la transition de working. On resynchronise aussi lorsqu'un nouvel item est
-     * tiré au sort (reset du shuffle à 5) et lorsqu'on repasse idle, sinon le
-     * renderStack ne parviendrait jamais au client pendant un craft continu —
-     * l'effet shuffle serait invisible. Coût (passe 2) : un block update par
-     * craft traité (capture) + au plus un / 5 ticks (shuffle) par Redirector
-     * actif — tag léger, voir getUpdateTag().
+     * Sync note: we resync not only on the working transition but also when a new item is
+     * picked (shuffle reset at 5) and when going idle — otherwise renderStack would never
+     * reach the client during a continuous craft and the shuffle effect would be invisible.
+     * Cost (pass 2): one block update per processed craft (capture) plus at most one per
+     * 5 ticks (shuffle) per active Redirector — light tag, see getUpdateTag().
      */
     private void updateShuffleAndSync(Level level)
     {
         if (level == null || level.isClientSide()) return;
 
-        // Passe 3 (volet A) — refresh the AE-job signal first (throttled internally
+        // Pass3 (PartA) — refresh the AE-job signal first (throttled internally
         // to one grid query per 5 ticks) so a job detected this tick feeds newWorking.
         refreshAeJobActive();
 
-        // Passe 2 (Fix 2) — decrement BEFORE computing newWorking: processOneCraft()
+        // Pass2 (Fix 2) — decrement BEFORE computing newWorking: processOneCraft()
         // ran just before in the same tick and arms linger=WORKING_LINGER_TICKS, so a
         // craft processed this tick yields exactly 5 ticks of visible activity after
         // the LAST craft (single 1-tick crafts no longer flicker or stay dark).
@@ -518,9 +497,9 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
             this.working = newWorking;
             needSync = true;
 
-            // Couche 2 : bascule la propriété de blockstate WORKING → modèle _off/_on.
-            // UNIQUEMENT sur transition idle↔busy : un seul setBlockAndUpdate par
-            // changement (aucun spam), qui notifie déjà les clients pour le re-render.
+            // Toggle the WORKING blockstate property → _off/_on model. ONLY on an
+            // idle↔busy transition: one setBlockAndUpdate per change (no spam), which
+            // already notifies clients for the re-render.
             BlockState oldState = level.getBlockState(worldPosition);
             if (oldState.hasProperty(ColonyLinkRedirectorBlock.WORKING))
                 level.setBlockAndUpdate(worldPosition,
@@ -529,7 +508,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
 
         if (this.working)
         {
-            // Passe 3 (volet A) — render fallback: after a relog/chunk reload mid-batch
+            // Pass3 (PartA) — render fallback: after a relog/chunk reload mid-batch
             // (or during a gap before the first craft) the server-side renderStack can be
             // EMPTY while the job still runs. Repopulate it with the requested output.
             // The capture done in processOneCraft() has priority — never overwritten here.
@@ -543,14 +522,14 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
             if (this.shuffleProgress >= 5)
             {
                 this.shuffleProgress = 0;
-                // Passe 2 (Fix 2) — random re-pick only while the queue is still
+                // Pass2 (Fix 2) — random re-pick only while the queue is still
                 // populated. When the queue is drained but the linger is running,
                 // keep the stack captured at processing time (never overwrite it
                 // with EMPTY while working is true).
                 if (!craftQueue.isEmpty())
                 {
                     updateRenderStack();
-                    needSync = true; // nouvel item tiré → resync client
+                    needSync = true; // new item picked → resync client
                 }
             }
         }
@@ -566,7 +545,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
     }
 
     /**
-     * Passe 3 (volet A) — visual-only signal: does the grid have a crafting job in
+     * Pass3 (PartA) — visual-only signal: does the grid have a crafting job in
      * flight that still requests one of OUR patterns' outputs?
      *
      * <p>API (recon, AE2 19.2.x decompiled) — DUAL signal:
@@ -636,7 +615,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
     }
 
     /**
-     * Passe 3 (volet A) — primary-output keys of the buffer's patterns, built through
+     * Pass3 (PartA) — primary-output keys of the buffer's patterns, built through
      * the EXACT ICraftingProvider path already exposed to AE2 (getAvailablePatterns()
      * -> DomumPatternDetails.getPrimaryOutput()): no hand-rolled re-decoding. Called
      * lazily by refreshAeJobActive() and memoised until the buffer changes.
@@ -653,9 +632,9 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
     }
 
     /**
-     * Couche 0 — Pick un craft aléatoire depuis la file et en expose le
-     * targetStack (copie défensive) pour le rendu 3D côté client.
-     * Utilise level.getRandom() : le BlockEntity n'a pas de champ random propre.
+     * Picks a random craft from the queue and exposes its targetStack (defensive copy)
+     * for the client-side 3D render. Uses level.getRandom(): the BlockEntity has no own
+     * random field.
      */
     private void updateRenderStack()
     {
@@ -665,7 +644,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
             return;
         }
 
-        // Snapshot instantané de la file concurrente pour l'indexation.
+        // Snapshot the concurrent queue for indexing.
         List<PendingDomumCraft> temp = new ArrayList<>(craftQueue);
         if (temp.isEmpty())
         {
@@ -678,16 +657,15 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
     }
 
     /**
-     * Réessaie d'injecter dans le ME les sorties déjà produites mais bloquées.
-     * Appelé chaque tick. Tant que le ME refuse, les items restent en attente
-     * (persistés en NBT) — jamais perdus.
+     * Retries injecting already-produced but blocked outputs into the ME. Called each
+     * tick. While the ME refuses, the items stay pending (persisted in NBT) — never lost.
      */
     private void flushPendingOutputs(Level level)
     {
         if (pendingOutputs.isEmpty()) return;
 
         IGridNode node = gridNode.getNode();
-        if (node == null || !node.isActive()) return; // réseau down : on garde tout
+        if (node == null || !node.isActive()) return; // network down: keep everything
 
         var inventory = node.getGrid().getStorageService().getInventory();
         IActionSource src = IActionSource.ofMachine(this);
@@ -702,7 +680,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
             AEItemKey key = AEItemKey.of(out);
             if (key == null)
             {
-                // Ne devrait jamais arriver pour un bloc Domum réel.
+                // Should never happen for a real Domum block.
                 ColonyLink.LOGGER.error("[DomumPattern] Pending output has no AE key, dropping 1 entry: {}",
                         out.getDisplayName().getString());
                 it.remove();
@@ -723,7 +701,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
                     out.shrink((int) inserted);
                     changed = true;
                 }
-                // ME saturé pour le reste : on s'arrête, on retentera au prochain tick.
+                // ME full for the rest: stop, retry next tick.
                 break;
             }
         }
@@ -732,22 +710,22 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
     }
 
     /**
-     * Exécute au plus un craft Domum de la file.
-     * Appelé chaque tick depuis le server thread (un seul craft/tick).
+     * Runs at most one queued Domum craft. Called each tick from the server thread (one
+     * craft per tick).
      *
-     * v1.4.9 : on n'exécute pas de nouveau craft tant que des sorties précédentes
-     * attendent d'être injectées (évite l'accumulation), et tout reliquat de sortie
-     * part dans pendingOutputs (persisté + réessayé) au lieu d'être voidé.
+     * v1.4.9: no new craft runs while previous outputs await injection (avoids pile-up),
+     * and any output remainder goes to pendingOutputs (persisted + retried) instead of
+     * being voided.
      */
     private void processOneCraft(Level level)
     {
         if (craftQueue.isEmpty()) return;
-        // Laisse d'abord le ME se vider : ne pas empiler les sorties.
+        // Let the ME drain first: do not pile up outputs.
         if (!pendingOutputs.isEmpty()) return;
 
         PendingDomumCraft pending = craftQueue.poll();
         if (pending == null) return;
-        setChanged(); // la file vient de changer
+        setChanged();
 
         ItemStack targetStack = pending.targetStack();
         List<ItemStack> materials = pending.materials();
@@ -758,7 +736,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
             return;
         }
 
-        // Passe 2 (Fix 2) — this craft is effectively being processed: arm the
+        // Pass2 (Fix 2) — this craft is effectively being processed: arm the
         // visual linger and show WHAT is being cut right now. Placed after the
         // validity guards (error skips must not light the block), before the
         // build/inject so even 1-tick crafts are observable client-side.
@@ -766,16 +744,15 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
         this.renderStack = targetStack.copy();
         this.renderStackDirty = true;
 
-        // Les matériaux ont déjà été extraits du ME par AE2 avant pushPattern().
+        // Materials were already extracted from the ME by AE2 before pushPattern().
         ItemStack result = buildDomumResult(targetStack, materials, level.registryAccess());
 
         if (result.isEmpty())
         {
-            // Cas pathologique : pattern validé mais reconstruction impossible.
-            // v1.6.2 — zéro voiding : AE2 a déjà prélevé les matériaux avant pushPattern.
-            // Plutôt que de les perdre, on les renvoie DANS LE ME via pendingOutputs
-            // (réinjecté à chaque tick par flushPendingOutputs, persisté NBT). Pas de
-            // double-comptage : ils n'ont été extraits qu'une fois.
+            // Pathological case: pattern validated but rebuild impossible. v1.6.2 — zero
+            // voiding: AE2 already pulled the materials before pushPattern. Rather than lose
+            // them, return them TO THE ME via pendingOutputs (reinjected each tick by
+            // flushPendingOutputs, NBT-persisted). No double-counting: extracted only once.
             ColonyLink.LOGGER.error("[DomumPattern] Failed to build Domum result for: {} — returning {} raw material stack(s) to the ME network (zero voiding)",
                     targetStack.getDisplayName().getString(), materials.size());
             for (ItemStack mat : materials)
@@ -784,10 +761,10 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
             return;
         }
 
-        // Applique le count de la recette (ex: shingles=4, panels=4, framed panes=6)
+        // Apply the recipe count (e.g. shingles=4, panels=4, framed panes=6)
         result.setCount(pending.outputCount());
 
-        // Les crafts Domum vont toujours dans le ME. Tout reliquat est conservé.
+        // Domum crafts always go into the ME. Any remainder is kept.
         ItemStack leftover = injectIntoME(result, level);
         if (!leftover.isEmpty())
             pendingOutputs.add(leftover);
@@ -796,9 +773,8 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
     }
 
     /**
-     * Construit l'ItemStack Domum résultat à partir des matériaux fournis.
-     * Reproduit la logique de DomumCraftHandler.handleDomumCraft() mais sans
-     * extraction ME (déjà faite par AE2).
+     * Builds the resulting Domum ItemStack from the supplied materials. Mirrors
+     * DomumCraftHandler.handleDomumCraft() but without ME extraction (already done by AE2).
      */
     private ItemStack buildDomumResult(ItemStack targetStack, List<ItemStack> materials,
                                        HolderLookup.Provider provider)
@@ -810,7 +786,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
         MaterialTextureData textureData = MaterialTextureData.readFromItemStack(targetStack);
         Map<ResourceLocation, Block> components = textureData.getTexturedComponents();
 
-        // Reconstruit le MaterialTextureData depuis les components connus
+        // Rebuild MaterialTextureData from the known components.
         MaterialTextureData.Builder builder = MaterialTextureData.builder();
         for (IMateriallyTexturedBlockComponent component : texturedBlock.getComponents())
         {
@@ -824,7 +800,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
             }
         }
 
-        // Copie l'ItemStack complet (préserve BlockItemStateProperties + tous DataComponents)
+        // Copy the whole ItemStack (preserves BlockItemStateProperties + all DataComponents)
         ItemStack result = targetStack.copy();
         builder.writeToItemStack(result);
 
@@ -832,12 +808,12 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
     }
 
     /**
-     * Tente de réinjecter un ItemStack dans le réseau ME du Redirector.
+     * Tries to reinject an ItemStack into the Redirector's ME network.
      *
-     * v1.4.9 : renvoie le RELIQUAT non inséré (au lieu de void).
-     *   - réseau indisponible  → renvoie la totalité (à conserver/réessayer)
-     *   - insertion partielle   → renvoie ce qui n'a pas été accepté
-     *   - insertion complète    → renvoie ItemStack.EMPTY
+     * v1.4.9: returns the uninserted REMAINDER (instead of voiding).
+     *   - network unavailable → returns the whole stack (to keep/retry)
+     *   - partial insert      → returns what was not accepted
+     *   - full insert         → returns ItemStack.EMPTY
      */
     private ItemStack injectIntoME(ItemStack stack, Level level)
     {
@@ -847,7 +823,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
         if (node == null || !node.isActive()) return stack.copy();
 
         AEItemKey key = AEItemKey.of(stack);
-        if (key == null) return ItemStack.EMPTY; // non insérable (jamais pour un item réel)
+        if (key == null) return ItemStack.EMPTY; // not insertable (never for a real item)
 
         IActionSource src = IActionSource.ofMachine(this);
 
@@ -861,12 +837,12 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
     }
 
     /**
-     * Notifie AE2 que la liste de patterns a changé (buffer modifié).
-     * AE2 va rescanner getAvailablePatterns() au prochain cycle.
+     * Notifies AE2 that the pattern list changed (buffer modified). AE2 rescans
+     * getAvailablePatterns() on the next cycle.
      */
     public void notifyPatternChange()
     {
-        // Passe 3 — the memoised output-key list follows the buffer content. All
+        // Pass3 — the memoised output-key list follows the buffer content. All
         // buffer mutations funnel through onContentsChanged() -> here, so this is
         // the single invalidation point (client-side calls just clear an unused cache).
         patternOutputKeys = null;
@@ -874,7 +850,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
             ICraftingProvider.requestUpdate(gridNode);
     }
 
-    // ── Lifecycle ─────────────────────────────────────────────────────────────
+    // Lifecycle
 
     @Override
     public void onLoad()
@@ -955,7 +931,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
     @Override
     public @Nullable IGridNode getGridNode(Direction dir)
     {
-        // Passe 3 (volet B) — defence in depth with setExposedOnSides(): the top
+        // Pass3 (PartB) — defence in depth with setExposedOnSides(): the top
         // face is pure glass, never hand the node out for UP.
         return dir == Direction.UP ? null : gridNode.getNode();
     }
@@ -963,7 +939,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
     @Override
     public AECableType getCableConnectionType(Direction dir)
     {
-        // Passe 4 (volet C) — without this override the IInWorldGridNodeHost default
+        // Pass4 (PartC) — without this override the IInWorldGridNodeHost default
         // is AECableType.GLASS (IInWorldGridNodeHost.java:19-21), which made adjacent
         // smart cables degrade their connection arm to a thin glass joint. Standard
         // AE2 machines return SMART (AENetworkedBlockEntity, PatternProviderBlockEntity).
@@ -980,7 +956,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
         firstTickDone = true;
         for (Direction dir : Direction.values())
             level.updateNeighborsAt(pos.relative(dir), level.getBlockState(pos.relative(dir)).getBlock());
-        // Annonce initiale des patterns au réseau
+        // Initial pattern announcement to the network.
         notifyPatternChange();
     }
 
@@ -991,7 +967,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
         setChanged();
     }
 
-    // ── Warehouse helpers ─────────────────────────────────────────────────────
+    // Warehouse helpers
 
     public boolean hasWarehouseCard()
     { return !warehouseCardSlot.getStackInSlot(0).isEmpty(); }
@@ -1017,7 +993,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
 
     public boolean isAdjacentToController() { return isAe2Active(); }
 
-    // ── MineColonies building handlers ────────────────────────────────────────
+    // MineColonies building handlers
 
     public List<IItemHandler> getBuildingHandlers()
     {
@@ -1093,7 +1069,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
         return true;
     }
 
-    // ── State ─────────────────────────────────────────────────────────────────
+    // State
 
     public void updateState()
     {
@@ -1132,7 +1108,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
         }
     }
 
-    // ── Getters / Setters ─────────────────────────────────────────────────────
+    // Getters / Setters
 
     public BlockPos getTargetInventoryPos() { return targetInventoryPos; }
     public void setTargetInventoryPos(BlockPos pos) { this.targetInventoryPos = pos; markDirtyAndUpdate(); }
@@ -1148,7 +1124,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
 
     public void setState(RedirectorState state)
     {
-        // Passe 2 — no-op on unchanged state. updateState() is invoked from
+        // Pass2 — no-op on unchanged state. updateState() is invoked from
         // repeated paths (Jade server data ~4/s while the block is looked at,
         // terminal GUI sync ticker) and, now that getUpdatePacket() is live,
         // every markDirtyAndUpdate() ships a real BE packet: only sync actual
@@ -1162,16 +1138,16 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
 
     public IManagedGridNode getManagedGridNode() { return gridNode; }
 
-    // ── Couche 0 : accesseurs de rendu (lus par le futur BlockEntityRenderer) ──
+    // Render accessors (read by the BlockEntityRenderer)
 
-    /** @return true si un craft est en cours, des sorties attendent l'injection,
-     *  ou le linger visuel de 5 ticks court encore (passe 2). */
+    /** @return true if a craft is running, outputs await injection, or the 5-tick visual
+     *  linger is still running (pass 2). */
     public boolean isWorking() { return this.working; }
 
-    /** @return l'ItemStack courant à afficher en 3D (copie serveur, EMPTY si idle). */
+    /** @return the current ItemStack to render in 3D (server copy, EMPTY if idle). */
     public ItemStack getRenderStack() { return this.renderStack; }
 
-    /** @return le progrès de shuffle (0→5) pour le glissement X de l'item. */
+    /** @return the shuffle progress (0→5) for the item's X slide. */
     public int getShuffleProgress() { return this.shuffleProgress; }
 
     private void markDirtyAndUpdate()
@@ -1181,10 +1157,10 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
             level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
     }
 
-    // ── Sync client ───────────────────────────────────────────────────────────
+    // Client sync
 
     /**
-     * Passe 2 (Fix 1) — without this override, {@code level.sendBlockUpdated()}
+     * Pass2 (Fix 1) — without this override, {@code level.sendBlockUpdated()}
      * never ships BE data to clients mid-game: the default implementation returns
      * {@code null}, so every sendBlockUpdated() in this class was a data no-op and
      * renderStack/working only reached clients on chunk (re)load. The packet
@@ -1198,7 +1174,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
     }
 
     /**
-     * Passe 2 (Fix 1) — client-side receipt of the packet above. Routes through
+     * Pass2 (Fix 1) — client-side receipt of the packet above. Routes through
      * {@link #handleUpdateTag} (same path as the chunk-load sync — simple
      * idempotent reads) instead of the NeoForge default, which calls
      * {@code loadWithComponents()} and would skip the client mirror fields
@@ -1236,7 +1212,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
         }
         tag.putString("linked_builder_name", linkedBuilderName);
 
-        // ── Couche 0 : état d'affichage animé ────────────────────────────────
+        // Animated display state
         tag.putBoolean("working", this.working);
         tag.put("renderStack", this.renderStack.saveOptional(provider));
         tag.putInt("shuffleProgress", this.shuffleProgress);
@@ -1260,7 +1236,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
             linkedBuilderPos = new BlockPos(tag.getInt("builder_x"), tag.getInt("builder_y"), tag.getInt("builder_z"));
         if (tag.contains("linked_builder_name")) linkedBuilderName = tag.getString("linked_builder_name");
 
-        // ── Couche 0 : état d'affichage animé ────────────────────────────────
+        // Animated display state
         this.working = tag.getBoolean("working");
         this.renderStack = tag.contains("renderStack")
                 ? ItemStack.parseOptional(provider, tag.getCompound("renderStack"))
@@ -1268,7 +1244,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
         this.shuffleProgress = tag.getInt("shuffleProgress");
     }
 
-    // ── NBT ───────────────────────────────────────────────────────────────────
+    // NBT
 
     @Override
     protected void saveAdditional(CompoundTag tag, HolderLookup.Provider provider)
@@ -1281,16 +1257,16 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
         tag.put("warehouse_card_slot", warehouseCardSlot.serializeNBT(provider));
         tag.putBoolean("warehouse_priority", warehousePriority);
 
-        // v1.4.9 — persistance de la file de craft et des sorties en attente.
-        // Indispensable : ces ItemStacks correspondent à des matériaux déjà prélevés
-        // du réseau AE2 ; les perdre au déchargement de chunk = voiding.
+        // v1.4.9 — persist the craft queue and pending outputs. Essential: these
+        // ItemStacks are materials already pulled from the AE2 network; losing them on
+        // chunk unload = voiding.
         ListTag queueTag = new ListTag();
         for (PendingDomumCraft p : craftQueue)
             queueTag.add(savePending(p, provider));
         tag.put("craft_queue", queueTag);
 
         ListTag pendingTag = new ListTag();
-        // Copie défensive (le ticker tourne aussi sur le thread serveur).
+        // Defensive copy (the ticker also runs on the server thread).
         for (ItemStack out : new ArrayList<>(pendingOutputs))
             if (!out.isEmpty()) pendingTag.add(out.saveOptional(provider));
         tag.put("pending_outputs", pendingTag);
@@ -1334,7 +1310,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
         if (tag.contains("warehouse_card_slot")) warehouseCardSlot.deserializeNBT(provider, tag.getCompound("warehouse_card_slot"));
         if (tag.contains("warehouse_priority")) warehousePriority = tag.getBoolean("warehouse_priority");
 
-        // v1.4.9 — restauration de la file de craft et des sorties en attente.
+        // v1.4.9 — restore the craft queue and pending outputs.
         craftQueue.clear();
         if (tag.contains("craft_queue"))
         {
@@ -1370,7 +1346,7 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
         }
     }
 
-    // ── NBT helpers (PendingDomumCraft) ───────────────────────────────────────
+    // NBT helpers (PendingDomumCraft)
 
     private static CompoundTag savePending(PendingDomumCraft p, HolderLookup.Provider provider)
     {
@@ -1402,16 +1378,15 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
         return new PendingDomumCraft(target, mats, count);
     }
 
-    // ── PendingDomumCraft record ──────────────────────────────────────────────
+    // PendingDomumCraft record
 
     /**
-     * Représente un craft Domum en attente d'exécution.
-     * Créé dans pushPattern(), consommé dans processOneCraft().
-     * Persisté en NBT (v1.4.9).
+     * A Domum craft awaiting execution. Created in pushPattern(), consumed in
+     * processOneCraft(). Persisted in NBT (v1.4.9).
      *
-     * @param targetStack  L'ItemStack Domum cible à produire
-     * @param materials    Les matériaux déjà extraits du ME par AE2
-     * @param outputCount  Le nombre d'items produits par le pattern (ex: shingles=4)
+     * @param targetStack  the target Domum ItemStack to produce
+     * @param materials    the materials already extracted from the ME by AE2
+     * @param outputCount  the number of items produced by the pattern (e.g. shingles=4)
      */
     private record PendingDomumCraft(
             ItemStack targetStack,

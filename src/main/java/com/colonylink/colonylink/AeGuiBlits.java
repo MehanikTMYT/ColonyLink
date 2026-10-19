@@ -10,10 +10,10 @@ import net.neoforged.api.distmarker.OnlyIn;
 /**
  * AeGuiBlits — shared client-only rendering primitives for AE2-themed screens.
  *
- * <p>UI passe 1: extracted VERBATIM from {@link ColonyLinkScreen} (which now
+ * <p>UI pass 1: extracted VERBATIM from {@link ColonyLinkScreen} (which now
  * delegates through thin private facades — zero visual change to the Clipboard),
  * so a second screen (the Redirector) reuses the exact same primitives. Adds two
- * helpers new to this chantier: a generic states.png sprite blit (slot wells) and
+ * helpers new to this effort: a generic states.png sprite blit (slot wells) and
  * the AE2 upgrade-panel cell (the overflowing side box).
  *
  * <p>Legal frame (validated on the Clipboard): AE2 assets are CC BY-NC-SA and are
@@ -27,26 +27,26 @@ public final class AeGuiBlits
 {
     private AeGuiBlits() {}
 
-    // ── AE2 text palette (published values from ae2:screens/common/palette.json) ──
+    // AE2 text palette (published values from ae2:screens/common/palette.json)
     /** AE2 DEFAULT_TEXT — normal text on the light AE body. */
     public static final int AE_TEXT  = 0xFF413F54;
     /** AE2 MUTED_TEXT_COLOR — secondary / muted text. */
     public static final int AE_MUTED = 0xFF878FA5;
 
-    // ── AE2 frame + light body (nine-slice source) ────────────────────────────
+    // AE2 frame + light body (nine-slice source)
     public static final ResourceLocation AE_BACKGROUND =
             ResourceLocation.fromNamespaceAndPath("ae2", "textures/guis/background.png");
     public static final int AE_BG_BORDER = 4;    // nine-slice border, px
     public static final int AE_BG_TEX    = 256;  // background.png is 256x256
     public static final int AE_BG_TILE   = 248;  // source edge/center band = 256 - 2*4
 
-    // ── AE2 button sprites (atlas ids + probe file) ───────────────────────────
+    // AE2 button sprites (atlas ids + probe file)
     public static final ResourceLocation AE_BTN_NORMAL   = ResourceLocation.fromNamespaceAndPath("ae2", "button");
     public static final ResourceLocation AE_BTN_HOVER    = ResourceLocation.fromNamespaceAndPath("ae2", "button_highlighted");
     public static final ResourceLocation AE_BTN_DISABLED = ResourceLocation.fromNamespaceAndPath("ae2", "button_disabled");
     public static final ResourceLocation AE_BTN_PROBE    = ResourceLocation.fromNamespaceAndPath("ae2", "textures/gui/sprites/button.png");
 
-    // ── AE2 states.png (generic GUI sprites — slot wells, tabs, icons) ────────
+    // AE2 states.png (generic GUI sprites — slot wells, tabs, icons)
     public static final ResourceLocation AE_STATES =
             ResourceLocation.fromNamespaceAndPath("ae2", "textures/guis/states.png");
     public static final int AE_STATES_TEX = 256;  // states.png is 256x256
@@ -55,7 +55,7 @@ public final class AeGuiBlits
     public static final int SLOT_BG_V = 192;
     public static final int SLOT_BG_SIZE = 18;
 
-    // ── AE2 extra_panels.png (upgrade side-box cells) ─────────────────────────
+    // AE2 extra_panels.png (upgrade side-box cells)
     public static final ResourceLocation AE_EXTRA_PANELS =
             ResourceLocation.fromNamespaceAndPath("ae2", "textures/guis/extra_panels.png");
     public static final int AE_EXTRA_PANELS_TEX = 128;  // extra_panels.png is 128x128 (measured)
@@ -214,7 +214,7 @@ public final class AeGuiBlits
         RenderSystem.disableBlend();
     }
 
-    // ── New for the Redirector chantier ───────────────────────────────────────
+    // New for the Redirector work
 
     /**
      * Generic tinted blit of a sprite region from AE2's states.png (256x256) —

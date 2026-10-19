@@ -6,14 +6,13 @@ import net.neoforged.api.distmarker.OnlyIn;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
- * Centralise tous les handlers S→C qui référencent Minecraft/Screen/ColonyLinkScreen.
+ * Centralizes all S→C handlers that reference Minecraft/Screen/ColonyLinkScreen.
  *
- * Annoté @OnlyIn(CLIENT) — RuntimeDistCleaner ne scanne jamais cette classe côté serveur.
- * Les classes packet (ColonyLinkPacket etc.) ne contiennent plus de handle() ni d'import
- * Minecraft → leur bytecode est safe au classload côté serveur dédié.
- *
- * Dans registerPayloads(), les playToClient utilisent des lambdas qui appellent
- * ces méthodes. La classe n'est chargée qu'à l'exécution du lambda (côté client).
+ * @OnlyIn(CLIENT) so RuntimeDistCleaner never scans it server-side. The packet
+ * classes (ColonyLinkPacket etc.) hold no handle() nor Minecraft import, so their
+ * bytecode is safe to classload on a dedicated server. The playToClient lambdas in
+ * registerPayloads() call these methods, so the class loads only when a lambda runs
+ * (client-side).
  */
 @OnlyIn(Dist.CLIENT)
 public class ClientPacketHandler

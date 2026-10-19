@@ -11,11 +11,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * S→C : snapshot complet du Warehouse vers le client.
- * Inclut un message d'erreur optionnel (ex. "No colony found").
+ * S->C: full Warehouse snapshot to the client, with an optional error message
+ * (e.g. "No colony found").
  *
- * Le handler client est dans TerminalClientPacketHandler (@OnlyIn(CLIENT))
- * pour éviter que RuntimeDistCleaner ne crashe le serveur dédié.
+ * The client handler lives in TerminalClientPacketHandler (@OnlyIn(CLIENT)) to keep
+ * RuntimeDistCleaner from crashing the dedicated server.
  */
 public record WarehouseTerminalSyncPacket(
         List<WarehouseItemEntry> entries,

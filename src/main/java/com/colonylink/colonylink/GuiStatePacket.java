@@ -9,11 +9,11 @@ import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
- * Envoyé par le client au serveur pour :
- * - open=true  : le joueur ouvre le GUI (activeTabIndex = tab active)
- * - open=false : le joueur ferme le GUI
+ * Sent client → server for:
+ * - open=true  : the player opens the GUI (activeTabIndex = active tab)
+ * - open=false : the player closes the GUI
  *
- * activeTabIndex ignoré si open=false, sauf si == -1 (bouton "+", mode pairing).
+ * activeTabIndex ignored when open=false, except == -1 ("+" button, pairing mode).
  */
 public record GuiStatePacket(boolean open, BlockPos builderPos, int activeTabIndex)
         implements CustomPacketPayload
@@ -63,8 +63,8 @@ public record GuiStatePacket(boolean open, BlockPos builderPos, int activeTabInd
             {
                 ColonyLinkServerTicker.removeViewer(serverPlayer.getUUID());
 
-                // Fix 3 : sauvegarde la tab active en NBT wand à la fermeture du GUI.
-                // activeTabIndex == -1 reste la sentinelle "mode pairing" (message ci-dessous).
+                // Fix 3: save the active tab to wand NBT on GUI close.
+                // activeTabIndex == -1 stays the "pairing mode" sentinel (message below).
                 if (packet.activeTabIndex() >= 0)
                 {
                     net.minecraft.world.item.ItemStack _wand2 = ColonyLinkServerTicker.findWandInInventory(serverPlayer);

@@ -8,45 +8,45 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 
 /**
- * v1.4.11 — Vérifications de chargement de chunks (côté MineColonies).
+ * v1.4.11 — Chunk-loading checks (MineColonies side).
  *
- * Politique « tout ou rien » : aucune opération ColonyLink sur la colonie, le warehouse
- * ou le builder n'est tentée si l'un de leurs chunks n'est pas RÉELLEMENT vivant. On
- * avertit le joueur et on annule, plutôt que d'opérer sur des inventaires non simulés.
+ * All-or-nothing policy: no ColonyLink operation on the colony, warehouse or builder is
+ * attempted if any of their chunks is not TRULY alive. The player is warned and the
+ * action is cancelled rather than operating on un-simulated inventories.
  *
- * IMPORTANT — chunk « présent » ≠ chunk « vivant » :
- *   MineColonies garde une colonie « chargée » via un ticket NON-TICKING quand aucun
- *   joueur n'est à portée. Les chunks et leurs données restent en mémoire :
- *     - {@link Level#hasChunkAt(BlockPos)} renvoie {@code true} (les LECTURES marchent :
- *       le Clipboard voit les items, la colonie est trouvée) ;
- *     - MAIS le monde ne SIMULE pas ces chunks. Une ÉCRITURE (insérer dans un rack) se
- *       fait sur une BlockEntity gelée et ne se propage/persiste pas → on affiche
- *       « sent to builder » alors que rien n'arrive (voire voiding selon le timing).
- *   On exige donc {@link ServerLevel#isPositionEntityTicking(BlockPos)} (chunk vivant :
- *   joueur à portée de simulation OU ticket ticking), pas la simple présence.
+ * IMPORTANT — "present" chunk ≠ "alive" chunk:
+ *   MineColonies keeps a colony "loaded" via a NON-TICKING ticket when no player is
+ *   nearby. The chunks and their data stay in memory:
+ *     - {@link Level#hasChunkAt(BlockPos)} returns {@code true} (READS work: the
+ *       Clipboard sees items, the colony is found);
+ *     - BUT the world does not SIMULATE those chunks. A WRITE (inserting into a rack)
+ *       hits a frozen BlockEntity and does not propagate/persist → we show "sent to
+ *       builder" while nothing actually arrives (even voiding, depending on timing).
+ *   So we require {@link ServerLevel#isPositionEntityTicking(BlockPos)} (alive chunk:
+ *   player within simulation range OR a ticking ticket), not mere presence.
  *
- * Côté Applied Energistics : AUCUNE vérification manuelle ici, volontairement.
- *   - AE2 retire lui-même les nœuds déchargés de la grille (split réseau) : on ne PEUT
- *     pas énumérer « la partie déchargée » du réseau, elle n'est plus dans la grille.
- *   - Si le déchargement coupe le Redirector du contrôleur/courant, node.isActive()
- *     passe false → nos gardes existantes annulent déjà.
- *   - Si seul du stockage se décharge alors que le Redirector reste alimenté, extract/
- *     insert n'opèrent que sur le stockage chargé, sans jamais voider (surplus géré).
- * Donc node.isActive() + la gestion du reliquat suffisent : pas de scan AE2 manuel.
+ * Applied Energistics side: NO manual check here, deliberately.
+ *   - AE2 itself removes unloaded nodes from the grid (network split): we CANNOT
+ *     enumerate "the unloaded part" of the network, it is no longer in the grid.
+ *   - If unloading cuts the Redirector from the controller/power, node.isActive()
+ *     goes false → our existing guards already cancel.
+ *   - If only storage unloads while the Redirector stays powered, extract/insert only
+ *     operate on loaded storage, never voiding (remainder handled).
+ *   So node.isActive() + remainder handling suffice: no manual AE2 scan.
  */
 public final class ColonyLinkChunkUtil
 {
     private ColonyLinkChunkUtil() {}
 
-    // ── Présence (lecture seule) ──────────────────────────────────────────────
+    // Presence (read-only)
 
-    /** True si le chunk contenant {@code pos} est présent en mémoire. Ne force pas le chargement. */
+    /** True if the chunk containing {@code pos} is present in memory. Does not force loading. */
     public static boolean isLoaded(Level level, BlockPos pos)
     {
         return level != null && pos != null && level.hasChunkAt(pos);
     }
 
-    /** True si TOUTES les positions sont dans des chunks présents (vide/null → true). */
+    /** True if ALL positions are in present chunks (empty/null → true). */
     public static boolean allLoaded(Level level, Iterable<BlockPos> positions)
     {
         if (level == null) return false;
@@ -56,13 +56,13 @@ public final class ColonyLinkChunkUtil
         return true;
     }
 
-    // ── Vivant (simulé/ticking) — requis pour toute écriture ──────────────────
+    // Alive (simulated/ticking) — required for any write
 
     /**
-     * True si le chunk de {@code pos} est RÉELLEMENT vivant (entity-ticking), pas juste
-     * présent. C'est la garantie qu'une écriture (insertion dans un rack) sera simulée et
-     * persistée. Un chargement « gelé » (non-ticking) de MineColonies renvoie ici false.
-     * Côté client (impossible à déterminer), on retombe sur la présence.
+     * True if {@code pos}'s chunk is TRULY alive (entity-ticking), not just present.
+     * This guarantees a write (rack insertion) will be simulated and persisted. A
+     * "frozen" (non-ticking) MineColonies load returns false here. On the client
+     * (undeterminable) we fall back to presence.
      */
     public static boolean isLive(Level level, BlockPos pos)
     {
@@ -72,7 +72,7 @@ public final class ColonyLinkChunkUtil
         return true;
     }
 
-    /** True si TOUTES les positions sont dans des chunks vivants (vide/null → true). */
+    /** True if ALL positions are in alive chunks (empty/null → true). */
     public static boolean allLive(Level level, Iterable<BlockPos> positions)
     {
         if (level == null) return false;
@@ -82,11 +82,11 @@ public final class ColonyLinkChunkUtil
         return true;
     }
 
-    // ── Gardes haut niveau (exigent un chunk VIVANT) ──────────────────────────
+    // High-level guards (require an ALIVE chunk)
 
     /**
-     * True si le warehouse (bloc hut + tous ses conteneurs/racks) est entièrement VIVANT.
-     * {@code null} → false (on échoue côté sûr).
+     * True if the warehouse (hut block + all its containers/racks) is fully ALIVE.
+     * {@code null} → false (fail safe).
      */
     public static boolean warehouseFullyLoaded(Level level, BuildingWareHouse warehouse)
     {
@@ -96,8 +96,8 @@ public final class ColonyLinkChunkUtil
     }
 
     /**
-     * True si TOUS les warehouses de la colonie sont entièrement VIVANTS.
-     * Une colonie sans warehouse → true (l'appelant gère l'absence séparément).
+     * True if ALL of the colony's warehouses are fully ALIVE.
+     * A colony with no warehouse → true (the caller handles absence separately).
      */
     public static boolean colonyWarehousesFullyLoaded(Level level, IColony colony)
     {
@@ -112,9 +112,9 @@ public final class ColonyLinkChunkUtil
     }
 
     /**
-     * True si le bâtiment à {@code buildingPos} (bloc + conteneurs) est entièrement VIVANT.
-     * Si aucun bâtiment MineColonies n'existe à cette position (inventaire direct,
-     * non-MineColonies), on vérifie simplement que le bloc est vivant.
+     * True if the building at {@code buildingPos} (block + containers) is fully ALIVE.
+     * If no MineColonies building exists at that position (direct, non-MineColonies
+     * inventory), only the block itself is checked for liveness.
      */
     public static boolean buildingFullyLoaded(Level level, IColony colony, BlockPos buildingPos)
     {

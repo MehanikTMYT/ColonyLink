@@ -25,8 +25,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Scanne tous les citoyens de la colonie du joueur (hors builders)
- * et envoie un CitizensPacket au client.
+ * Scans every citizen of the player's colony (builders excluded)
+ * and sends a CitizensPacket to the client.
  */
 public class CitizensScanHandler
 {
@@ -191,7 +191,7 @@ public class CitizensScanHandler
                     ItemStack finalDisplay = display;
                     BuilderToolHelper.SubstituteAction finalAction = BuilderToolHelper.SubstituteAction.NONE;
 
-                    // Niveau réel du bâtiment du citoyen (0 si pas de bâtiment)
+                    // Citizen's actual building level (0 if no building)
                     int buildingLevel = workBuilding != null ? workBuilding.getBuildingLevel() : 0;
 
                     if (BuilderToolHelper.isArmor(display))
@@ -297,11 +297,11 @@ public class CitizensScanHandler
         }
     }
 
-    // ── v1.6.2 — throttle state for the ticker Citizens tab ────────────────────
+    // v1.6.2 — throttle state for the ticker Citizens tab
     private static final java.util.Map<java.util.UUID, Long> LAST_SIG =
             new java.util.concurrent.ConcurrentHashMap<>();
 
-    // ── A2 — per-player cooldown for MANUAL requests only ──────────────────────
+    // A2 — per-player cooldown for MANUAL requests only
     // Guards CitizensRequestPacket (the client entering the Citizens tab). It must
     // NOT cover the periodic ticker refresh, which calls sendCitizensPacket(..., false)
     // directly and has to keep pushing live updates every ticker interval.

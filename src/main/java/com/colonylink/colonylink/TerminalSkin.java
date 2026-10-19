@@ -44,12 +44,11 @@ public final class TerminalSkin {
     }
 
     /**
-     * Dessin "fluide" facon AE2 : on supprime la bande verticale [cutTop, cutBot[
-     * (les lignes de slots du milieu) et on remonte de {@code dy} px tout ce qui se
-     * trouve sous {@code cutBot} (cadre bas des panneaux, connecteur, bloc craft +
-     * inventaire). Les coordonnees cutTop/cutBot sont LOCALES au skin (origine 0,0).
-     * Les rectangles qui chevauchent la coupe sont scindes proprement. Avec
-     * dy = 0 (cutTop == cutBot) le rendu est strictement identique a draw().
+     * AE2-style "fluid" draw: removes the vertical band [cutTop, cutBot[ (the middle
+     * slot rows) and shifts everything below {@code cutBot} up by {@code dy} px (panel
+     * bottom frame, connector, craft block + inventory). cutTop/cutBot are LOCAL to the
+     * skin (origin 0,0). Rectangles overlapping the cut are split cleanly. With dy = 0
+     * (cutTop == cutBot) the output is strictly identical to draw().
      */
     public static void drawCut(GuiGraphics g, Skin s, int ox, int oy,
                                int cutTop, int cutBot, int dy) {
@@ -59,9 +58,9 @@ public final class TerminalSkin {
             int y1 = s.ry[i];
             int y2 = y1 + s.rh[i];
             int col = s.pal[s.rc[i]];
-            if (y1 < cutTop)                                   // portion haute (ancree en haut)
+            if (y1 < cutTop)                                   // top portion (anchored at top)
                 g.fill(x1, oy + y1, x2, oy + Math.min(y2, cutTop), col);
-            if (y2 > cutBot) {                                 // portion basse, remontee de dy
+            if (y2 > cutBot) {                                 // bottom portion, shifted up by dy
                 int by1 = Math.max(y1, cutBot);
                 g.fill(x1, oy + by1 - dy, x2, oy + y2 - dy, col);
             }

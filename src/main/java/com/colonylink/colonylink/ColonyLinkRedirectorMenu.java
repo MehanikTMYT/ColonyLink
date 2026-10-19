@@ -18,8 +18,8 @@ public class ColonyLinkRedirectorMenu extends AbstractContainerMenu
     public static final int BUFFER_ROWS = ColonyLinkRedirectorBlockEntity.BUFFER_ROWS;
 
     /**
-     * Index du slot Warehouse Link Card dans la liste des slots du menu.
-     * Il est placé en premier pour simplifier les indices.
+     * Index of the Warehouse Link Card slot in the menu's slot list.
+     * Placed first to simplify indices.
      */
     public static final int WAREHOUSE_CARD_SLOT_INDEX = 0;
 
@@ -61,7 +61,7 @@ public class ColonyLinkRedirectorMenu extends AbstractContainerMenu
         net.neoforged.neoforge.items.IItemHandler bufferHandler = blockEntity != null
                 ? blockEntity.buffer : new net.neoforged.neoforge.items.ItemStackHandler(BUFFER_ROWS * BUFFER_COLS);
 
-        // ── Slot Warehouse Link Card ─────────────────────────────────────────
+        // Slot Warehouse Link Card
         // Item area of the AE2 upgrade-cell box overflowing the top-right edge. The
         // Screen DERIVES the box origin from this slot (box = slot - cell item offset
         // (1,6)), so moving the slot moves the whole cell + fallback + JEI zone + tooltip.
@@ -90,7 +90,7 @@ public class ColonyLinkRedirectorMenu extends AbstractContainerMenu
             }
         });
 
-        // ── Buffer slots — 9 columns x 3 rows (UI passe 1: grid top at y=38) ─
+        // Buffer slots — 9 columns x 3 rows (UI pass 1: grid top at y=38)
         for (int row = 0; row < BUFFER_ROWS; row++)
         {
             for (int col = 0; col < BUFFER_COLS; col++)
@@ -104,7 +104,7 @@ public class ColonyLinkRedirectorMenu extends AbstractContainerMenu
             }
         }
 
-        // ── Inventaire joueur ────────────────────────────────────────────────
+        // Player inventory
         for (int row = 0; row < 3; row++)
         {
             for (int col = 0; col < 9; col++)
@@ -113,7 +113,7 @@ public class ColonyLinkRedirectorMenu extends AbstractContainerMenu
             }
         }
 
-        // ── Hotbar joueur ────────────────────────────────────────────────────
+        // Player hotbar
         for (int col = 0; col < 9; col++)
         {
             this.addSlot(new Slot(playerInventory, col, 8 + col * 18, 165));
@@ -160,33 +160,28 @@ public class ColonyLinkRedirectorMenu extends AbstractContainerMenu
             ItemStack slotStack = slot.getItem();
             returnStack = slotStack.copy();
 
-            int bufferStart = 1; // après le slot warehouse card
+            int bufferStart = 1; // after the warehouse card slot
             int bufferEnd = bufferStart + BUFFER_ROWS * BUFFER_COLS;
 
             if (index == WAREHOUSE_CARD_SLOT_INDEX)
             {
-                // Carte → inventaire joueur
                 if (!this.moveItemStackTo(slotStack, bufferEnd, this.slots.size(), true))
                     return ItemStack.EMPTY;
             }
             else if (index >= bufferStart && index < bufferEnd)
             {
-                // Buffer → inventaire joueur
                 if (!this.moveItemStackTo(slotStack, bufferEnd, this.slots.size(), true))
                     return ItemStack.EMPTY;
             }
             else
             {
-                // Inventaire joueur
                 if (slotStack.getItem() instanceof WarehouseLinkCard)
                 {
-                    // Carte → slot dédié
                     if (!this.moveItemStackTo(slotStack, WAREHOUSE_CARD_SLOT_INDEX, bufferStart, false))
                         return ItemStack.EMPTY;
                 }
                 else
                 {
-                    // Autre item → buffer
                     if (!this.moveItemStackTo(slotStack, bufferStart, bufferEnd, false))
                         return ItemStack.EMPTY;
                 }

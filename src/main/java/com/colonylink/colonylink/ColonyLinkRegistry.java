@@ -25,13 +25,13 @@ public class ColonyLinkRegistry
             DeferredRegister.createDataComponents(
                     net.minecraft.core.registries.Registries.DATA_COMPONENT_TYPE, ColonyLink.MODID);
 
-    // ── 1.7.0-beta.2 — Warehouse Link Card: linked colony + Warehouse ─────────
+    // 1.7.0-beta.2 — Warehouse Link Card: linked colony + Warehouse
 
     public static final DeferredHolder<DataComponentType<?>, DataComponentType<CardLink>>
             CARD_LINK = DATA_COMPONENTS.registerComponentType("card_link",
             builder -> builder.persistent(CardLink.CODEC).networkSynchronized(CardLink.STREAM_CODEC));
 
-    // ── AE2 Redirector ────────────────────────────────────────────────────────
+    // AE2 Redirector
 
     public static final DeferredBlock<ColonyLinkRedirectorBlock> REDIRECTOR_BLOCK =
             BLOCKS.register("colony_link_redirector", ColonyLinkRedirectorBlock::new);
@@ -48,7 +48,7 @@ public class ColonyLinkRegistry
             REDIRECTOR_MENU_TYPE = MENUS.register("colony_link_redirector",
             () -> IMenuTypeExtension.create(ColonyLinkRedirectorMenu::new));
 
-    // ── Warehouse Link Terminal Part ──────────────────────────────────────────
+    // Warehouse Link Terminal Part
 
     public static final DeferredHolder<Item, WarehouseLinkTerminalItem>
             WAREHOUSE_LINK_TERMINAL_ITEM = BLOCK_ITEMS.register("warehouse_link_terminal",
@@ -58,28 +58,28 @@ public class ColonyLinkRegistry
             WAREHOUSE_LINK_TERMINAL_MENU_TYPE = MENUS.register("warehouse_link_terminal",
             () -> IMenuTypeExtension.create(WarehouseLinkTerminalMenu::new));
 
-    // ── v1.4.2 — Domum Pattern Item ───────────────────────────────────────────
+    // v1.4.2 — Domum Pattern Item
     //
-    // Item custom stockant une recette Domum Ornamentum encodée.
-    // Seuls ces items peuvent entrer dans le buffer du Redirector.
-    // Les Encoded Patterns AE2 standard sont rejetés par isItemValid().
-    // AE2 ne peut pas confondre ce type avec ses propres patterns.
+    // Custom item storing an encoded Domum Ornamentum recipe.
+    // Only these items may enter the Redirector's buffer.
+    // Standard AE2 Encoded Patterns are rejected by isItemValid().
+    // AE2 cannot confuse this type with its own patterns.
 
     public static final DeferredHolder<Item, DomumPatternItem>
             DOMUM_PATTERN_ITEM = BLOCK_ITEMS.register("domum_pattern",
             DomumPatternItem::new);
 
-    // ── Capabilities ──────────────────────────────────────────────────────────
+    // Capabilities
 
     public static void registerCapabilities(RegisterCapabilitiesEvent event)
     {
-        // AE2 grid node host — Redirector bloc
+        // AE2 grid node host — Redirector block
         event.registerBlockEntity(
                 AECapabilities.IN_WORLD_GRID_NODE_HOST,
                 REDIRECTOR_BLOCK_ENTITY.get(),
                 (be, context) -> be);
 
-        // IEnergyStorage — wand AE2
+        // IEnergyStorage — AE2 wand
         event.registerItem(
                 Capabilities.EnergyStorage.ITEM,
                 (stack, context) -> new WandEnergyStorage(stack),

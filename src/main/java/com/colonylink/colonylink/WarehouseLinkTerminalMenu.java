@@ -24,26 +24,25 @@ import java.util.Optional;
 /**
  * WarehouseLinkTerminalMenu — v1.4.2
  *
- * Layout des slots :
+ * Slot layout:
  *   0        Warehouse Link Card  (x=201, y=1)
- *   1–9      Grille craft 3×3    (x=147+c*18, y=273+r*18)
- *   10       Résultat craft       (x=255, y=291)
- *   11–37    Inventaire 3×9       (x=130+c*18, y=347+r*18)
+ *   1–9      3×3 craft grid       (x=147+c*18, y=273+r*18)
+ *   10       Craft result         (x=255, y=291)
+ *   11–37    Inventory 3×9        (x=130+c*18, y=347+r*18)
  *   38–46    Hotbar               (x=130+c*18, y=405)
- *   47       Domum Target         (x=139, y=283) — dans pattern_gui
- *   48       Blank Pattern input  (x=253, y=267) — x=269-16=253 relatif GUI
+ *   47       Domum Target         (x=139, y=283) — in pattern_gui
+ *   48       Blank Pattern input  (x=253, y=267) — x=269-16=253 relative to GUI
  *   49       DomumPattern output  (x=253, y=314) — read-only
  *
- * Pattern AE2 pour masquer les slots craft (onglet Cutter) :
- *   Les slots 1-10 sont déplacés à x=-2000 quand l'onglet Cutter est actif.
- *   Le Screen appelle setTab() pour switcher.
+ * AE2 trick to hide the craft slots (Cutter tab): slots 1-10 move to x=-2000 when the
+ * Cutter tab is active; the Screen calls setTab() to switch.
  *
- * Coordonnées slots : relatives au GUI (leftPos/topPos ajoutés par vanilla).
- * Les coords données par Morph sont absolues dans le GUI → on les utilise telles quelles.
+ * Slot coords are relative to the GUI (vanilla adds leftPos/topPos). Morph's coords are
+ * absolute within the GUI, so they are used as-is.
  */
 public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
 {
-    // ── Coordonnées GUI (inchangées v2.0.0) ──────────────────────────────────
+    // GUI coordinates (unchanged v2.0.0)
 
     static final int GUI_W = 420;
     static final int GUI_H = 432;
@@ -94,23 +93,23 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
     static final int BTN2_Y = 62;
     static final int BTN_SZ = 12;
 
-    // ── v1.4.2 — Coordonnées Domum Pattern GUI ────────────────────────────────
-    // pattern_gui.png en sur-impression à x=129, y=266 (166×68)
-    // Toutes les coords sont relatives au GUI (0,0 = coin haut-gauche du fond PNG)
+    // v1.4.2 — Domum Pattern GUI coordinates
+    // pattern_gui.png overlaid at x=129, y=266 (166×68)
+    // All coords relative to the GUI (0,0 = top-left corner of the background PNG)
 
-    /** Slot Domum Target — zone libre gauche de pattern_gui */
-    static final int DOMUM_TARGET_X = 139;  // dans pattern_gui, zone gauche
-    static final int DOMUM_TARGET_Y = 283;  // centré verticalement (266+17=283)
+    /** Domum Target slot — free left area of pattern_gui */
+    static final int DOMUM_TARGET_X = 139;  // in pattern_gui, left area
+    static final int DOMUM_TARGET_Y = 283;  // vertically centred (266+17=283)
 
-    /** Slot Blank Pattern input — x=269, y=267 (donné par Morph, coords GUI absolues) */
+    /** Blank Pattern input slot — x=269, y=267 (Morph's values, absolute GUI coords) */
     static final int BLANK_PATTERN_X = 269;
     static final int BLANK_PATTERN_Y = 267;
 
-    /** Slot DomumPattern output — x=269, y=314 (donné par Morph, coords GUI absolues) */
+    /** DomumPattern output slot — x=269, y=314 (Morph's values, absolute GUI coords) */
     static final int DOMUM_OUT_X = 269;
     static final int DOMUM_OUT_Y = 314;
 
-    // ── Indices de slots ──────────────────────────────────────────────────────
+    // Slot indices
 
     public static final int CARD_SLOT_INDEX     = 0;
     public static final int CRAFT_GRID_START    = 1;
@@ -121,29 +120,29 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
     public static final int BLANK_PATTERN_SLOT  = 48;
     public static final int DOMUM_OUTPUT_SLOT   = 49;  // read-only
 
-    // ── Slider partagé ────────────────────────────────────────────────────────
+    // Shared slider
     public static volatile boolean warehouseFirst = true;
 
-    // ── Champs ────────────────────────────────────────────────────────────────
+    // Fields
     private final WarehouseLinkTerminalPart  part;
     private final Player                     player;
     private final TransientCraftingContainer craftingGrid;
     private final ResultContainer            craftResult = new ResultContainer();
 
-    // ── Onglet actif (0=Craft, 1=Cutter) ─────────────────────────────────────
-    // Partagé avec le Screen via setTab()
+    // Active tab (0=Craft, 1=Cutter)
+    // Shared with the Screen via setTab()
     private int activeTab = 0;
 
-    // ── Conteneurs Domum ──────────────────────────────────────────────────────
+    // Domum containers
 
-    // v1.4.2 — Les slots Domum sont persistés dans le Part (pas dans le Menu).
-    // Le Menu accède aux handlers du Part via part.domumTargetSlot etc.
-    // Si part == null (côté client sans Part), on crée des handlers locaux temporaires.
+    // v1.4.2 — Domum slots are persisted in the Part (not the Menu). The Menu accesses the
+    // Part's handlers via part.domumTargetSlot etc. If part == null (client side without a
+    // Part), temporary local handlers are created.
     final ItemStackHandler domumTargetSlot;
     final ItemStackHandler blankPatternSlot;
     final ItemStackHandler domumOutputSlot;
 
-    // ── Constructeurs ─────────────────────────────────────────────────────────
+    // Constructors
 
     public WarehouseLinkTerminalMenu(int id, Inventory inv, FriendlyByteBuf buf)
     {
@@ -171,7 +170,7 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
         this.player       = inv.player;
         this.craftingGrid = new TransientCraftingContainer(this, 3, 3);
 
-        // Utilise les handlers persistants du Part si disponible
+        // Use the Part's persistent handlers when available
         if (part != null)
         {
             this.domumTargetSlot  = part.domumTargetSlot;
@@ -185,7 +184,7 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
             this.domumOutputSlot  = new ItemStackHandler(1);
         }
 
-        // Restaure la grille craft depuis le Part
+        // Restore the craft grid from the Part
         if (part != null)
         {
             for (int i = 0; i < 9; i++)
@@ -196,7 +195,7 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
             }
         }
 
-        // domumOutputSlot toujours vide à l'ouverture
+        // domumOutputSlot always empty on open
         if (part != null) part.domumOutputSlot.setStackInSlot(0, ItemStack.EMPTY);
 
         // Slot 0 — Warehouse Link Card
@@ -227,9 +226,9 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
             }
         });
 
-        // Slots 1-9 — Grille craft 3×3
-        // isActive() = (activeTab==0) : invisible+non-cliquable côté client quand onglet Cutter.
-        // Côté serveur isActive() n'est pas appelé pour les craft slots → aucun impact.
+        // Slots 1-9 — 3×3 craft grid
+        // isActive() = (activeTab==0): invisible + non-clickable client-side on the Cutter tab.
+        // Server-side isActive() is not called for craft slots -> no impact.
         for (int r = 0; r < 3; r++)
             for (int c = 0; c < 3; c++)
                 this.addSlot(new Slot(craftingGrid, r * 3 + c,
@@ -239,7 +238,7 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
                     @Override public boolean isActive() { return activeTab == 0; }
                 });
 
-        // Slot 10 — Output craft
+        // Slot 10 — Craft output
         this.addSlot(new ResultSlot(inv.player, craftingGrid, craftResult, 0,
                 CRAFT_OUT_X + 1,
                 CRAFT_OUT_Y + 1)
@@ -254,7 +253,7 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
             }
         });
 
-        // Slots 11-37 — Inventaire joueur 3×9
+        // Slots 11-37 — Player inventory 3×9
         for (int r = 0; r < 3; r++)
             for (int c = 0; c < 9; c++)
                 this.addSlot(new Slot(inv,
@@ -269,11 +268,11 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
                     INV_X + c * SLOT_PITCH + 1,
                     HOTBAR_Y + 1));
 
-        // ── v1.4.2 — Slots Domum Pattern ─────────────────────────────────────
-        // Toujours à x=-2000 (hors-écran) → aucune collision avec les autres slots.
-        // Le Screen les rend manuellement aux bonnes coords visuelles.
-        // Le Screen intercepte les clics aux positions visuelles et les route vers ces slots.
-        // mayPlace/mayPickup sans check d'onglet → safe côté serveur.
+        // v1.4.2 — Domum Pattern slots
+        // Always at x=-2000 (off-screen) -> no collision with other slots.
+        // The Screen renders them manually at the right visual coords and intercepts clicks
+        // at those visual positions, routing them to these slots.
+        // mayPlace/mayPickup without a tab check -> server-side safe.
 
         // Slot 47 — Domum Target
         this.addSlot(new SlotItemHandler(domumTargetSlot, 0, -2000, -2000)
@@ -296,7 +295,7 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
             }
         });
 
-        // Slot 49 — DomumPattern output (read-only pour dépôt, pickup autorisé)
+        // Slot 49 — DomumPattern output (read-only for deposit, pickup allowed)
         this.addSlot(new SlotItemHandler(domumOutputSlot, 0, -2000, -2000)
         {
             @Override public boolean mayPlace(ItemStack s) { return false; }
@@ -304,13 +303,13 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
         });
     }
 
-    // ── Gestion des onglets — pattern AE2 (x=-2000 = slot caché) ─────────────
+    // Tab handling — AE2 pattern (x=-2000 = hidden slot)
 
     /**
-     * Appelé par le Screen quand l'utilisateur change d'onglet.
-     * Tab 0 = Crafting Table, Tab 1 = Cutter Domum.
-     * Les slots masqués restent aux bonnes coordonnées mais isActive() = false,
-     * ce qui empêche toute interaction vanilla (pas de drop, pas de pick).
+     * Called by the Screen when the user switches tab.
+     * Tab 0 = Crafting Table, Tab 1 = Domum Cutter.
+     * Hidden slots keep their coordinates but isActive() = false, which blocks all vanilla
+     * interaction (no drop, no pick).
      */
     public void setTab(int tab)
     {
@@ -320,14 +319,14 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
     public int getActiveTab() { return activeTab; }
 
     /**
-     * Un slot Craft est actif seulement si l'onglet Craft est affiché.
-     * Un slot Domum est actif seulement si l'onglet Cutter est affiché.
-     * isActive() = false → le slot est invisible ET non-interactif côté vanilla.
+     * A Craft slot is active only when the Craft tab is shown.
+     * A Domum slot is active only when the Cutter tab is shown.
+     * isActive() = false -> the slot is invisible AND non-interactive in vanilla.
      */
     boolean isCraftTabActive()  { return activeTab == 0; }
     boolean isCutterTabActive() { return activeTab == 1; }
 
-    // ── Craft vanilla ─────────────────────────────────────────────────────────
+    // Vanilla craft
 
     private boolean lastCardState = false;
 
@@ -360,7 +359,7 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
                 : ItemStack.EMPTY);
     }
 
-    // ── Domum Pattern output preview ──────────────────────────────────────────
+    // Domum Pattern output preview
 
     private void updateDomumOutput()
     {
@@ -372,7 +371,7 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
         domumOutputSlot.setStackInSlot(0, preview);
     }
 
-    /** Appelé depuis le Screen client quand le joueur clique "Encode". */
+    /** Called from the client Screen when the player clicks "Encode". */
     public void sendEncodeRequest()
     {
         if (!player.level().isClientSide()) return;
@@ -391,7 +390,7 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
         PacketDistributor.sendToServer(new DomumEncodePatternPacket(hostPos, sideByte, target.copy()));
     }
 
-    // ── stillValid ────────────────────────────────────────────────────────────
+    // stillValid
 
     @Override
     public boolean stillValid(Player p)
@@ -425,7 +424,7 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
         return false;
     }
 
-    // ── quickMoveStack ────────────────────────────────────────────────────────
+    // quickMoveStack
 
     @Override
     public ItemStack quickMoveStack(Player p, int index)
@@ -491,13 +490,13 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
         }
         else if (index == DOMUM_OUTPUT_SLOT)
         {
-            // Point 1 : le slot output est read-only pour le dépôt
-            // mais on peut le prendre via shift-clic → va dans l'inventaire
+            // The output slot is read-only for deposit but can be taken via shift-click
+            // -> goes to the inventory
             if (!moveItemStackTo(ss, PLAYER_INV_START, invEnd, true))
                 if (!moveItemStackTo(ss, PLAYER_HOTBAR_START, invEnd, false))
                     return ItemStack.EMPTY;
         }
-        else // inventaire / hotbar
+        else // inventory / hotbar
         {
             if (ss.getItem() instanceof WarehouseLinkCard)
             {
@@ -512,7 +511,7 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
                         && id.getPath().equals("blank_pattern");
                 boolean isDomum = DomumCraftHandler.isDomumItem(ss);
 
-                // Si onglet Cutter actif → proposer les slots Domum en priorité
+                // Cutter tab active -> offer the Domum slots first
                 if (activeTab == 1)
                 {
                     if (isDomum)
@@ -573,7 +572,7 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
         return rs;
     }
 
-    // ── removed ───────────────────────────────────────────────────────────────
+    // removed
 
     @Override
     public void removed(Player p)
@@ -581,7 +580,7 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
         super.removed(p);
         if (!p.level().isClientSide())
         {
-            // Slot 49 output : si un pattern encodé non pris → le rendre au joueur
+            // Slot 49 output: return any un-taken encoded pattern to the player
             if (part != null)
             {
                 ItemStack encoded = part.domumOutputSlot.getStackInSlot(0);
@@ -592,7 +591,7 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
                 }
             }
 
-            // Sauvegarde la grille craft dans le Part (persistance)
+            // Save the craft grid into the Part (persistence)
             if (part != null)
             {
                 for (int i = 0; i < craftingGrid.getContainerSize(); i++)
@@ -600,7 +599,7 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
             }
             else
             {
-                // Pas de Part : rend les items au joueur
+                // No Part: return the items to the player
                 for (int i = 0; i < craftingGrid.getContainerSize(); i++)
                 {
                     ItemStack s = craftingGrid.getItem(i);
@@ -612,7 +611,7 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
         }
     }
 
-    // ── Getters ───────────────────────────────────────────────────────────────
+    // Getters
 
     public WarehouseLinkTerminalPart  getPart()         { return part; }
     public TransientCraftingContainer getCraftingGrid() { return craftingGrid; }
@@ -620,7 +619,7 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
     public ItemStack getDomumTarget() { return domumTargetSlot.getStackInSlot(0); }
     public ItemStack getDomumOutput() { return domumOutputSlot.getStackInSlot(0); }
 
-    /** Retourne la position du bloc AE2 qui héberge ce Part (pour les packets). */
+    /** Position of the AE2 block hosting this Part (for packets). */
     public net.minecraft.core.BlockPos getHostPos()
     {
         if (part == null) return net.minecraft.core.BlockPos.ZERO;
@@ -628,7 +627,7 @@ public class WarehouseLinkTerminalMenu extends AbstractContainerMenu
         return be != null ? be.getBlockPos() : net.minecraft.core.BlockPos.ZERO;
     }
 
-    /** Retourne le côté du Part (ordinal de Direction) pour les packets. */
+    /** The Part's side (Direction ordinal) for packets. */
     public int getHostSide()
     {
         if (part == null) return 0;

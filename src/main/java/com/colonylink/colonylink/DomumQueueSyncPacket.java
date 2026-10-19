@@ -13,10 +13,10 @@ import java.util.List;
 /**
  * DomumQueueSyncPacket — v1.4.8
  *
- * Envoyé S→C à tous les viewers du WarehouseLinkTerminal quand la queue Domum change.
- * Transporte la liste complète des ItemStack en attente d'encodage.
+ * Sent S→C to all WarehouseLinkTerminal viewers when the Domum queue changes.
+ * Carries the full list of ItemStacks awaiting encoding.
  *
- * Stockage côté client : TerminalClientPacketHandler.domumQueue (List<ItemStack>).
+ * Client-side storage: TerminalClientPacketHandler.domumQueue (List<ItemStack>).
  */
 public record DomumQueueSyncPacket(List<ItemStack> queue) implements CustomPacketPayload
 {
@@ -46,8 +46,8 @@ public record DomumQueueSyncPacket(List<ItemStack> queue) implements CustomPacke
 
     public static void handle(DomumQueueSyncPacket packet, IPayloadContext ctx)
     {
-        // Handler délégué via ColonyLink.registerPayloads() → TerminalClientPacketHandler
-        // Ne pas appeler TerminalClientPacketHandler ici — classe @OnlyIn(CLIENT),
-        // le classloader la chargerait côté serveur dédié au chargement de ce packet.
+        // Handler delegated via ColonyLink.registerPayloads() → TerminalClientPacketHandler.
+        // Do NOT reference TerminalClientPacketHandler here — it is @OnlyIn(CLIENT) and the
+        // classloader would load it on a dedicated server when this packet class loads.
     }
 }

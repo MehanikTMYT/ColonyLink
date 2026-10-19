@@ -16,31 +16,30 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Handler AE2 GridLinkable pour la wand.
- * Gère le lien WAP (AE2) — inchangé.
- * Ajoute les helpers NBT pour la liste de BuilderEntry (multi-builder v1.1.2).
+ * AE2 GridLinkable handler for the wand. Manages the WAP (AE2) link and adds the
+ * NBT helpers for the BuilderEntry list (multi-builder, v1.1.2).
  *
- * Clés NBT :
- *   linked_x/y/z/dim  → lien WAP AE2 (inchangé)
- *   builder_entries    → ListTag de BuilderEntry (nouveau)
- *   active_tab         → int, index de la tab active (nouveau)
+ * NBT keys:
+ *   linked_x/y/z/dim  → AE2 WAP link
+ *   builder_entries   → ListTag of BuilderEntry
+ *   active_tab        → int, index of the active tab
  *
- * Compat v1.1.1 : si "last_builder_x" est présent (ancien format),
- * il est lu et converti en entrée unique dans builder_entries au premier accès.
+ * v1.1.1 compat: a legacy "last_builder_x" is read and converted into a single
+ * builder_entries entry on first access.
  */
 public class ColonyLinkWandLinkableHandler implements IGridLinkableHandler
 {
-    // ── Clés NBT WAP (inchangées) ────────────────────────────────────────
+    // WAP NBT keys
     private static final String NBT_LINKED_X   = "linked_x";
     private static final String NBT_LINKED_Y   = "linked_y";
     private static final String NBT_LINKED_Z   = "linked_z";
     private static final String NBT_LINKED_DIM = "linked_dim";
 
-    // ── Clés NBT multi-builder ───────────────────────────────────────────
+    // Multi-builder NBT keys
     public static final String NBT_BUILDER_ENTRIES = "builder_entries";
     public static final String NBT_ACTIVE_TAB      = "active_tab";
 
-    // Clés legacy v1.1.1 (migration)
+    // Legacy v1.1.1 keys (migration)
     private static final String LEGACY_BUILDER_X   = "last_builder_x";
     private static final String LEGACY_BUILDER_Y   = "last_builder_y";
     private static final String LEGACY_BUILDER_Z   = "last_builder_z";
@@ -48,7 +47,7 @@ public class ColonyLinkWandLinkableHandler implements IGridLinkableHandler
     private static final String LEGACY_REDIRECTOR_Y = "redirector_y";
     private static final String LEGACY_REDIRECTOR_Z = "redirector_z";
 
-    /** Retourne la limite actuelle depuis la config (hot-reloadable). */
+    /** Current limit from config (hot-reloadable). */
     public static int getMaxBuilders()
     {
         // v1.6.0 — SERVER config: guarded read, this is called from client
@@ -56,7 +55,7 @@ public class ColonyLinkWandLinkableHandler implements IGridLinkableHandler
         return ColonyLinkConfig.safeGet(ColonyLinkConfig.MAX_BUILDERS_PER_WAND, 5);
     }
 
-    // ── IGridLinkableHandler (WAP AE2) ───────────────────────────────────
+    // IGridLinkableHandler (WAP AE2)
 
     @Override
     public boolean canLink(ItemStack stack)
@@ -90,7 +89,7 @@ public class ColonyLinkWandLinkableHandler implements IGridLinkableHandler
         });
     }
 
-    // ── Helpers WAP ──────────────────────────────────────────────────────
+    // WAP helpers
 
     public static boolean isLinked(ItemStack stack)
     {
@@ -118,19 +117,16 @@ public class ColonyLinkWandLinkableHandler implements IGridLinkableHandler
         return GlobalPos.of(dimKey, new BlockPos(x, y, z));
     }
 
-    // ── Helpers multi-builder ────────────────────────────────────────────
+    // Multi-builder helpers
 
-    /**
-     * Retourne la liste complète des BuilderEntry stockées dans la wand.
-     * Applique la migration depuis le format v1.1.1 si nécessaire.
-     */
+    /** All BuilderEntry stored in the wand, migrating from the v1.1.1 format if needed. */
     public static List<BuilderEntry> getBuilderEntries(ItemStack stack)
     {
         CustomData data = stack.get(DataComponents.CUSTOM_DATA);
         if (data == null) return new ArrayList<>();
         var tag = data.copyTag();
 
-        // Migration legacy → nouveau format
+        // Legacy → new format migration
         if (!tag.contains(NBT_BUILDER_ENTRIES) && tag.contains(LEGACY_BUILDER_X))
         {
             List<BuilderEntry> migrated = new ArrayList<>();
@@ -152,13 +148,13 @@ public class ColonyLinkWandLinkableHandler implements IGridLinkableHandler
         return BuilderEntry.listFromNbt(tag.getList(NBT_BUILDER_ENTRIES, 10));
     }
 
-    /** Écrit la liste de BuilderEntry dans le NBT de la wand. */
+    /** Writes the BuilderEntry list to the wand NBT. */
     public static void setBuilderEntries(ItemStack stack, List<BuilderEntry> entries)
     {
         stack.update(DataComponents.CUSTOM_DATA, CustomData.EMPTY, data -> {
             var tag = data.copyTag();
             tag.put(NBT_BUILDER_ENTRIES, BuilderEntry.listToNbt(entries));
-            // Nettoyage des clés legacy si présentes
+            // Clean up legacy keys if present
             tag.remove(LEGACY_BUILDER_X);
             tag.remove(LEGACY_BUILDER_Y);
             tag.remove(LEGACY_BUILDER_Z);
@@ -170,16 +166,14 @@ public class ColonyLinkWandLinkableHandler implements IGridLinkableHandler
     }
 
     /**
-     * Ajoute un BuilderEntry à la liste.
-     * Vérifie qu'un entry avec le même builderPos n'existe pas déjà (écrase si oui).
-     * Limite : getMaxBuilders() entries.
-     * Retourne false si la limite est atteinte et que l'entry n'existe pas déjà.
+     * Adds a BuilderEntry, overwriting any existing entry with the same builderPos.
+     * Limited to getMaxBuilders() entries; returns false if the limit is reached and
+     * the entry is not already present.
      */
     public static boolean addOrUpdateEntry(ItemStack stack, BuilderEntry entry)
     {
         List<BuilderEntry> entries = getBuilderEntries(stack);
 
-        // Cherche un entry existant avec la même position builder
         for (int i = 0; i < entries.size(); i++)
         {
             if (entries.get(i).builderPos().equals(entry.builderPos()))
@@ -197,10 +191,7 @@ public class ColonyLinkWandLinkableHandler implements IGridLinkableHandler
         return true;
     }
 
-    /**
-     * Met à jour le redirectorPos d'un entry existant identifié par builderPos.
-     * Retourne false si l'entry n'existe pas.
-     */
+    /** Updates the redirectorPos of the entry identified by builderPos; false if none. */
     public static boolean updateRedirectorForBuilder(ItemStack stack, BlockPos builderPos, BlockPos redirectorPos)
     {
         List<BuilderEntry> entries = getBuilderEntries(stack);
@@ -216,7 +207,7 @@ public class ColonyLinkWandLinkableHandler implements IGridLinkableHandler
         return false;
     }
 
-    /** Supprime l'entry à l'index donné. Ajuste activeTab si nécessaire. */
+    /** Removes the entry at the given index, adjusting activeTab if needed. */
     public static void removeEntryAt(ItemStack stack, int index)
     {
         List<BuilderEntry> entries = getBuilderEntries(stack);
@@ -224,7 +215,6 @@ public class ColonyLinkWandLinkableHandler implements IGridLinkableHandler
         entries.remove(index);
         setBuilderEntries(stack, entries);
 
-        // Ajuste l'index actif
         int activeTab = getActiveTab(stack);
         if (entries.isEmpty())
             setActiveTab(stack, 0);
@@ -232,7 +222,7 @@ public class ColonyLinkWandLinkableHandler implements IGridLinkableHandler
             setActiveTab(stack, entries.size() - 1);
     }
 
-    // ── Tab active ───────────────────────────────────────────────────────
+    // Active tab
 
     public static int getActiveTab(ItemStack stack)
     {
@@ -257,9 +247,7 @@ public class ColonyLinkWandLinkableHandler implements IGridLinkableHandler
         });
     }
 
-    /**
-     * Retourne l'entry de la tab active, ou null si la liste est vide.
-     */
+    /** The active tab's entry, or null if the list is empty. */
     public static BuilderEntry getActiveEntry(ItemStack stack)
     {
         List<BuilderEntry> entries = getBuilderEntries(stack);
@@ -269,12 +257,8 @@ public class ColonyLinkWandLinkableHandler implements IGridLinkableHandler
     }
 
     /**
-     * Retourne le redirectorPos de l'entry active, ou null si absent.
-     * Compatibilité avec les appels legacy dans ServerTicker / CraftHandler.
-     */
-    /**
-     * v1.4.9 — Dimension figée à l'appairage du builder situé à {@code builderPos},
-     * ou null si inconnue (entrée legacy d'avant le suivi des dimensions).
+     * v1.4.9 — Dimension frozen when the builder at {@code builderPos} was paired,
+     * or null if unknown (legacy entry from before dimension tracking).
      */
     public static ResourceKey<Level> getBuilderDimension(ItemStack stack, BlockPos builderPos)
     {
@@ -331,22 +315,19 @@ public class ColonyLinkWandLinkableHandler implements IGridLinkableHandler
         return entry.hasRedirector() ? entry.redirectorPos() : null;
     }
 
-    /**
-     * Retourne le builderPos de l'entry active, ou null.
-     * Remplace getLastBuilderPos() dans les appels legacy.
-     */
+    /** The active entry's builderPos, or null. Replaces getLastBuilderPos() in legacy calls. */
     public static BlockPos getActiveBuilderPos(ItemStack stack)
     {
         BuilderEntry entry = getActiveEntry(stack);
         return entry != null ? entry.builderPos() : null;
     }
 
-    // ── ColonyLink Packages (citizen token) ──────────────────────────────────
+    // ColonyLink Packages (citizen token)
 
     private static final String NBT_CITIZEN_PACKAGES = "citizen_packages";
     public static final int MAX_PACKAGES = 64;
 
-    /** Retourne le nombre de packages stockés dans la wand (0 si absent). */
+    /** Number of packages stored in the wand (0 if absent). */
     public static int getCitizenPackages(ItemStack stack)
     {
         net.minecraft.world.item.component.CustomData data = stack.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
@@ -355,7 +336,7 @@ public class ColonyLinkWandLinkableHandler implements IGridLinkableHandler
         return tag.contains(NBT_CITIZEN_PACKAGES) ? tag.getInt(NBT_CITIZEN_PACKAGES) : 0;
     }
 
-    /** Définit le nombre de packages (clamped 0..MAX_PACKAGES). */
+    /** Sets the package count (clamped 0..MAX_PACKAGES). */
     public static void setCitizenPackages(ItemStack stack, int count)
     {
         int clamped = Math.max(0, Math.min(count, MAX_PACKAGES));
@@ -367,15 +348,15 @@ public class ColonyLinkWandLinkableHandler implements IGridLinkableHandler
                 });
     }
 
-    /** Ajoute des packages (clamped). */
+    /** Adds packages (clamped). */
     public static void addCitizenPackages(ItemStack stack, int amount)
     {
         setCitizenPackages(stack, getCitizenPackages(stack) + amount);
     }
 
     /**
-     * Consomme 1 package.
-     * @return true si la consommation a réussi (stock > 0)
+     * Consumes 1 package.
+     * @return true if a package was consumed (stock > 0)
      */
     public static boolean consumeCitizenPackage(ItemStack stack)
     {
@@ -489,7 +470,7 @@ public class ColonyLinkWandLinkableHandler implements IGridLinkableHandler
         }
     }
 
-    /** Retourne les clés des requests déjà envoyées (both families, prefixed). */
+    /** Keys of requests already sent (both families, prefixed). */
     public static java.util.Set<String> getSentRequestKeys(ItemStack stack)
     {
         net.minecraft.world.item.component.CustomData data = stack.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);

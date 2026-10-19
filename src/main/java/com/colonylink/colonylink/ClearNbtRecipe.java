@@ -34,9 +34,8 @@ public class ClearNbtRecipe extends CustomRecipe
     }
 
     /**
-     * v1.1.3 : Le RF stocké dans la wand (clé "wand_rf" en NBT) est préservé
-     * au reset de la recette. Toutes les autres données NBT sont effacées
-     * (link AE2, builder entries, tab active).
+     * v1.1.3: the RF stored in the wand (NBT key "wand_rf") is preserved on reset;
+     * all other NBT (AE2 link, builder entries, active tab) is cleared.
      */
     @Override
     public ItemStack assemble(CraftingInput input, HolderLookup.Provider provider)
@@ -46,13 +45,10 @@ public class ClearNbtRecipe extends CustomRecipe
             ItemStack stack = input.getItem(i);
             if (!stack.isEmpty() && stack.getItem() == targetItem)
             {
-                // Récupère le RF stocké avant reset
                 long storedRf = WandEnergyStorage.getStoredRF(stack);
 
-                // Crée un item propre (sans NBT)
                 ItemStack result = new ItemStack(targetItem, 1);
 
-                // Réinjecte le RF si non nul
                 if (storedRf > 0)
                     WandEnergyStorage.setStoredRF(result, storedRf);
 

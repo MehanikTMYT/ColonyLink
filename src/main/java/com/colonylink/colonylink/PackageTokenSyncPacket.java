@@ -7,9 +7,9 @@ import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
- * Packet S→C : synchronise le nombre de ColonyLink Packages stockés dans la wand.
- * Envoyé après chaque action PackageTokenPacket pour mettre à jour l'affichage du slot.
- * Aussi envoyé par le ticker à l'ouverture de la tab Citizens.
+ * Packet S→C: syncs the count of ColonyLink Packages stored in the wand.
+ * Sent after each PackageTokenPacket action to refresh the slot display, and by
+ * the ticker when the Citizens tab opens.
  */
 public record PackageTokenSyncPacket(int count) implements CustomPacketPayload
 {

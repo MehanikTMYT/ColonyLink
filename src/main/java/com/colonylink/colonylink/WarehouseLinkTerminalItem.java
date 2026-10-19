@@ -32,7 +32,7 @@ public class WarehouseLinkTerminalItem extends Item
         super(new Item.Properties().stacksTo(1));
     }
 
-    // ── IPartItem ─────────────────────────────────────────────────────────────
+    // IPartItem
 
     @Override
     public Class<WarehouseLinkTerminalPart> getPartClass()
@@ -46,7 +46,7 @@ public class WarehouseLinkTerminalItem extends Item
         return new WarehouseLinkTerminalPart(this);
     }
 
-    // ── Placement on cable bus ────────────────────────────────────────────────
+    // Placement on cable bus
 
     @Override
     public InteractionResult useOn(UseOnContext ctx)
@@ -54,7 +54,7 @@ public class WarehouseLinkTerminalItem extends Item
         return PartHelper.usePartItem(ctx);
     }
 
-    // ── Tooltip ───────────────────────────────────────────────────────────────
+    // Tooltip
 
     @Override
     @OnlyIn(Dist.CLIENT)

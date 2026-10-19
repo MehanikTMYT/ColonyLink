@@ -51,7 +51,7 @@ public final class ColonyLinkClient
      */
     private static final String STANDALONE_VARIANT = "standalone";
 
-    // ── Keybinding ────────────────────────────────────────────────────────────
+    // Keybinding
 
     /** Category shown in the Controls menu. */
     public static final String KEY_CATEGORY = "key.categories.colonylink";
@@ -68,7 +68,7 @@ public final class ColonyLinkClient
 
     private ColonyLinkClient() {}
 
-    // ── Model registration ────────────────────────────────────────────────────
+    // Model registration
 
     /**
      * Registers part model ResourceLocations with the NeoForge model pipeline.
@@ -80,7 +80,7 @@ public final class ColonyLinkClient
         event.register(new ModelResourceLocation(WarehouseLinkTerminalPart.MODEL_ON,  STANDALONE_VARIANT));
     }
 
-    // ── Block entity renderer registration ────────────────────────────────────
+    // Block entity renderer registration
 
     /**
      * Registers the Redirector's BlockEntityRenderer (3D craft item + slide/bob).
@@ -94,7 +94,7 @@ public final class ColonyLinkClient
                 RedirectorBlockEntityRenderer::new);
     }
 
-    // ── Item color registration ───────────────────────────────────────────────
+    // Item color registration
 
     /**
      * Registers ItemColor handlers for ColonyLink items.
@@ -113,7 +113,7 @@ public final class ColonyLinkClient
                 ColonyLinkRegistry.WAREHOUSE_LINK_TERMINAL_ITEM.get());
     }
 
-    // ── Keybinding registration ───────────────────────────────────────────────
+    // Keybinding registration
 
     /**
      * Registers the ColonyLink keybinding with NeoForge.
@@ -125,7 +125,7 @@ public final class ColonyLinkClient
         event.register(KEY_OPEN_CLIPBOARD);
     }
 
-    // ── Keybinding input handler ──────────────────────────────────────────────
+    // Keybinding input handler
 
     /**
      * Fires on every key press/release. Checked on the NeoForge event bus
@@ -139,21 +139,17 @@ public final class ColonyLinkClient
      */
     public static void onKeyInput(InputEvent.Key event)
     {
-        // Only on press, not hold or release
         if (event.getAction() != org.lwjgl.glfw.GLFW.GLFW_PRESS) return;
 
-        // Don't intercept when a screen is open
         if (Minecraft.getInstance().screen != null) return;
 
-        // Check if our keybind was the one pressed
         if (!KEY_OPEN_CLIPBOARD.isDown()) return;
 
-        // Consume the key and send the packet to the server
         KEY_OPEN_CLIPBOARD.consumeClick();
         PacketDistributor.sendToServer(new OpenWandGuiPacket());
     }
 
-    // ── Recipe sync ───────────────────────────────────────────────────────────
+    // Recipe sync
 
     /**
      * 1.7.0 — the client refreshes its RecipeManager IN PLACE when the server sends
@@ -166,7 +162,7 @@ public final class ColonyLinkClient
         DomumRecipeHelper.invalidate();
     }
 
-    // ── Internal helpers ──────────────────────────────────────────────────────
+    // Internal helpers
 
     private static final class StaticItemColor implements ItemColor
     {

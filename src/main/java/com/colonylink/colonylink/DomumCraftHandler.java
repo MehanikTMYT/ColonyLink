@@ -50,7 +50,7 @@ public class DomumCraftHandler
         MaterialTextureData textureData = MaterialTextureData.readFromItemStack(stack);
         BlockItemStateProperties targetBlockState = stack.get(DataComponents.BLOCK_STATE);
 
-        // Vérifie d'abord si l'item est déjà dans le buffer du redirector
+        // First, check whether the item is already in the redirector's buffer
         if (redirectorPos != null && level != null && !redirectorPos.equals(BlockPos.ZERO))
         {
             var be = level.getBlockEntity(redirectorPos);
@@ -63,10 +63,9 @@ public class DomumCraftHandler
                     if (inSlot.isEmpty()) continue;
                     if (inSlot.getItem() != stack.getItem()) continue;
 
-                    // Vérifie MaterialTextureData
                     if (!MaterialTextureData.readFromItemStack(inSlot).equals(textureData)) continue;
 
-                    // Vérifie le blockstate (variant : Full, Panel, etc.)
+                    // Blockstate variant: Full, Panel, etc.
                     BlockItemStateProperties slotBlockState = inSlot.get(DataComponents.BLOCK_STATE);
                     if (!Objects.equals(slotBlockState, targetBlockState)) continue;
 
@@ -78,7 +77,6 @@ public class DomumCraftHandler
             }
         }
 
-        // Vérifie ME
         IStorageService storageService = grid.getStorageService();
         ICraftingService craftingService = grid.getCraftingService();
         KeyCounter inventory = storageService.getCachedInventory();

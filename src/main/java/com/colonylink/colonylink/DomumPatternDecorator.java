@@ -11,12 +11,11 @@ import net.neoforged.neoforge.client.IItemDecorator;
 /**
  * DomumPatternDecorator — ColonyLink v1.4.2
  *
- * IItemDecorator pour DomumPatternItem.
- * Quand Shift est enfoncé : rend l'item Domum cible PAR-DESSUS le pattern
- * dans le slot, à la position exacte (x, y identiques = pas de décalage).
+ * IItemDecorator for DomumPatternItem. When Shift is held, renders the target
+ * Domum item over the pattern in the slot at the exact same (x, y).
  *
- * Enregistré via RegisterItemDecorationsEvent dans ColonyLinkClient.
- * Fonctionne dans TOUS les slots : inventaire, hotbar, AE2, WH, etc.
+ * Registered via RegisterItemDecorationsEvent in ColonyLinkClient.
+ * Works in all slots: inventory, hotbar, AE2, WH, etc.
  */
 @OnlyIn(Dist.CLIENT)
 public class DomumPatternDecorator implements IItemDecorator
@@ -38,14 +37,13 @@ public class DomumPatternDecorator implements IItemDecorator
                 stack, mc.level.registryAccess());
         if (target == null || target.isEmpty()) return false;
 
-        // Pousse le z-level très haut pour passer au-dessus du rendu pattern
+        // Push z very high to draw above the pattern render
         graphics.pose().pushPose();
         graphics.pose().translate(0, 0, 300);
 
-        // Fond couleur slot vanilla (#8B8B8B) pour masquer le pattern
+        // Vanilla slot background (#8B8B8B) to mask the pattern
         graphics.fill(x, y, x + 16, y + 16, 0xFF8B8B8B);
 
-        // Rend l'item cible au même z-level élevé
         graphics.renderItem(target, x, y);
         graphics.renderItemDecorations(font, target, x, y, null);
 

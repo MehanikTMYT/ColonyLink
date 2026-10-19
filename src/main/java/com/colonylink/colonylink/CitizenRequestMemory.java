@@ -91,7 +91,7 @@ public final class CitizenRequestMemory
 
     private static final Map<ColonyKey, LinkedHashMap<UUID, Entry>> MEMORY = new HashMap<>();
 
-    // ── Memory ────────────────────────────────────────────────────────────────
+    // Memory
 
     /** Adds or replaces the mark of a request; drops the oldest entry past MAX_PER_COLONY. */
     public static void mark(ColonyKey colony, UUID requestId, Entry entry)
@@ -157,7 +157,7 @@ public final class CitizenRequestMemory
         MEMORY.clear();
     }
 
-    // ── MineColonies request helpers ──────────────────────────────────────────
+    // MineColonies request helpers
 
     public static IToken<?> token(UUID requestId)
     {
@@ -214,7 +214,7 @@ public final class CitizenRequestMemory
         return key != null && !grid.getCraftingService().isRequesting(key);
     }
 
-    // ── Classification of who handles a request ───────────────────────────────
+    // Classification of who handles a request
 
     // Codes shared with the client through CitizensPacket (no MineColonies class there).
     private static final byte STATE_PLAYER       = CitizensPacket.STATE_PLAYER;
