@@ -168,6 +168,13 @@ public class ColonyLinkRedirectorBlock extends Block implements EntityBlock
                 net.minecraft.world.item.ItemStack card = redirector.warehouseCardSlot.getStackInSlot(0);
                 if (!card.isEmpty())
                     Block.popResource(level, pos, card);
+                // 1.7.0-beta.5 (audit #12/#13) — materials AE2 already pulled for the queued
+                // Domum crafts (craftQueue) and outputs waiting to be re-injected
+                // (pendingOutputs) are not in any item handler and were silently voided on
+                // a normal break. Normal-break branch only: a move (movedByPiston above)
+                // keeps them in the NBT copied to the new position.
+                for (net.minecraft.world.item.ItemStack queued : redirector.drainUnstoredContents())
+                    Block.popResource(level, pos, queued);
             }
             level.updateNeighborsAt(pos, this);
         }

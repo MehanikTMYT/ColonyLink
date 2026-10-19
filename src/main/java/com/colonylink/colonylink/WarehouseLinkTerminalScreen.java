@@ -189,6 +189,19 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
 
     @Override protected void init()
     {
+        // 1.7.0-beta.5 (audit #10) — the menu tolerates part == null on the client (host
+        // block entity not resolvable client-side when the menu opened: chunk not yet
+        // loaded). Every panel of this screen needs the Part; instead of NPE-crashing
+        // the client, tell the player and close cleanly (the server menu closes with it,
+        // the player simply reopens the terminal).
+        if (menu.getPart() == null)
+        {
+            if (minecraft != null && minecraft.player != null)
+                minecraft.player.displayClientMessage(
+                        Component.translatable("colonylink.terminal.part_unavailable"), false);
+            this.onClose();
+            return;
+        }
         imageWidth  = GUI_W;
         imageHeight = (GUI_H - PANEL_ROWS * SLOT_PITCH) + visRows() * SLOT_PITCH; // hauteur fluide
         super.init();
@@ -869,7 +882,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
                 g.drawCenteredString(font, lines.get(i), cx, cy + i * 10, 0xFF8888BB);
             return;
         }
-        if (!isWh && !menu.getPart().isAe2Active())
+        if (!isWh && !ae2Active())
         {
             g.fill(panelX, guiY + Y_ITEMS,
                     panelX + PANEL_COLS * SLOT_PITCH,
@@ -978,7 +991,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
         // ME
         panelX = leftPos + X_ITEMS_AE;
         s = itemSlot(mx, my, panelX);
-        if (s >= 0 && menu.getPart().isAe2Active())
+        if (s >= 0 && ae2Active())
         {
             int i = meScroll * PANEL_COLS + s;
             if (i < meFiltered.size())
@@ -1150,7 +1163,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
                 && mx >= leftPos + INV_X && mx < leftPos + INV_X + 9 * SLOT_PITCH)
         {
             boolean canSendToWh = hasWarehouseCard && whErrorMsg.isEmpty();
-            boolean canSendToMe = menu.getPart().isAe2Active();
+            boolean canSendToMe = ae2Active();
             boolean canSend     = warehouseFirst ? canSendToWh : canSendToMe;
 
             if (canSend)
@@ -1343,7 +1356,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
 
         // ── Panel AE — pick / set-down / select / autocraft ──────────────────
         int ms = itemSlot((int) mx, (int) my, leftPos + X_ITEMS_AE);
-        if (ms >= 0 && menu.getPart().isAe2Active())
+        if (ms >= 0 && ae2Active())
         {
             int idx = meScroll * PANEL_COLS + ms;
             ItemStack carried = minecraft.player.containerMenu.getCarried();
@@ -1462,7 +1475,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
                 }
             }
             int ms = itemSlot((int) mx, (int) my, leftPos + X_ITEMS_AE);
-            if (ms >= 0 && menu.getPart().isAe2Active())
+            if (ms >= 0 && ae2Active())
             {
                 int idx = meScroll * PANEL_COLS + ms;
                 if (idx < meFiltered.size() && idx != dragStartSlotAe)
@@ -1601,11 +1614,30 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
     private static String fmtDecimal(long n, long divisor)
     { return (n / divisor) + "." + ((n * 10 / divisor) % 10); }
 
+    // 1.7.0-beta.5 (audit #10) — the three helpers below are the ONLY places this screen
+    // touches menu.getPart(); all tolerate a null Part (see init()).
+
     private net.minecraft.core.BlockPos partHostPos()
-    { var be = menu.getPart().getHostBlockEntity(); return be != null ? be.getBlockPos() : net.minecraft.core.BlockPos.ZERO; }
+    {
+        var part = menu.getPart();
+        if (part == null) return net.minecraft.core.BlockPos.ZERO;
+        var be = part.getHostBlockEntity();
+        return be != null ? be.getBlockPos() : net.minecraft.core.BlockPos.ZERO;
+    }
 
     private int partSide()
-    { var s = menu.getPart().getSide(); return s != null ? s.ordinal() : 0; }
+    {
+        var part = menu.getPart();
+        if (part == null) return 0;
+        var s = part.getSide();
+        return s != null ? s.ordinal() : 0;
+    }
+
+    private boolean ae2Active()
+    {
+        var part = menu.getPart();
+        return part != null && part.isAe2Active();
+    }
 
     public record MeItemEntry(ItemStack stack, long count, boolean craftable) {}
 }

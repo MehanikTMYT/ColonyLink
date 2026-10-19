@@ -145,6 +145,10 @@ public class ColonyLinkScreen extends Screen
     private List<ColonyLinkPacket.BuilderTabMeta> tabMetas = new ArrayList<>();
     private int activeTabIndex = 0;
 
+    // 1.7.0-beta.5 (audit #9) — exactly one GuiStatePacket(false) per open, whichever
+    // way the screen goes away (onClose, removed, pairing "+"). Reset in init().
+    private boolean closePacketSent = false;
+
     // ── #12 : données de la tab Citizens ─────────────────────────────────────
     private List<CitizensPacket.CitizenRequestEntry> citizenEntries = new ArrayList<>();
     private boolean citizensLoading = false;
@@ -378,8 +382,10 @@ public class ColonyLinkScreen extends Screen
     public void updateFromPacket(ColonyLinkPacket packet)
     {
         applyPacket(packet);
+        // 1.7.0-beta.5 (audit #9) — close through onClose(): setScreen(null) alone left
+        // the server-side viewer alive, and its next packet reopened the Clipboard.
         if (tabMetas.isEmpty() && this.minecraft != null)
-            this.minecraft.setScreen(null);
+            this.onClose();
     }
 
     // #12 : appelé par CitizensPacket.handle() quand le serveur répond
@@ -663,8 +669,13 @@ public class ColonyLinkScreen extends Screen
     protected void init()
     {
         super.init();
-        int serverTabIndex = (activeTabIndex == CITIZENS_TAB_INDEX) ? 0 : activeTabIndex;
-        PacketDistributor.sendToServer(new GuiStatePacket(true, builderPos, serverTabIndex));
+        // 1.7.0-beta.5 (audit #8) — init() also runs after a resize, F11 or a return from
+        // the config screen. Sending tab 0 while the Citizens tab was active moved the
+        // server-side viewer to builder tab 0: no more Citizens refreshes (frozen list)
+        // and tab 0 written to the wand. The Citizens sentinel (Integer.MAX_VALUE) is
+        // preserved as-is by GuiStatePacket.sanitizeTab(), so send the active tab itself.
+        PacketDistributor.sendToServer(new GuiStatePacket(true, builderPos, activeTabIndex));
+        closePacketSent = false; // 1.7.0-beta.5 — this open owes the server one close
         // Lire le count packages depuis la wand NBT côté client (read-only)
         net.minecraft.world.item.ItemStack initWand = getClientWand();
         if (!initWand.isEmpty())
@@ -739,8 +750,32 @@ public class ColonyLinkScreen extends Screen
     @Override
     public void onClose()
     {
-        PacketDistributor.sendToServer(new GuiStatePacket(false, builderPos, activeTabIndex));
+        sendClosePacket(activeTabIndex);
         super.onClose();
+    }
+
+    /**
+     * 1.7.0-beta.5 (audit #9) — Minecraft.setScreen() swaps screens through removed(),
+     * never through onClose(): death screen, disconnect, another mod's GUI, our own
+     * config screen. The server-side viewer then survived, the ticker kept pushing
+     * ColonyLinkPackets and the client handler reopened the Clipboard on its own (even
+     * over the death screen). Every open (init) is now matched by exactly one close
+     * packet, whichever way the screen goes away.
+     */
+    @Override
+    public void removed()
+    {
+        sendClosePacket(activeTabIndex);
+        super.removed();
+    }
+
+    private void sendClosePacket(int tabIndex)
+    {
+        if (closePacketSent) return;
+        closePacketSent = true;
+        // Connection already torn down (disconnect): nothing left to tell the server.
+        if (this.minecraft == null || this.minecraft.getConnection() == null) return;
+        PacketDistributor.sendToServer(new GuiStatePacket(false, builderPos, tabIndex));
     }
 
     // ── Helpers boutons ───────────────────────────────────────────────────────
@@ -2650,7 +2685,7 @@ public class ColonyLinkScreen extends Screen
             int tx = getGuiX() - TAB_WIDTH, ty = getAddTabY();
             if (mx >= tx && mx <= tx + TAB_WIDTH && my >= ty && my <= ty + TAB_HEIGHT)
             {
-                PacketDistributor.sendToServer(new GuiStatePacket(false, builderPos, -1));
+                sendClosePacket(-1); // pairing-mode sentinel; removed() will not send a second one
                 this.minecraft.setScreen(null);
                 return true;
             }

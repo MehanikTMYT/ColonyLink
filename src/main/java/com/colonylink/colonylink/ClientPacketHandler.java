@@ -28,7 +28,11 @@ public class ClientPacketHandler
                 cls.updateFromPacket(packet);
             else if (screen instanceof ColonyLinkConfigScreen cfgScreen)
                 cfgScreen.updateParentPacket(packet);
-            else
+            // 1.7.0-beta.5 (audit #9/#39) — only open the Clipboard when the player is
+            // in-game with no GUI. A packet still in flight when another screen took
+            // over (death screen, pause menu, another mod's GUI…) must not pull the
+            // Clipboard over it.
+            else if (screen == null)
                 Minecraft.getInstance().setScreen(new ColonyLinkScreen(packet));
         });
     }

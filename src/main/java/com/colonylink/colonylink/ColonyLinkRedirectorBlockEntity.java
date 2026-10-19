@@ -902,6 +902,38 @@ public class ColonyLinkRedirectorBlockEntity extends BlockEntity
         for (int slot = 0; slot < buffer.getSlots(); slot++)
             buffer.setStackInSlot(slot, ItemStack.EMPTY);
         warehouseCardSlot.setStackInSlot(0, ItemStack.EMPTY);
+        // 1.7.0-beta.5 (audit #13/#46) — the Clearable contract covers EVERYTHING the
+        // block entity holds: the materials AE2 already pulled for the queued crafts and
+        // the outputs waiting to be re-injected live here too (persisted in the NBT the
+        // mover copied). Leaving them behind would let onRemove() drop a second copy.
+        craftQueue.clear();
+        pendingOutputs.clear();
+    }
+
+    /**
+     * 1.7.0-beta.5 (audit #12/#13) — everything this block entity holds OUTSIDE its item
+     * handlers, which a normal break would otherwise void:
+     *   - craftQueue : the materials AE2 already extracted from the network for each
+     *                  queued Domum craft (pushPattern accepted them, they exist nowhere else);
+     *   - pendingOutputs : outputs already produced (or raw materials of a failed build)
+     *                  waiting for the ME to accept them back.
+     * The stacks are handed over (copies) and both collections are emptied, so a later
+     * save of this block entity cannot duplicate them. The target reference stack of a
+     * queued craft is a pattern template, not a physical item, and is not included.
+     * Server thread only.
+     */
+    public List<ItemStack> drainUnstoredContents()
+    {
+        List<ItemStack> out = new ArrayList<>();
+        for (PendingDomumCraft p : craftQueue)
+            for (ItemStack mat : p.materials())
+                if (!mat.isEmpty()) out.add(mat.copy());
+        for (ItemStack o : pendingOutputs)
+            if (!o.isEmpty()) out.add(o.copy());
+        craftQueue.clear();
+        pendingOutputs.clear();
+        if (!out.isEmpty()) setChanged();
+        return out;
     }
 
     @Override

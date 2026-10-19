@@ -971,6 +971,9 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
                 // v1.3.9 — skip méta-handler.
                 ret = insertIntoHandler(rack, ret);
             }
+            // 1.7.0-beta.5 — safety net: what the Warehouse refused to take back (not
+            // expected: it was just extracted from it) is dropped, never voided.
+            dropLeftover(player, ret);
         }
 
         if (transferred == 0) msg(player, Component.translatable("colonylink.terminal.me_full_or_missing"));
@@ -1019,11 +1022,18 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
 
         ItemStack toGive = extracted.get(0).copy();
         for (int i = 1; i < extracted.size(); i++) toGive.grow(extracted.get(i).getCount());
+        int totalExtracted = toGive.getCount();
 
-        boolean added = player.getInventory().add(toGive.copy());
-        if (!added)
+        // 1.7.0-beta.5 (audit #2) — Inventory.add() inserts as much as it can, SHRINKS the
+        // stack it is given to the remainder and returns false on a partial add. Passing a
+        // copy and rolling back the full amount on "false" duplicated the part the player
+        // had already received. Pass the stack itself: what is left in it is exactly what
+        // the player did NOT get, and only that goes back to the Warehouse.
+        player.getInventory().add(toGive);
+        int given = totalExtracted - toGive.getCount();
+        if (!toGive.isEmpty())
         {
-            // Remettre dans WH
+            // Remettre le reliquat (et seulement lui) dans le WH
             java.util.Set<IItemHandler> retVis = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
             for (BlockPos rp : wh.getContainers())
             {
@@ -1033,10 +1043,11 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
                 // v1.3.9 — skip méta-handler.
                 toGive = insertIntoHandler(rack, toGive);
             }
-            msg(player, Component.translatable("colonylink.terminal.inventory_full"));
-            return 0;
+            dropLeftover(player, toGive);
+            if (given == 0) msg(player, Component.translatable("colonylink.terminal.inventory_full"));
+            else msg(player, Component.translatable("colonylink.terminal.inventory_full_partial", given));
         }
-        return toGive.getCount();
+        return given;
     }
 
     /**
@@ -1081,7 +1092,11 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         int inserted = (int)(extracted - remaining.getCount());
         if (!remaining.isEmpty())
         {
-            storage.insert(key, remaining.getCount(), Actionable.MODULATE, src);
+            long back = storage.insert(key, remaining.getCount(), Actionable.MODULATE, src);
+            // 1.7.0-beta.5 — safety net: what the ME refused to take back (not expected:
+            // it was just extracted from it) is dropped, never voided.
+            if (back < remaining.getCount())
+                dropLeftover(player, remaining.copyWithCount((int) (remaining.getCount() - back)));
             if (inserted == 0) msg(player, Component.translatable("colonylink.terminal.warehouse_full"));
             else msg(player, Component.translatable("colonylink.terminal.warehouse_full_partial", inserted));
         }
@@ -1105,14 +1120,21 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         if (extracted <= 0) { msg(player, Component.translatable("colonylink.terminal.item_not_in_me")); return 0; }
 
         ItemStack toGive = key.toStack((int) extracted);
-        boolean added = player.getInventory().add(toGive.copy());
-        if (!added)
+        // 1.7.0-beta.5 (audit #2/#3) — same fix as transferWarehouseToInventory: let
+        // Inventory.add() shrink the stack to the remainder, and re-insert into the ME
+        // only that remainder (re-inserting the full 'extracted' duplicated the part the
+        // player had already received).
+        player.getInventory().add(toGive);
+        int given = (int) extracted - toGive.getCount();
+        if (!toGive.isEmpty())
         {
-            storage.insert(key, extracted, Actionable.MODULATE, src);
-            msg(player, Component.translatable("colonylink.terminal.inventory_full"));
-            return 0;
+            long back = storage.insert(key, toGive.getCount(), Actionable.MODULATE, src);
+            if (back < toGive.getCount())
+                dropLeftover(player, toGive.copyWithCount((int) (toGive.getCount() - back)));
+            if (given == 0) msg(player, Component.translatable("colonylink.terminal.inventory_full"));
+            else msg(player, Component.translatable("colonylink.terminal.inventory_full_partial", given));
         }
-        return (int) extracted;
+        return given;
     }
 
     /**
@@ -1131,7 +1153,14 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
             int sent = switch (dest)
             {
                 case 0 -> transferPlayerToWarehouse(player, stack.copy());
-                case 1 -> { boolean ok = player.getInventory().add(stack.copy()); yield ok ? stack.getCount() : 0; }
+                case 1 -> {
+                    // 1.7.0-beta.5 (audit #3) — on a partial add the old code yielded 0 and
+                    // left the full stack in the grid while the player had received part of
+                    // it (duplication). Count what actually went in.
+                    ItemStack give = stack.copy();
+                    player.getInventory().add(give);
+                    yield stack.getCount() - give.getCount();
+                }
                 case 2 -> transferPlayerToMe(player, stack.copy());
                 default -> 0;
             };
@@ -1449,5 +1478,21 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     private static void msg(ServerPlayer player, Component text)
     {
         if (text != null) player.sendSystemMessage(text);
+    }
+
+    /**
+     * 1.7.0-beta.5 — last-resort safety net of the rollback paths: a remainder the
+     * source (Warehouse / ME) refused to take back is dropped at the player's feet
+     * instead of being voided. Not expected to trigger (the items were just extracted
+     * from that very source), hence the log line.
+     */
+    private static void dropLeftover(ServerPlayer player, ItemStack leftover)
+    {
+        if (leftover == null || leftover.isEmpty()) return;
+        int n = leftover.getCount();
+        ColonyLink.LOGGER.warn("[Terminal] {} x {} could not be returned to its source; dropped at {}'s feet",
+                n, leftover.getDisplayName().getString(), player.getGameProfile().getName());
+        player.drop(leftover, false);
+        msg(player, Component.translatable("colonylink.terminal.dropped_on_ground", n));
     }
 }
