@@ -2,7 +2,7 @@
   "type": "minecraft:crafting_shapeless",
   "category": "misc",
   "ingredients": [
-    { "item": "colonylink:warehouse_link_card" }
+    "colonylink:warehouse_link_card"
   ],
   "result": {
     "id": "colonylink:warehouse_link_card",
