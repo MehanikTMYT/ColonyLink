@@ -10,17 +10,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Packet S→C léger : nombre de requêtes par tab (pour badge #5).
+ * Lightweight packet S→C: request count per tab (for badge #5).
  *
- * Envoyé à chaque cycle ticker en même temps que sendFullUpdate.
- * Contient uniquement les counts des tabs inactives — la tab active
- * est gérée par ColonyLinkPacket directement.
+ * Sent each ticker cycle alongside sendFullUpdate. Carries only the counts of
+ * inactive tabs — the active tab is handled directly by ColonyLinkPacket.
  *
- * Le client met à jour ColonyLinkScreen.markTabUnread() si un count > 0
- * sur une tab qui n'est pas active.
+ * The client calls ColonyLinkScreen.markTabUnread() when a count > 0 on a tab
+ * that is not active.
  */
 public record TabCountsPacket(
-        List<Integer> counts,   // counts[i] = nb entrées tab i (-1 = non calculé)
+        List<Integer> counts,   // counts[i] = entry count for tab i (-1 = not computed)
         int activeTabIndex
 ) implements CustomPacketPayload
 {

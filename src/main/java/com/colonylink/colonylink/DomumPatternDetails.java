@@ -25,26 +25,26 @@ import java.util.Map;
 /**
  * DomumPatternDetails — ColonyLink v1.4.2
  *
- * Implémente IPatternDetails pour exposer une recette Domum Ornamentum
- * au système de crafting AE2.
+ * Implements IPatternDetails to expose a Domum Ornamentum recipe to the AE2
+ * crafting system.
  *
- * API réelle AE2 (depuis AECraftingPattern décompilé) :
- *   - getDefinition()          → AEItemKey (identifiant du pattern item)
- *   - getInputs()              → IInput[] (tableau)
- *   - IInput.getPossibleInputs() → GenericStack[] (tableau, pas List)
- *   - IInput.getRemainingKey() → @Nullable AEKey (remainder après craft)
+ * Actual AE2 API (from decompiled AECraftingPattern):
+ *   - getDefinition()          → AEItemKey (pattern item identifier)
+ *   - getInputs()              → IInput[] (array)
+ *   - IInput.getPossibleInputs() → GenericStack[] (array, not List)
+ *   - IInput.getRemainingKey() → @Nullable AEKey (remainder after craft)
  *   - getOutputs()             → List<GenericStack>
- *   - getTooltip()             → PatternDetailsTooltip(OUTPUT_TEXT_CRAFTS ou OUTPUT_TEXT_PROCESSING)
+ *   - getTooltip()             → PatternDetailsTooltip(OUTPUT_TEXT_CRAFTS or OUTPUT_TEXT_PROCESSING)
  */
 public class DomumPatternDetails implements IPatternDetails
 {
-    private final AEItemKey          definition;    // AEItemKey du DomumPatternItem (identifiant AE2)
-    private final ItemStack          patternStack;  // Le DomumPatternItem (pour lire NBT_COUNT)
-    private final ItemStack          targetStack;   // L'item Domum cible
-    private final IInput[]           inputs;        // Matériaux → inputs AE2
-    private final List<GenericStack> outputs;       // Bloc Domum → output AE2
+    private final AEItemKey          definition;    // AEItemKey of the DomumPatternItem (AE2 identifier)
+    private final ItemStack          patternStack;  // The DomumPatternItem (to read NBT_COUNT)
+    private final ItemStack          targetStack;   // The target Domum item
+    private final IInput[]           inputs;        // Materials → AE2 inputs
+    private final List<GenericStack> outputs;       // Domum block → AE2 output
 
-    // ── Constructeur ──────────────────────────────────────────────────────────
+    // Constructor
 
     public DomumPatternDetails(ItemStack patternStack, HolderLookup.Provider provider)
     {
@@ -58,11 +58,11 @@ public class DomumPatternDetails implements IPatternDetails
         this.inputs  = buildInputs(provider);
     }
 
-    // ── IPatternDetails ───────────────────────────────────────────────────────
+    // IPatternDetails
 
     /**
-     * L'identifiant AE2 du pattern — AEItemKey du DomumPatternItem.
-     * C'est ce qu'AE2 utilise pour l'unicité et le cache.
+     * The pattern's AE2 identifier — AEItemKey of the DomumPatternItem.
+     * AE2 uses this for uniqueness and caching.
      */
     @Override
     public AEItemKey getDefinition()
@@ -71,7 +71,7 @@ public class DomumPatternDetails implements IPatternDetails
     }
 
     /**
-     * Inputs : les matériaux bruts (1 IInput par composant Domum).
+     * Inputs: the raw materials (1 IInput per Domum component).
      */
     @Override
     public IInput[] getInputs()
@@ -80,7 +80,7 @@ public class DomumPatternDetails implements IPatternDetails
     }
 
     /**
-     * Outputs : le bloc Domum cible (1 item).
+     * Outputs: the target Domum block (1 item).
      */
     @Override
     public List<GenericStack> getOutputs()
@@ -89,7 +89,7 @@ public class DomumPatternDetails implements IPatternDetails
     }
 
     /**
-     * Output primaire — utilisé par AE2 pour la search bar et JEI/REI.
+     * Primary output — used by AE2 for the search bar and JEI/REI.
      */
     @Override
     public GenericStack getPrimaryOutput()
@@ -97,13 +97,13 @@ public class DomumPatternDetails implements IPatternDetails
         return outputs.isEmpty() ? new GenericStack(definition, 1L) : outputs.get(0);
     }
 
-    // ── Tooltip AE2 ───────────────────────────────────────────────────────────
+    // AE2 tooltip
 
     @Override
     public PatternDetailsTooltip getTooltip(Level level, TooltipFlag flags)
     {
-        // OUTPUT_TEXT_CRAFTS = constante Component statique dans PatternDetailsTooltip
-        // (comme vu dans AECraftingPattern : new PatternDetailsTooltip(OUTPUT_TEXT_CRAFTS))
+        // OUTPUT_TEXT_CRAFTS is a static Component constant in PatternDetailsTooltip
+        // (as in AECraftingPattern: new PatternDetailsTooltip(OUTPUT_TEXT_CRAFTS))
         PatternDetailsTooltip tooltip = new PatternDetailsTooltip(
                 PatternDetailsTooltip.OUTPUT_TEXT_CRAFTS);
 
@@ -120,13 +120,13 @@ public class DomumPatternDetails implements IPatternDetails
         return tooltip;
     }
 
-    // ── Validité ──────────────────────────────────────────────────────────────
+    // Validity
 
     public boolean isValid() { return !targetStack.isEmpty() && definition != null; }
 
     public ItemStack getTargetStack() { return targetStack.copy(); }
 
-    // ── Builders internes ─────────────────────────────────────────────────────
+    // Internal builders
 
     private List<GenericStack> buildOutputs()
     {
@@ -178,7 +178,7 @@ public class DomumPatternDetails implements IPatternDetails
                     return 1L;
                 }
 
-                // Un matériau Domum est valide si la clé correspond exactement
+                // A Domum material is valid only if the key matches exactly
                 @Override
                 public boolean isValid(AEKey input, Level level)
                 {
@@ -197,7 +197,7 @@ public class DomumPatternDetails implements IPatternDetails
         return result.toArray(new IInput[0]);
     }
 
-    // ── Equals / hashCode ─────────────────────────────────────────────────────
+    // Equals / hashCode
 
     @Override
     public boolean equals(Object o)

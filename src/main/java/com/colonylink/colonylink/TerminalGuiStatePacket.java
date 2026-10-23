@@ -12,7 +12,7 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * C→S : ouverture ou fermeture du GUI Warehouse Link Terminal.
+ * C→S: open or close the Warehouse Link Terminal GUI.
  */
 public record TerminalGuiStatePacket(boolean open, BlockPos hostPos, int sideByte)
         implements CustomPacketPayload

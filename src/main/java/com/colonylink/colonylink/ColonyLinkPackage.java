@@ -8,14 +8,14 @@ import net.minecraft.world.item.TooltipFlag;
 import java.util.List;
 
 /**
- * ColonyLink Package — token consommable pour la tab Citizens.
+ * ColonyLink Package — consumable token for the Citizens tab.
  *
- * Stocké dans la wand (NBT "citizen_packages", int).
- * Chaque action Send ou Craft dans la tab Citizens consomme 1 package côté serveur.
- * Si le stock est épuisé, l'action est bloquée avec un message d'erreur.
+ * Stored in the wand (NBT "citizen_packages", int). Each Send or Craft action in
+ * the Citizens tab consumes 1 package server-side; when the stock is empty the
+ * action is blocked with an error message.
  *
- * Recette : 4 Oak Slab (tag #c:slabs/wooden) + 4 Paper disposés en anneau.
- * Stackable 16 — coût modéré, intentionnel.
+ * Recipe: 4 Oak Slab (tag #c:slabs/wooden) + 4 Paper arranged in a ring.
+ * Modest, intentional cost.
  */
 public class ColonyLinkPackage extends Item
 {

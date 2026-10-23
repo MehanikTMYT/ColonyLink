@@ -1,6 +1,7 @@
 package com.colonylink.colonylink;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -10,24 +11,24 @@ import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
- * C→S : interactions avec le Warehouse Link Terminal.
+ * C→S: interactions with the Warehouse Link Terminal.
  *
- * Directions :
- *   PICKUP_FROM_WH   Clic sur item WH → extrait du WH, met dans carried vanilla
- *   PICKUP_FROM_ME   Clic sur item ME → extrait du ME, met dans carried vanilla
- *   PUT_INTO_WH      Drop carried → WH (carried non-vide, clic sur panel WH)
- *   PUT_INTO_ME      Drop carried → ME (carried non-vide, clic sur panel ME)
- *   WH_TO_ME         Sélection WH → ME (flèche centrale)
- *   WH_TO_PLAYER     Sélection WH → Inventaire joueur
- *   ME_TO_WH         Sélection ME → WH
- *   ME_TO_PLAYER     Sélection ME → Inventaire joueur
- *   CRAFT_TO_WH      Vide grille craft → WH
- *   CRAFT_TO_PLAYER  Vide grille craft → Inventaire joueur
- *   CRAFT_TO_ME      Vide grille craft → ME
- *   RESULT_TO_WH     Craft + résultat → WH
- *   RESULT_TO_ME     Craft + résultat → ME
- *   INV_TO_WH        Shift+clic inventaire → WH
- *   INV_TO_ME        Shift+clic inventaire → ME
+ * Directions:
+ *   PICKUP_FROM_WH   click WH item → extract from WH into the vanilla carried stack
+ *   PICKUP_FROM_ME   click ME item → extract from ME into the vanilla carried stack
+ *   PUT_INTO_WH      drop carried → WH (carried non-empty, click on WH panel)
+ *   PUT_INTO_ME      drop carried → ME (carried non-empty, click on ME panel)
+ *   WH_TO_ME         selection WH → ME (center arrow)
+ *   WH_TO_PLAYER     selection WH → player inventory
+ *   ME_TO_WH         selection ME → WH
+ *   ME_TO_PLAYER     selection ME → player inventory
+ *   CRAFT_TO_WH      empty craft grid → WH
+ *   CRAFT_TO_PLAYER  empty craft grid → player inventory
+ *   CRAFT_TO_ME      empty craft grid → ME
+ *   RESULT_TO_WH     craft + result → WH
+ *   RESULT_TO_ME     craft + result → ME
+ *   INV_TO_WH        shift+click inventory → WH
+ *   INV_TO_ME        shift+click inventory → ME
  */
 public record TerminalTransferPacket(
         ItemStack stack,
@@ -39,10 +40,10 @@ public record TerminalTransferPacket(
 {
     public enum Direction
     {
-        PICKUP_FROM_WH,  // clic panel WH → extrait du WH → carried
-        PICKUP_FROM_ME,  // clic panel ME → extrait du ME → carried
-        PUT_INTO_WH,     // drop carried sur panel WH → insère dans WH
-        PUT_INTO_ME,     // drop carried sur panel ME → insère dans ME
+        PICKUP_FROM_WH,  // click WH panel → extract from WH → carried
+        PICKUP_FROM_ME,  // click ME panel → extract from ME → carried
+        PUT_INTO_WH,     // drop carried on WH panel → insert into WH
+        PUT_INTO_ME,     // drop carried on ME panel → insert into ME
         WH_TO_ME,
         WH_TO_PLAYER,
         ME_TO_WH,
@@ -101,21 +102,21 @@ public record TerminalTransferPacket(
 
             switch (packet.direction())
             {
-                // ── PICKUP : extrait de WH/ME → carried vanilla ──────────────
+                // PICKUP: extract from WH/ME → vanilla carried stack
                 case PICKUP_FROM_WH -> part.pickupFromWarehouse(player, packet.stack(), packet.count());
                 case PICKUP_FROM_ME -> part.pickupFromMe(player, packet.stack(), packet.count());
 
-                // ── PUT : dépose carried dans WH/ME ──────────────────────────
+                // PUT: drop carried into WH/ME
                 case PUT_INTO_WH    -> part.putCarriedIntoWarehouse(player);
                 case PUT_INTO_ME    -> part.putCarriedIntoMe(player);
 
-                // ── Transferts sélection ──────────────────────────────────────
+                // Selection transfers
                 case WH_TO_ME      -> part.transferWarehouseToMe(player, packet.stack(), packet.count());
                 case WH_TO_PLAYER  -> part.transferWarehouseToInventory(player, packet.stack(), packet.count());
                 case ME_TO_WH      -> part.transferMeToWarehouse(player, packet.stack(), packet.count());
                 case ME_TO_PLAYER  -> part.transferMeToInventory(player, packet.stack(), packet.count());
 
-                // ── Grille craft ──────────────────────────────────────────────
+                // Craft grid
                 case CRAFT_TO_WH, CRAFT_TO_PLAYER, CRAFT_TO_ME -> {
                     if (player.containerMenu instanceof WarehouseLinkTerminalMenu menu) {
                         int dest = switch (packet.direction()) {
@@ -136,7 +137,11 @@ public record TerminalTransferPacket(
                                 if (menu.getCraftResult().getItem(0).isEmpty()) break;
                                 ItemStack crafted = doCraft(menu, player);
                                 if (crafted.isEmpty()) break;
-                                part.transferPlayerToWarehouse(player, crafted);
+                                // 1.7.0-beta.5 (audit #4) — the result is already out of the
+                                // grid: what the Warehouse does not take goes back to the
+                                // player, and we stop crafting into a full destination.
+                                int sent = part.transferPlayerToWarehouse(player, crafted.copy());
+                                if (!giveBackRemainder(player, crafted, crafted.getCount() - sent)) break;
                             }
                         }
                     }
@@ -150,21 +155,65 @@ public record TerminalTransferPacket(
                                 if (menu.getCraftResult().getItem(0).isEmpty()) break;
                                 ItemStack crafted = doCraft(menu, player);
                                 if (crafted.isEmpty()) break;
-                                part.transferPlayerToMe(player, crafted);
+                                // 1.7.0-beta.5 (audit #4) — same as RESULT_TO_WH.
+                                int sent = part.transferPlayerToMe(player, crafted.copy());
+                                if (!giveBackRemainder(player, crafted, crafted.getCount() - sent)) break;
                             }
                         }
                     }
                 }
+                // 1.7.0-beta.5 (audit #1/#5) — the items are removed from the player's
+                // inventory BEFORE the transfer. Any part the Warehouse / ME does not
+                // accept (full, no access, card invalid, warehouse unloaded…) was simply
+                // lost. It now goes back to the player.
                 case INV_TO_WH -> {
                     ItemStack from = removeFromPlayerInventory(player, packet.stack(), packet.count());
-                    if (!from.isEmpty()) part.transferPlayerToWarehouse(player, from);
+                    if (!from.isEmpty())
+                    {
+                        int sent = part.transferPlayerToWarehouse(player, from.copy());
+                        giveBackRemainder(player, from, from.getCount() - sent);
+                    }
                 }
                 case INV_TO_ME -> {
                     ItemStack from = removeFromPlayerInventory(player, packet.stack(), packet.count());
-                    if (!from.isEmpty()) part.transferPlayerToMe(player, from);
+                    if (!from.isEmpty())
+                    {
+                        int sent = part.transferPlayerToMe(player, from.copy());
+                        giveBackRemainder(player, from, from.getCount() - sent);
+                    }
                 }
             }
         });
+    }
+
+    /**
+     * 1.7.0-beta.5 (audit #1/#4/#5) — returns to the player the part of a transfer the
+     * Warehouse / ME did not accept. The items were already taken from the player
+     * (inventory or crafting grid), so they must land somewhere: inventory first,
+     * ground if the inventory filled up in the meantime. Never voided.
+     *
+     * @param template  the transferred stack (item + components); callers hand the Part
+     *                  a copy, so this one is never mutated by the transfer
+     * @param remainder how many of it were NOT accepted
+     * @return true when nothing was left over (the whole transfer went through)
+     */
+    private static boolean giveBackRemainder(ServerPlayer player, ItemStack template, int remainder)
+    {
+        if (remainder <= 0 || template.isEmpty()) return true;
+        ItemStack back = template.copyWithCount(remainder);
+        player.getInventory().add(back); // shrinks 'back' to what did not fit
+        int returned = remainder - back.getCount();
+        if (returned > 0)
+            player.sendSystemMessage(Component.translatable(
+                    "colonylink.terminal.returned_to_inventory", returned));
+        if (!back.isEmpty())
+        {
+            int dropped = back.getCount();
+            player.drop(back, false);
+            player.sendSystemMessage(Component.translatable(
+                    "colonylink.terminal.dropped_on_ground", dropped));
+        }
+        return false;
     }
 
     private static ItemStack removeFromPlayerInventory(ServerPlayer player, ItemStack template, int count)

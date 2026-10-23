@@ -9,8 +9,8 @@ import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
- * Envoyé par le client quand le joueur clique "Unlink" dans le GUI.
- * Le serveur retire l'entry à l'index donné de la wand et met à jour activeViewers.
+ * Sent by the client when the player clicks "Unlink" in the GUI.
+ * The server removes the entry at the given index from the wand and updates activeViewers.
  */
 public record RemoveBuilderPacket(int tabIndex) implements CustomPacketPayload
 {

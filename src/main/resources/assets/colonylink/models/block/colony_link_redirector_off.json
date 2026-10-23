@@ -7,6 +7,7 @@
 		"body": "colonylink:block/redirector_body",
 		"bottom": "colonylink:block/redirector_bottom",
 		"frame": "colonylink:block/redirector_frame",
+		"deck": "colonylink:block/redirector_frame",
 		"glass": "colonylink:block/redirector_glass",
 		"saw": "colonylink:block/redirector_saw",
 		"particle": "colonylink:block/redirector_body"
@@ -29,7 +30,7 @@
 			"from": [0, 10, 0],
 			"to": [16, 11, 16],
 			"faces": {
-				"up":    {"uv": [0, 0, 16, 16], "texture": "#frame"},
+				"up":    {"uv": [0, 0, 16, 16], "texture": "#deck"},
 				"north": {"uv": [0, 0, 16, 1], "texture": "#frame", "cullface": "north"},
 				"south": {"uv": [0, 0, 16, 1], "texture": "#frame", "cullface": "south"},
 				"east":  {"uv": [0, 0, 16, 1], "texture": "#frame", "cullface": "east"},

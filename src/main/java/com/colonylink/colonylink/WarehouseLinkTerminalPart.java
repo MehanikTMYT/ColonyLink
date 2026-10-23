@@ -41,33 +41,30 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Warehouse Link Terminal — Part v1.3.9 (hybride méta/racks).
+ * Warehouse Link Terminal — Part v1.3.9 (hybrid meta/racks).
  *
- * v1.3.9 :
- *  - Fix double-count : la lecture du warehouse passe par le méta-handler
- *    exposé par MineColonies (un handler agrégé de tous les racks, identifié
- *    par getSlots() > 54). Plus rapide, plus juste, et MineColonies gère
- *    pour nous la dédup rack double / rack simple / mix.
- *  - Insertions/extractions inchangées dans leur logique, mais filtrent
- *    désormais explicitement le méta-handler (skip si getSlots() > 54).
- *    Le méta n'est touché que pour la lecture, jamais pour écrire.
- *  - Fallback : si aucun méta-handler n'est trouvé (cas dégénéré, mod
- *    conflict), la lecture retombe sur l'ancien scan des racks individuels
- *    avec la limite RACK_HALF_SLOTS (comportement v1.3.0).
+ * v1.3.9:
+ *  - Double-count fix: warehouse reads go through the meta-handler exposed by
+ *    MineColonies (an aggregate of all racks, identified by getSlots() > 54).
+ *    MineColonies handles dedup of double/single/mixed racks for us.
+ *  - Insert/extract logic unchanged, but now explicitly skip the meta-handler
+ *    (getSlots() > 54). The meta-handler is read-only, never written.
+ *  - Fallback: with no meta-handler (degenerate case, mod conflict), reads fall
+ *    back to the old per-rack scan capped at RACK_HALF_SLOTS (v1.3.0 behavior).
  *
- * Hérite de AbstractTerminalPart pour :
- *  - Rendu AE2 natif (cable arm, canal, ModelData SPIN)
+ * Extends AbstractTerminalPart for:
+ *  - Native AE2 rendering (cable arm, channel, ModelData SPIN)
  *  - NBT view cells
- *  - Intégration réseau AE2 (1 canal, nom dans Network Status)
+ *  - AE2 network integration (1 channel, named in Network Status)
  *
- * Fonctionnalités :
- *  - Slot carte Warehouse Link Card (NBT persisté)
- *  - Scan warehouse MineColonies → snapshot client (via méta-handler)
- *  - Scan ME storage → snapshot client
- *  - Transfers : WH↔ME, WH↔Player, ME↔Player (via racks individuels)
- *  - Pick/deposit : via le carried vanilla (setCarried/getCarried)
- *  - Permissions : owner ou officer de la colonie liée à la card
- *  - Gestion des viewers actifs (sync périodique)
+ * Features:
+ *  - Warehouse Link Card slot (NBT-persisted)
+ *  - MineColonies warehouse scan → client snapshot (via meta-handler)
+ *  - ME storage scan → client snapshot
+ *  - Transfers: WH↔ME, WH↔Player, ME↔Player (via individual racks)
+ *  - Pick/deposit: via vanilla carried (setCarried/getCarried)
+ *  - Permissions: owner or officer of the colony linked to the card
+ *  - Active viewer management (periodic sync)
  */
 public class WarehouseLinkTerminalPart extends AbstractTerminalPart
 {
@@ -75,20 +72,20 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     // PORT(26.1): AE2 part models are data-driven — see assets/colonylink/ae2/parts/warehouse_link_terminal.json
     // (status_indicator picks the off/on/has-channel layers the old getStaticModels() selected).
 
-    // ── Constantes ────────────────────────────────────────────────────────────
+    // Constants
 
     /**
-     * Nombre de slots locaux d'une moitié de rack MineColonies.
-     * - Rack simple : 27 slots
-     * - Rack double : 54 slots (27 locaux + 27 miroir de l'autre moitié)
-     * Quand on scanne les racks individuels (insert/extract), on s'arrête à 27
-     * pour ne pas doublonner les miroirs.
+     * Local slot count of one MineColonies rack half.
+     * - Single rack: 27 slots
+     * - Double rack: 54 slots (27 local + 27 mirror of the other half)
+     * When scanning individual racks (insert/extract), stop at 27 to avoid
+     * double-counting the mirror slots.
      */
     private static final int RACK_HALF_SLOTS = 27;
 
-    // ── État ──────────────────────────────────────────────────────────────────
+    // State
 
-    /** Slot NBT-persisté pour la Warehouse Link Card. */
+    /** NBT-persisted slot for the Warehouse Link Card. */
     private final ItemStackHandler warehouseCardSlot = new ItemStackHandler(1)
     {
         @Override
@@ -100,7 +97,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         { getHost().markForSave(); }
     };
 
-    /** Slot NBT-persisté pour l'item Domum cible (onglet Cutter). Limité à 1 item. */
+    /** NBT-persisted slot for the target Domum item (Cutter tab). Capped at 1 item. */
     final ItemStackHandler domumTargetSlot = new ItemStackHandler(1)
     {
         @Override
@@ -115,7 +112,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         { getHost().markForSave(); }
     };
 
-    /** Slot NBT-persisté pour le Blank Pattern AE2 (onglet Cutter). */
+    /** NBT-persisted slot for the AE2 Blank Pattern (Cutter tab). */
     final ItemStackHandler blankPatternSlot = new ItemStackHandler(1)
     {
         @Override
@@ -132,13 +129,13 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         { getHost().markForSave(); }
     };
 
-    /** Slot output preview (non-persisté, recalculé à l'ouverture). */
+    /** Output preview slot (not persisted, recomputed on open). */
     final ItemStackHandler domumOutputSlot = new ItemStackHandler(1)
     {
         @Override public boolean isItemValid(int slot, ItemStack stack) { return false; }
     };
 
-    /** Grille craft 3×3 persistée (9 slots). */
+    /** Persisted 3×3 crafting grid (9 slots). */
     final ItemStackHandler craftingGridSlot = new ItemStackHandler(9)
     {
         @Override
@@ -146,36 +143,54 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         { getHost().markForSave(); }
     };
 
-    /** Joueurs ayant le GUI ouvert — reçoivent les syncs périodiques. */
+    /** Players with the GUI open — receive periodic syncs. */
     private final Set<UUID> viewers = ConcurrentHashMap.newKeySet();
 
     /**
-     * Queue des items Domum en attente d'encodage — partagée par colonie.
-     * Persistée en NBT, synchronisée vers tous les viewers à chaque changement.
-     * Une entrée est retirée automatiquement quand AE2 la considère craftable.
+     * Domum items awaiting encoding — shared per colony.
+     * NBT-persisted, synced to all viewers on every change. An entry is removed
+     * automatically once AE2 considers it craftable.
      */
     private final List<ItemStack> domumQueue = new java.util.ArrayList<>();
 
-    // ── Diff/throttle v1.4.6 ───────────────────────────────────────────────────
-    // Signature du dernier snapshot effectivement envoyé. Si la signature
-    // recalculée au tick est identique, on n'envoie rien (zéro alloc au repos).
+    // Diff/throttle v1.4.6
+    // Signature of the last snapshot actually sent. If the signature recomputed
+    // on tick is identical, nothing is sent (zero alloc at rest).
     private long lastWarehouseSig = Long.MIN_VALUE;
     private long lastMeSig        = Long.MIN_VALUE;
 
-    // ── Constructeur ──────────────────────────────────────────────────────────
+    // Constructor
 
     public WarehouseLinkTerminalPart(IPartItem<?> partItem)
     {
         super(partItem);
     }
 
-    // ── Modèle ────────────────────────────────────────────────────────────────
+    // Model
 
     /**
-     * Droppe la Warehouse Link Card quand le terminal est retiré (wrench ou destruction).
-     * addAdditionalDrops est la méthode AE2 (IPart) pour les drops additionnels d'une Part.
-     * @MustBeInvokedByOverriders → appel super obligatoire.
+     * Drops the Warehouse Link Card when the terminal is removed (wrench or break).
+     * addAdditionalDrops is AE2's IPart hook for a Part's extra drops.
+     * @MustBeInvokedByOverriders → super call required.
      */
+    /**
+     * 1.7.0-beta.4 — AE2's CableBusBlockEntity is Clearable and clears every part. Block
+     * movers (Sable ship assembly, Create) save the NBT, call Clearable.tryClear, then
+     * remove the block, and AEBaseEntityBlock.onRemove calls addAdditionalDrops without
+     * an isMoving check: our slots must be empty by then, or their contents duplicate.
+     */
+    @Override
+    public void clearContent()
+    {
+        super.clearContent();
+        warehouseCardSlot.setStackInSlot(0, ItemStack.EMPTY);
+        domumTargetSlot.setStackInSlot(0, ItemStack.EMPTY);
+        blankPatternSlot.setStackInSlot(0, ItemStack.EMPTY);
+        domumOutputSlot.setStackInSlot(0, ItemStack.EMPTY);
+        for (int i = 0; i < craftingGridSlot.getSlots(); i++)
+            craftingGridSlot.setStackInSlot(i, ItemStack.EMPTY);
+    }
+
     @Override
     public void addAdditionalDrops(java.util.List<ItemStack> drops, boolean wrenched)
     {
@@ -222,13 +237,13 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         // domumOutputSlot toujours vide à l'ouverture — pas de désérialisation
         data.child("CraftingGrid").ifPresent(craftingGridSlot::deserialize);
 
-        // Queue Domum
+        // Domum queue
         domumQueue.clear();
         for (ItemStack stack : data.listOrEmpty("DomumQueue", ItemStack.CODEC))
             domumQueue.add(stack);
     }
 
-    // ── Activation (clic droit) ───────────────────────────────────────────────
+    // Activation (right-click)
 
     @Override
     public boolean onUseWithoutItem(Player player, Vec3 pos)
@@ -236,10 +251,23 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         if (this.getLevel() == null || this.getLevel().isClientSide()) return true;
         if (!(player instanceof ServerPlayer sp)) return true;
 
+        // 1.7.0-beta.2 — a pre-beta.2 card in this Terminal is linked on open, only when
+        // the Terminal is inside a colony claim (before the permission check, which
+        // then reads that colony from the card, as it read the closest colony before).
+        migrateOldCard();
+
         if (!checkPermission(sp))
         {
             sp.sendSystemMessage(Component.translatable("colonylink.terminal.no_permission"));
             return true;
+        }
+
+        // 1.7.0-beta.2 — a card that does not resolve (not linked, colony lost or
+        // reassigned, Warehouse gone…) is reported; the terminal still opens (ME side).
+        if (hasWarehouseCard())
+        {
+            CardLinks.Resolved card = resolveCard(sp.level());
+            if (!card.ok()) msg(sp, card.message());
         }
 
         BlockEntity hostBe = this.getBlockEntity();
@@ -265,7 +293,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         return true;
     }
 
-    // ── Tick ──────────────────────────────────────────────────────────────────
+    // Tick
 
     @Override
     public void addToWorld()
@@ -283,8 +311,8 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     }
 
     /**
-     * Appelé par ColonyLinkServerTicker à chaque fois que le ticker global fire.
-     * Envoie le snapshot warehouse + ME à tous les viewers actifs.
+     * Called by ColonyLinkServerTicker on every global ticker fire.
+     * Sends the warehouse + ME snapshot to all active viewers.
      */
     public void serverTick()
     {
@@ -317,11 +345,11 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
             lastMeSig = meSig;
         }
 
-        // ── Auto-retrait queue Domum quand craftable dans AE2 ─────────────────
+        // Auto-remove Domum queue entries once craftable in AE2
         tickDomumQueueCraftableCheck();
     }
 
-    // ── GUI open / close ──────────────────────────────────────────────────────
+    // GUI open / close
 
     public void onGuiOpened(ServerPlayer player)
     {
@@ -331,16 +359,15 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         {
             net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(player, buildWarehouseSnapshot(level));
             net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(player, buildMeSnapshot(level));
-            // v1.6.1 — queue Domum PARTAGEE : seme/recupere la liste commune de la grille,
-            // aligne le NBT de tous les terminaux et diffuse a leurs viewers (dont ce joueur).
+            // v1.6.1 — SHARED Domum queue: seeds/fetches the grid's common list, aligns
+            // the NBT of all terminals and broadcasts to their viewers (including this player).
             IGrid grid = currentGrid();
             if (grid != null)
                 syncGrid(level, grid);
             else
                 net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(player,
                         new DomumQueueSyncPacket(new java.util.ArrayList<>()));
-            // Le snapshot vient d'être envoyé : aligner la signature pour
-            // éviter un double envoi au prochain tick.
+            // Snapshot just sent: align the signature to avoid a double send next tick.
             lastWarehouseSig = computeWarehouseSig(level);
             lastMeSig        = computeMeSig();
         }
@@ -357,7 +384,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
 
     public void requestImmediateSync()
     {
-        // Force le prochain serverTick() à tout renvoyer (le contenu vient de changer).
+        // Force the next serverTick() to resend everything (content just changed).
         lastWarehouseSig = Long.MIN_VALUE;
         lastMeSig        = Long.MIN_VALUE;
         if (viewers.isEmpty()) return;
@@ -375,34 +402,32 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         }
     }
 
-    // ── Signatures de contenu (diff/throttle v1.4.6) ──────────────────────────
+    // Content signatures (diff/throttle v1.4.6)
 
     /**
-     * Signature légère d'un ItemStack : combine l'identité de l'Item (singleton)
-     * et ses DataComponents (Domum, NBT…) avec la quantité.
-     * N'alloue pas de String.
+     * Lightweight ItemStack signature: combines the Item identity (singleton) and
+     * its DataComponents (Domum, NBT…) with the count. Allocates no String.
      */
     private static long stackSig(ItemStack stack, long count)
     {
-        int h = Item.getId(stack.getItem());          // int stable, pas d'alloc
+        int h = Item.getId(stack.getItem());          // stable int, no alloc
         h = 31 * h + stack.getComponents().hashCode();
         return ((long) h << 20) ^ count;
     }
 
     /**
-     * Signature du contenu warehouse. Reproduit le même traversal que
-     * buildWarehouseSnapshot (méta-handler ou fallback racks) mais folde un
-     * long (FNV-1a) sans allouer de map/liste.
+     * Warehouse content signature. Mirrors buildWarehouseSnapshot's traversal
+     * (meta-handler or rack fallback) but folds a long (FNV-1a) with no map/list.
      */
     private long computeWarehouseSig(ServerLevel level)
     {
         if (!hasWarehouseCard()) return 0L;
 
-        IColony colony = findColony(level);
-        if (colony == null) return 1L;
-
-        BuildingWareHouse warehouse = findWarehouse(colony);
-        if (warehouse == null) return 2L;
+        // 1.7.0-beta.2 — colony + Warehouse come from the card. One distinct signature
+        // per failure status, so the panel re-syncs when the status changes.
+        CardLinks.Resolved card = resolveCard(level);
+        if (!card.ok()) return 1L + card.status().ordinal();
+        BuildingWareHouse warehouse = card.warehouse();
 
         long sig = 0xcbf29ce484222325L; // FNV offset basis
         final long FNV_PRIME = 0x100000001b3L;
@@ -438,8 +463,8 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     }
 
     /**
-     * Signature du contenu ME. Même accès réseau que buildMeSnapshot : folde le
-     * stock (clé + count) et le nombre de craftables.
+     * ME content signature. Same network access as buildMeSnapshot: folds the
+     * stock (key + count) and the craftable count.
      */
     private long computeMeSig()
     {
@@ -459,7 +484,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
             sig = (sig ^ ((long) k.hashCode() << 20 ^ entry.getLongValue())) * FNV_PRIME;
         }
 
-        // Craftables (taille du set suffit à détecter un changement)
+        // Craftables (set size is enough to detect a change)
         try
         {
             ICraftingService crafting = grid.getCraftingService();
@@ -471,24 +496,18 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         return sig;
     }
 
-    // ── Snapshots ─────────────────────────────────────────────────────────────
+    // Snapshots
 
     /**
-     * Construit le snapshot warehouse pour le client.
+     * Builds the warehouse snapshot for the client.
      *
-     * v1.3.9 — Stratégie hybride :
-     *
-     *  1. On scanne getContainers() à la recherche du méta-handler (le handler
-     *     agrégé exposé par le building, identifié par getSlots() >= 55).
-     *
-     *  2. Si trouvé : on lit UNIQUEMENT le méta-handler. C'est MineColonies qui
-     *     gère pour nous la dédup rack double et l'agrégation des stacks
-     *     identiques répartis sur plusieurs racks. Aucun risque de
-     *     double-comptage.
-     *
-     *  3. Si non trouvé (cas dégénéré : warehouse atypique, mod conflict, etc.) :
-     *     fallback sur l'ancien scan des racks individuels avec la limite
-     *     RACK_HALF_SLOTS=27 par handler. Comportement v1.3.0.
+     * v1.3.9 — hybrid strategy:
+     *  1. Scan getContainers() for the meta-handler (the building's aggregate
+     *     handler, identified by getSlots() >= 55).
+     *  2. If found: read ONLY the meta-handler. MineColonies handles double-rack
+     *     dedup and aggregation of identical stacks across racks — no double-count.
+     *  3. If not found (degenerate case: atypical warehouse, mod conflict): fall
+     *     back to the old per-rack scan capped at RACK_HALF_SLOTS=27 (v1.3.0).
      */
     private WarehouseTerminalSyncPacket buildWarehouseSnapshot(ServerLevel level)
     {
@@ -498,22 +517,20 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         if (!hasCard)
             return new WarehouseTerminalSyncPacket(List.of(), false, hostPos, "");
 
-        IColony colony = findColony(level);
-        if (colony == null)
-            return new WarehouseTerminalSyncPacket(List.of(), true, hostPos, "No colony found");
-
-        BuildingWareHouse warehouse = findWarehouse(colony);
-        if (warehouse == null)
-            return new WarehouseTerminalSyncPacket(List.of(), true, hostPos, "No warehouse nearby");
+        // 1.7.0-beta.2 — the error is now a translation key (the Screen translates it);
+        // it replaces the hard-coded "No colony found" / "No warehouse nearby".
+        CardLinks.Resolved card = resolveCard(level);
+        if (!card.ok())
+            return new WarehouseTerminalSyncPacket(List.of(), true, hostPos, card.panelKey());
+        BuildingWareHouse warehouse = card.warehouse();
 
         java.util.Map<String, WarehouseTerminalSyncPacket.WarehouseItemEntry> aggregated = new java.util.LinkedHashMap<>();
 
-        // Étape 1 : chercher le méta-handler.
         IItemHandler metaHandler = findMetaHandler(level, warehouse);
 
         if (metaHandler != null)
         {
-            // Lecture via méta : scan unique de tous les slots, sans dédup.
+            // Meta read: single scan of all slots, no dedup.
             int slots = metaHandler.getSlots();
             for (int s = 0; s < slots; s++)
             {
@@ -524,19 +541,16 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         }
         else
         {
-            // Fallback : scan des racks individuels (comportement v1.3.0).
-            // Déduplication par position (rack double = 2 BlockPos) et limite
-            // RACK_HALF_SLOTS pour ne pas re-lire les slots miroir.
+            // Fallback: per-rack scan (v1.3.0 behavior). Dedup by position
+            // (double rack = 2 BlockPos) and RACK_HALF_SLOTS cap to skip mirror slots.
             java.util.Set<BlockPos> visitedPos = new java.util.HashSet<>();
             for (BlockPos rackPos : warehouse.getContainers())
             {
                 if (!visitedPos.add(rackPos)) continue;
                 IItemHandler rack = CapCompat.itemHandler(level, rackPos, null);
                 if (rack == null) continue;
-                // Sécurité : si un méta-handler arrive ici, on le saute (il sera
-                // beaucoup trop gros et fausserait le total). En pratique on
-                // n'arrive ici que si findMetaHandler() a retourné null, donc
-                // ce filtre est défensif.
+                // Defensive: the RACK_HALF_SLOTS cap keeps a stray meta-handler from
+                // skewing the total. Only reached when findMetaHandler() returned null.
                 int slots = Math.min(rack.getSlots(), RACK_HALF_SLOTS);
                 for (int s = 0; s < slots; s++)
                 {
@@ -554,8 +568,8 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     }
 
     /**
-     * Helper : fusionne un ItemStack dans la map d'agrégation par identité d'item
-     * (item + components). Utilisé par les deux branches de buildWarehouseSnapshot.
+     * Merges an ItemStack into the aggregation map keyed by item identity
+     * (item + components). Used by both branches of buildWarehouseSnapshot.
      */
     private static void aggregateItem(
             java.util.Map<String, WarehouseTerminalSyncPacket.WarehouseItemEntry> aggregated,
@@ -570,29 +584,15 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     }
 
     /**
-     * Cherche le méta-handler exposé par le warehouse MineColonies.
+     * Finds the MineColonies meta-handler by the Warehouse Hut block position.
+     * The meta-handler is exposed at warehouse.getPosition() (the building block),
+     * not at a rack position; this works regardless of warehouse size.
      *
-     * MineColonies expose dans getContainers() à la fois :
-     *  - tous les racks individuels (27 ou 54 slots chacun)
-     *  - un handler agrégé "warehouse-as-a-whole" (généralement 100+ slots)
-     *
-     * Le méta-handler est identifié par sa taille : >= 55 slots.
-     * Au plus un seul méta-handler par warehouse en pratique.
-     *
-     * @return le méta-handler trouvé, ou null s'il n'y en a pas (fallback).
-     */
-    /**
-     * Identifie le meta-handler MineColonies par la position du bloc Warehouse Hut.
-     * Le meta-handler est expose a warehouse.getPosition() (position du bloc batiment),
-     * pas a la position d'un rack. Cette approche est independante du nombre de slots
-     * et fonctionne quelle que soit la taille du warehouse.
-     *
-     * L'inventaire interne du bloc Warehouse Hut (9x7 = 63 slots) est traite
-     * separement dans buildWarehouseSnapshot/pickupFromWarehouse.
+     * The Warehouse Hut's internal inventory (9x7 = 63 slots) is handled
+     * separately in buildWarehouseSnapshot/pickupFromWarehouse.
      */
     private static IItemHandler findMetaHandler(ServerLevel level, BuildingWareHouse warehouse)
     {
-        // Le meta-handler MineColonies est toujours expose a la position du batiment
         BlockPos hutPos = warehouse.getPosition();
         IItemHandler h = CapCompat.itemHandler(level, hutPos, null);
         // Verifier que ce handler a plus de slots qu'un rack simple (27 ou 54 slots)
@@ -612,27 +612,26 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         return TerminalMeSyncPacket.fromGrid(grid, hostPos);
     }
 
-    // ── PICK / DEPOSIT (via carried vanilla) ──────────────────────────────────
+    // PICK / DEPOSIT (via vanilla carried)
 
 
     /**
-     * Deposit depuis le carried vers le WH.
-     * Si count < carried.count : dépose seulement count items (clic droit).
-     * Si count >= carried.count ou count == -1 : dépose tout.
+     * Deposits from the carried stack into the WH.
+     * count < carried.count: deposit only count items (right-click).
+     * count >= carried.count or count == -1: deposit all.
      */
     public void depositToWarehouse(ServerPlayer player, int count)
     {
-        if (!checkPermission(player)) return;
+        if (!checkWarehouseAccess(player)) return;
 
         ItemStack carried = player.containerMenu.getCarried();
         if (carried.isEmpty()) return;
 
         ServerLevel level = player.level();
-        IColony colony = findColony(level);
-        if (colony == null) { msg(player, Component.translatable("colonylink.terminal.no_colony")); return; }
-        BuildingWareHouse wh = findWarehouse(colony);
-        if (wh == null) { msg(player, Component.translatable("colonylink.terminal.no_warehouse")); return; }
-        // v1.4.9 — fail-off strict : warehouse entièrement chargé requis.
+        CardLinks.Resolved card = resolveCard(level);
+        if (!card.ok()) { msg(player, card.message()); return; }
+        BuildingWareHouse wh = card.warehouse();
+        // v1.4.9 — strict fail-off: warehouse must be fully loaded.
         if (!ColonyLinkChunkUtil.warehouseFullyLoaded(level, wh))
         {
             msg(player, Component.translatable("colonylink.terminal.warehouse_unloaded"));
@@ -651,7 +650,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
             if (!visitedPos.add(rackPos)) continue;
             IItemHandler rack = CapCompat.itemHandler(level, rackPos, null);
             if (rack == null || !visited.add(rack)) continue;
-            // v1.3.9 — skip méta-handler : on n'écrit jamais via l'agrégat.
+            // v1.3.9 — skip meta-handler: never write via the aggregate.
             ItemStack before = toInsert.copy();
             toInsert = insertIntoHandler(rack, toInsert);
             inserted += before.getCount() - toInsert.getCount();
@@ -659,7 +658,6 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
 
         if (inserted > 0)
         {
-            // Réduire le carried
             carried.shrink(inserted);
             player.containerMenu.setCarried(carried.isEmpty() ? ItemStack.EMPTY : carried);
             player.containerMenu.broadcastChanges();
@@ -669,7 +667,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     }
 
     /**
-     * Deposit depuis le carried vers le ME.
+     * Deposits from the carried stack into the ME.
      */
     public void depositToMe(ServerPlayer player, int count)
     {
@@ -697,19 +695,18 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
             msg(player, Component.translatable("colonylink.terminal.me_full"));
     }
 
-    // ── Transferts sélection (flèches centrales) ──────────────────────────────
+    // Selection transfers (center arrows)
 
-    // ── PICKUP/PUT (style AE2 PICKUP_OR_SET_DOWN) ─────────────────────────────
+    // PICKUP/PUT (AE2 PICKUP_OR_SET_DOWN style)
 
     public void pickupFromWarehouse(ServerPlayer player, ItemStack template, int requestCount)
     {
-        if (!checkPermission(player)) return;
+        if (!checkWarehouseAccess(player)) return;
         ServerLevel level = player.level();
-        IColony colony = findColony(level);
-        if (colony == null) { msg(player, Component.translatable("colonylink.terminal.no_colony")); return; }
-        BuildingWareHouse wh = findWarehouse(colony);
-        if (wh == null) { msg(player, Component.translatable("colonylink.terminal.no_warehouse")); return; }
-        // v1.4.9 — fail-off strict : warehouse entièrement chargé requis.
+        CardLinks.Resolved card = resolveCard(level);
+        if (!card.ok()) { msg(player, card.message()); return; }
+        BuildingWareHouse wh = card.warehouse();
+        // v1.4.9 — strict fail-off: warehouse must be fully loaded.
         if (!ColonyLinkChunkUtil.warehouseFullyLoaded(level, wh))
         {
             msg(player, Component.translatable("colonylink.terminal.warehouse_unloaded"));
@@ -718,7 +715,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
 
         ItemStack carried = player.containerMenu.getCarried();
 
-        // Item différent dans le curseur → dépose d'abord dans le WH
+        // Different item on the cursor → deposit it into the WH first
         if (!carried.isEmpty() && !ItemStack.isSameItemSameComponents(carried, template))
         {
             int deposited = transferPlayerToWarehouse(player, carried.copy());
@@ -745,8 +742,8 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
             if (!visitedPos.add(rackPos)) continue;
             IItemHandler rack = CapCompat.itemHandler(level, rackPos, null);
             if (rack == null || !visited.add(rack)) continue;
-            // Pour le bloc Warehouse Hut (position du batiment), scanner tous les slots.
-            // Pour les racks normaux, limiter a RACK_HALF_SLOTS (moitie exposee).
+            // Warehouse Hut block (building position): scan all slots.
+            // Normal racks: cap at RACK_HALF_SLOTS (exposed half).
             int slots = rackPos.equals(hutPos) ? rack.getSlots()
                     : Math.min(rack.getSlots(), RACK_HALF_SLOTS);
             for (int s = 0; s < slots && remaining > 0; s++)
@@ -780,7 +777,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
 
         ItemStack carried = player.containerMenu.getCarried();
 
-        // Item différent dans le curseur → dépose d'abord dans ME
+        // Different item on the cursor → deposit it into the ME first
         if (!carried.isEmpty() && !ItemStack.isSameItemSameComponents(carried, template))
         {
             AEItemKey carriedKey = AEItemKey.of(carried);
@@ -813,7 +810,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     {
         ItemStack carried = player.containerMenu.getCarried();
         if (carried.isEmpty()) return;
-        if (!checkPermission(player)) return;
+        if (!checkWarehouseAccess(player)) return;
         int inserted = transferPlayerToWarehouse(player, carried.copy());
         carried.shrink(inserted);
         player.containerMenu.setCarried(carried.isEmpty() ? ItemStack.EMPTY : carried);
@@ -838,17 +835,16 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
 
 
     /**
-     * WH → ME (flèches centrales / sélection).
+     * WH → ME (center arrows / selection).
      */
     public int transferWarehouseToMe(ServerPlayer player, ItemStack template, int count)
     {
-        if (!checkPermission(player)) return 0;
+        if (!checkWarehouseAccess(player)) return 0;
         ServerLevel level = player.level();
-        IColony colony = findColony(level);
-        if (colony == null) { msg(player, Component.translatable("colonylink.terminal.no_colony")); return 0; }
-        BuildingWareHouse wh = findWarehouse(colony);
-        if (wh == null) { msg(player, Component.translatable("colonylink.terminal.no_warehouse")); return 0; }
-        // v1.4.9 — fail-off strict : warehouse entièrement chargé requis.
+        CardLinks.Resolved card = resolveCard(level);
+        if (!card.ok()) { msg(player, card.message()); return 0; }
+        BuildingWareHouse wh = card.warehouse();
+        // v1.4.9 — strict fail-off: warehouse must be fully loaded.
         if (!ColonyLinkChunkUtil.warehouseFullyLoaded(level, wh))
         {
             msg(player, Component.translatable("colonylink.terminal.warehouse_unloaded"));
@@ -871,7 +867,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
             if (!visitedPos.add(rackPos)) continue;
             IItemHandler rack = CapCompat.itemHandler(level, rackPos, null);
             if (rack == null || !visited.add(rack)) continue;
-            // v1.3.9 — skip méta-handler.
+            // v1.3.9 — skip meta-handler.
             for (int s = 0; s < Math.min(rack.getSlots(), RACK_HALF_SLOTS) && remaining > 0; s++)
             {
                 ItemStack inSlot = rack.getStackInSlot(s);
@@ -902,9 +898,12 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
                 if (ret.isEmpty()) break;
                 IItemHandler rack = CapCompat.itemHandler(level, rackPos, null);
                 if (rack == null || !retVisited.add(rack)) continue;
-                // v1.3.9 — skip méta-handler.
+                // v1.3.9 — skip meta-handler.
                 ret = insertIntoHandler(rack, ret);
             }
+            // 1.7.0-beta.5 — safety net: what the Warehouse refused to take back (not
+            // expected: it was just extracted from it) is dropped, never voided.
+            dropLeftover(player, ret);
         }
 
         if (transferred == 0) msg(player, Component.translatable("colonylink.terminal.me_full_or_missing"));
@@ -912,17 +911,16 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     }
 
     /**
-     * WH → Inventaire joueur (flèches centrales / sélection).
+     * WH → player inventory (center arrows / selection).
      */
     public int transferWarehouseToInventory(ServerPlayer player, ItemStack template, int count)
     {
-        if (!checkPermission(player)) return 0;
+        if (!checkWarehouseAccess(player)) return 0;
         ServerLevel level = player.level();
-        IColony colony = findColony(level);
-        if (colony == null) { msg(player, Component.translatable("colonylink.terminal.no_colony")); return 0; }
-        BuildingWareHouse wh = findWarehouse(colony);
-        if (wh == null) { msg(player, Component.translatable("colonylink.terminal.no_warehouse")); return 0; }
-        // v1.4.9 — fail-off strict : warehouse entièrement chargé requis.
+        CardLinks.Resolved card = resolveCard(level);
+        if (!card.ok()) { msg(player, card.message()); return 0; }
+        BuildingWareHouse wh = card.warehouse();
+        // v1.4.9 — strict fail-off: warehouse must be fully loaded.
         if (!ColonyLinkChunkUtil.warehouseFullyLoaded(level, wh))
         {
             msg(player, Component.translatable("colonylink.terminal.warehouse_unloaded"));
@@ -939,7 +937,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
             if (!visitedPos.add(rackPos)) continue;
             IItemHandler rack = CapCompat.itemHandler(level, rackPos, null);
             if (rack == null || !visited.add(rack)) continue;
-            // v1.3.9 — skip méta-handler.
+            // v1.3.9 — skip meta-handler.
             for (int s = 0; s < Math.min(rack.getSlots(), RACK_HALF_SLOTS) && remaining > 0; s++)
             {
                 ItemStack inSlot = rack.getStackInSlot(s);
@@ -954,38 +952,45 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
 
         ItemStack toGive = extracted.get(0).copy();
         for (int i = 1; i < extracted.size(); i++) toGive.grow(extracted.get(i).getCount());
+        int totalExtracted = toGive.getCount();
 
-        boolean added = player.getInventory().add(toGive.copy());
-        if (!added)
+        // 1.7.0-beta.5 (audit #2) — Inventory.add() inserts as much as it can, SHRINKS the
+        // stack it is given to the remainder and returns false on a partial add. Passing a
+        // copy and rolling back the full amount on "false" duplicated the part the player
+        // had already received. Pass the stack itself: what is left in it is exactly what
+        // the player did NOT get, and only that goes back to the Warehouse.
+        player.getInventory().add(toGive);
+        int given = totalExtracted - toGive.getCount();
+        if (!toGive.isEmpty())
         {
-            // Remettre dans WH
+            // Return the leftover (and only it) to the WH
             java.util.Set<IItemHandler> retVis = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
             for (BlockPos rp : wh.getContainers())
             {
                 if (toGive.isEmpty()) break;
                 IItemHandler rack = CapCompat.itemHandler(level, rp, null);
                 if (rack == null || !retVis.add(rack)) continue;
-                // v1.3.9 — skip méta-handler.
+                // v1.3.9 — skip meta-handler.
                 toGive = insertIntoHandler(rack, toGive);
             }
-            msg(player, Component.translatable("colonylink.terminal.inventory_full"));
-            return 0;
+            dropLeftover(player, toGive);
+            if (given == 0) msg(player, Component.translatable("colonylink.terminal.inventory_full"));
+            else msg(player, Component.translatable("colonylink.terminal.inventory_full_partial", given));
         }
-        return toGive.getCount();
+        return given;
     }
 
     /**
-     * ME → WH (flèches centrales / sélection).
+     * ME → WH (center arrows / selection).
      */
     public int transferMeToWarehouse(ServerPlayer player, ItemStack template, int count)
     {
-        if (!checkPermission(player)) return 0;
+        if (!checkWarehouseAccess(player)) return 0;
         ServerLevel level = player.level();
-        IColony colony = findColony(level);
-        if (colony == null) { msg(player, Component.translatable("colonylink.terminal.no_colony")); return 0; }
-        BuildingWareHouse wh = findWarehouse(colony);
-        if (wh == null) { msg(player, Component.translatable("colonylink.terminal.no_warehouse")); return 0; }
-        // v1.4.9 — fail-off strict : warehouse entièrement chargé requis.
+        CardLinks.Resolved card = resolveCard(level);
+        if (!card.ok()) { msg(player, card.message()); return 0; }
+        BuildingWareHouse wh = card.warehouse();
+        // v1.4.9 — strict fail-off: warehouse must be fully loaded.
         if (!ColonyLinkChunkUtil.warehouseFullyLoaded(level, wh))
         {
             msg(player, Component.translatable("colonylink.terminal.warehouse_unloaded"));
@@ -1010,14 +1015,18 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
             if (!visitedPos.add(rackPos)) continue;
             IItemHandler rack = CapCompat.itemHandler(level, rackPos, null);
             if (rack == null || !visited.add(rack)) continue;
-            // v1.3.9 — skip méta-handler.
+            // v1.3.9 — skip meta-handler.
             remaining = insertIntoHandler(rack, remaining);
         }
 
         int inserted = (int)(extracted - remaining.getCount());
         if (!remaining.isEmpty())
         {
-            storage.insert(key, remaining.getCount(), Actionable.MODULATE, src);
+            long back = storage.insert(key, remaining.getCount(), Actionable.MODULATE, src);
+            // 1.7.0-beta.5 — safety net: what the ME refused to take back (not expected:
+            // it was just extracted from it) is dropped, never voided.
+            if (back < remaining.getCount())
+                dropLeftover(player, remaining.copyWithCount((int) (remaining.getCount() - back)));
             if (inserted == 0) msg(player, Component.translatable("colonylink.terminal.warehouse_full"));
             else msg(player, Component.translatable("colonylink.terminal.warehouse_full_partial", inserted));
         }
@@ -1025,7 +1034,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     }
 
     /**
-     * ME → Inventaire joueur (flèches centrales / sélection).
+     * ME → player inventory (center arrows / selection).
      */
     public int transferMeToInventory(ServerPlayer player, ItemStack template, int count)
     {
@@ -1041,18 +1050,25 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         if (extracted <= 0) { msg(player, Component.translatable("colonylink.terminal.item_not_in_me")); return 0; }
 
         ItemStack toGive = key.toStack((int) extracted);
-        boolean added = player.getInventory().add(toGive.copy());
-        if (!added)
+        // 1.7.0-beta.5 (audit #2/#3) — same fix as transferWarehouseToInventory: let
+        // Inventory.add() shrink the stack to the remainder, and re-insert into the ME
+        // only that remainder (re-inserting the full 'extracted' duplicated the part the
+        // player had already received).
+        player.getInventory().add(toGive);
+        int given = (int) extracted - toGive.getCount();
+        if (!toGive.isEmpty())
         {
-            storage.insert(key, extracted, Actionable.MODULATE, src);
-            msg(player, Component.translatable("colonylink.terminal.inventory_full"));
-            return 0;
+            long back = storage.insert(key, toGive.getCount(), Actionable.MODULATE, src);
+            if (back < toGive.getCount())
+                dropLeftover(player, toGive.copyWithCount((int) (toGive.getCount() - back)));
+            if (given == 0) msg(player, Component.translatable("colonylink.terminal.inventory_full"));
+            else msg(player, Component.translatable("colonylink.terminal.inventory_full_partial", given));
         }
-        return (int) extracted;
+        return given;
     }
 
     /**
-     * Vide la grille de craft vers une destination.
+     * Empties the crafting grid to a destination.
      * @param dest 0=WH, 1=Player, 2=ME
      */
     public int transferCraftGridContents(ServerPlayer player,
@@ -1067,7 +1083,14 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
             int sent = switch (dest)
             {
                 case 0 -> transferPlayerToWarehouse(player, stack.copy());
-                case 1 -> { boolean ok = player.getInventory().add(stack.copy()); yield ok ? stack.getCount() : 0; }
+                case 1 -> {
+                    // 1.7.0-beta.5 (audit #3) — on a partial add the old code yielded 0 and
+                    // left the full stack in the grid while the player had received part of
+                    // it (duplication). Count what actually went in.
+                    ItemStack give = stack.copy();
+                    player.getInventory().add(give);
+                    yield stack.getCount() - give.getCount();
+                }
                 case 2 -> transferPlayerToMe(player, stack.copy());
                 default -> 0;
             };
@@ -1081,16 +1104,15 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         return total;
     }
 
-    /** Insère un item depuis l'inventaire du joueur vers le WH. */
+    /** Inserts an item from the player inventory into the WH. */
     public int transferPlayerToWarehouse(ServerPlayer player, ItemStack stack)
     {
-        if (!checkPermission(player)) return 0;
+        if (!checkWarehouseAccess(player)) return 0;
         ServerLevel level = player.level();
-        IColony colony = findColony(level);
-        if (colony == null) return 0;
-        BuildingWareHouse wh = findWarehouse(colony);
-        if (wh == null) return 0;
-        // v1.4.9 — fail-off strict : warehouse entièrement chargé requis.
+        CardLinks.Resolved card = resolveCard(level);
+        if (!card.ok()) return 0;
+        BuildingWareHouse wh = card.warehouse();
+        // v1.4.9 — strict fail-off: warehouse must be fully loaded.
         if (!ColonyLinkChunkUtil.warehouseFullyLoaded(level, wh))
         {
             msg(player, Component.translatable("colonylink.terminal.warehouse_unloaded"));
@@ -1106,13 +1128,13 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
             if (!visitedPos.add(rackPos)) continue;
             IItemHandler rack = CapCompat.itemHandler(level, rackPos, null);
             if (rack == null || !visited.add(rack)) continue;
-            // v1.3.9 — skip méta-handler.
+            // v1.3.9 — skip meta-handler.
             stack = insertIntoHandler(rack, stack);
         }
         return original - stack.getCount();
     }
 
-    /** Insère un item dans le ME. */
+    /** Inserts an item into the ME. */
     public int transferPlayerToMe(ServerPlayer player, ItemStack stack)
     {
         var node = this.getMainNode().getNode();
@@ -1127,8 +1149,8 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     }
 
     /**
-     * Rouvre notre WarehouseLinkTerminalMenu quand l'utilisateur clique
-     * "Retour" depuis le CraftAmountMenu ou CraftConfirmMenu AE2.
+     * Reopens our WarehouseLinkTerminalMenu when the user clicks "Back" from
+     * AE2's CraftAmountMenu or CraftConfirmMenu.
      */
     @Override
     public void returnToMainMenu(net.minecraft.world.entity.player.Player player,
@@ -1154,27 +1176,22 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         );
     }
 
-    // ── Queue Domum ───────────────────────────────────────────────────────────
+    // Domum queue
 
-    /**
-     * Ajoute un item Domum à la queue d'encodage.
-     * Persiste le Part et broadcast la queue mise à jour à tous les viewers.
-     */
-    // ── v1.6.1 — Queue Domum PARTAGEE par reseau AE2 (DomumQueueManager) ─────
-    // Le champ domumQueue ne sert plus que de copie NBT (filet de persistance) ; la liste
-    // vive commune est tenue par DomumQueueManager, indexee par grille. Tous les terminaux
-    // d'un meme reseau lisent/ecrivent la meme liste → un item mis en file apparait sur
-    // TOUS les terminaux (cable commun, Quantum Ring, etc.).
+    // v1.6.1 — SHARED Domum queue over the AE2 network (DomumQueueManager)
+    // domumQueue is now only an NBT copy (persistence net); the live shared list is held
+    // by DomumQueueManager, indexed by grid. All terminals on the same network read/write
+    // the same list → a queued item appears on ALL terminals (shared cable, Quantum Ring…).
 
-    /** Grille ME courante de ce terminal (null si non connecte). */
+    /** Current ME grid of this terminal (null if not connected). */
     private IGrid currentGrid()
     {
         var node = this.getMainNode().getNode();
         return node != null ? node.getGrid() : null;
     }
 
-    /** Union des copies NBT de tous les terminaux vivants de la grille — seed du manager
-     *  (fusionne aussi les files divergentes d'anciens mondes a la 1re lecture). */
+    /** Union of the NBT copies of all live terminals on the grid — the manager's seed
+     *  (also merges divergent queues from old worlds on first read). */
     private static List<ItemStack> collectSeed(ServerLevel level, IGrid grid)
     {
         List<ItemStack> seed = new java.util.ArrayList<>();
@@ -1190,8 +1207,8 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         return seed;
     }
 
-    /** Apres toute mutation : recopie la queue partagee dans le NBT de chaque terminal de
-     *  la grille (persistance) et diffuse la liste a tous leurs viewers. */
+    /** After any mutation: copies the shared queue into each grid terminal's NBT
+     *  (persistence) and broadcasts the list to all their viewers. */
     private static void syncGrid(ServerLevel level, IGrid grid)
     {
         if (grid == null) return;
@@ -1205,8 +1222,8 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         }
     }
 
-    /** Point d'entree depuis DomumQueuePacket : ajoute a la queue partagee de la grille et
-     *  synchronise tous les terminaux. Retourne true si ajoute (false = deja en file). */
+    /** Entry point from DomumQueuePacket: adds to the grid's shared queue and syncs all
+     *  terminals. Returns true if added (false = already queued). */
     public static boolean queueDomumOnGrid(ServerLevel level, IGrid grid, ItemStack stack)
     {
         if (grid == null) return false;
@@ -1225,8 +1242,8 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     }
 
     /**
-     * Retire un item de la queue par index.
-     * Utilisé par DomumEncodePatternPacket après encodage réussi.
+     * Removes a queue item by index.
+     * Used by DomumEncodePatternPacket after a successful encode.
      */
     public void removeFromDomumQueue(int index)
     {
@@ -1238,8 +1255,8 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     }
 
     /**
-     * Vérifie si un ItemStack Domum exact est déjà dans la queue (dédup).
-     * Comparaison stricte : item + DataComponents (bloc + MaterialTextureData + BLOCK_STATE).
+     * Checks whether an exact Domum ItemStack is already queued (dedup).
+     * Strict comparison: item + DataComponents (block + MaterialTextureData + BLOCK_STATE).
      */
     public boolean isDomumQueued(ItemStack stack)
     {
@@ -1248,7 +1265,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         return DomumQueueManager.isQueued(grid, () -> collectSeed(level, grid), stack);
     }
 
-    /** Retourne une vue non-modifiable de la queue (pour le menu / screen). */
+    /** Returns an unmodifiable view of the queue (for the menu / screen). */
     public List<ItemStack> getDomumQueue()
     {
         if (!(this.getLevel() instanceof ServerLevel level))
@@ -1258,8 +1275,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     }
 
     /**
-     * Vérifie à chaque serverTick si des items de la queue sont devenus craftables
-     * dans AE2 → les retire automatiquement.
+     * On each serverTick, removes queue items that have become craftable in AE2.
      */
     private void tickDomumQueueCraftableCheck()
     {
@@ -1279,7 +1295,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     }
 
     /**
-     * Envoie la queue complète à tous les viewers actifs.
+     * Sends the full queue to all active viewers.
      */
     private void broadcastDomumQueue()
     {
@@ -1295,7 +1311,7 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         }
     }
 
-    // ── Getters publics ───────────────────────────────────────────────────────
+    // Public getters
 
     public boolean isAe2Active()     { return this.isActive(); }
     public IManagedGridNode getManagedGridNode() { return this.getMainNode(); }
@@ -1303,13 +1319,13 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
     public ItemStackHandler getWarehouseCardSlot() { return warehouseCardSlot; }
     public boolean hasWarehouseCard() { return !warehouseCardSlot.getStackInSlot(0).isEmpty(); }
 
-    // ── Helpers privés ────────────────────────────────────────────────────────
+    // Private helpers
 
 
     /**
-     * Synchronise le carried item (curseur) vers le client.
-     * Équivalent de ServerPlayer.broadcastCarriedItem() qui n'existe pas en 1.21.1.
-     * Envoie ClientboundContainerSetSlotPacket(containerId=-1, slot=-1, carried).
+     * Syncs the carried item (cursor) to the client.
+     * Stands in for ServerPlayer.broadcastCarriedItem(), absent in 1.21.1.
+     * Sends ClientboundContainerSetSlotPacket(containerId=-1, slot=-1, carried).
      */
     private static void syncCarried(net.minecraft.server.level.ServerPlayer player)
     {
@@ -1327,25 +1343,52 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
         // (AE2 security), by resolvePart requiring the menu to be actually open, and
         // by the menu's range check — no colony binding to enforce here.
         if (!hasWarehouseCard()) return true;
-        ServerLevel level = player.level();
-        IColony colony = findColony(level);
-        // v1.6.2 — card present but no colony resolvable: deny warehouse ops instead
-        // of failing open. A bound card without a colony can only be an anomaly.
-        if (colony == null) return false;
-        return colony.getPermissions().hasPermission(player, Action.ACCESS_HUTS);
+        // 1.7.0-beta.2 — the colony is the one written on the card, checked live on
+        // this player. A card that resolves to no colony (not linked, other dimension,
+        // colony lost) unlocks nothing: the terminal then behaves exactly like the
+        // card-less ME terminal above, and every Warehouse action still fails on the
+        // card resolution with its own message (so the player can open the terminal,
+        // read the error and take the card out).
+        CardLinks.Resolved card = resolveCard(player.level());
+        if (card.colony() == null) return true;
+        return card.colony().getPermissions().hasPermission(player, Action.ACCESS_HUTS);
     }
 
-    private IColony findColony(ServerLevel level)
+    /**
+     * 1.7.0 — guard for every Warehouse-touching action. checkPermission alone
+     * returns true without a card (so the plain ME actions keep working), which
+     * left the Warehouse transfers reachable card-less by a modified client, with
+     * no colony permission at all. The GUI never offers them without a card.
+     */
+    private boolean checkWarehouseAccess(ServerPlayer player)
     {
-        BlockPos pos = this.getBlockEntity() != null ? this.getBlockEntity().getBlockPos() : BlockPos.ZERO;
-        return IColonyManager.getInstance().getClosestColony(level, pos);
+        return hasWarehouseCard() && checkPermission(player);
     }
 
-    private BuildingWareHouse findWarehouse(IColony colony)
+    /**
+     * 1.7.0-beta.2 — colony + Warehouse written on the card in the slot. Replaces
+     * findColony (closest colony to the Terminal, no radius) and findWarehouse (first
+     * Warehouse of the building map, unordered).
+     */
+    private CardLinks.Resolved resolveCard(ServerLevel level)
     {
-        for (IBuilding b : colony.getServerBuildingManager().getBuildings().values())
-            if (b instanceof BuildingWareHouse wh) return wh;
-        return null;
+        return CardLinks.resolve(warehouseCardSlot.getStackInSlot(0), level);
+    }
+
+    /**
+     * 1.7.0-beta.2 — migration of a pre-beta.2 (blank) card already in this Terminal:
+     * linked to the colony whose claim the Terminal stands in, Warehouse closest to
+     * the Terminal. Outside any claim nothing happens; a player re-inserting the card
+     * links it. Called when a player opens the terminal.
+     */
+    private void migrateOldCard()
+    {
+        ItemStack card = warehouseCardSlot.getStackInSlot(0);
+        BlockEntity hostBe = this.getBlockEntity();
+        if (hostBe == null || !CardLinks.isUnlinkedCard(card)) return;
+        ItemStack linked = card.copy();
+        if (CardLinks.migrateInTerritory(linked, this.getLevel(), hostBe.getBlockPos()))
+            warehouseCardSlot.setStackInSlot(0, linked);
     }
 
     private static ItemStack insertIntoHandler(IItemHandler handler, ItemStack stack)
@@ -1358,6 +1401,22 @@ public class WarehouseLinkTerminalPart extends AbstractTerminalPart
 
     private static void msg(ServerPlayer player, Component text)
     {
-        player.sendSystemMessage(text);
+        if (text != null) player.sendSystemMessage(text);
+    }
+
+    /**
+     * 1.7.0-beta.5 — last-resort safety net of the rollback paths: a remainder the
+     * source (Warehouse / ME) refused to take back is dropped at the player's feet
+     * instead of being voided. Not expected to trigger (the items were just extracted
+     * from that very source), hence the log line.
+     */
+    private static void dropLeftover(ServerPlayer player, ItemStack leftover)
+    {
+        if (leftover == null || leftover.isEmpty()) return;
+        int n = leftover.getCount();
+        ColonyLink.LOGGER.warn("[Terminal] {} x {} could not be returned to its source; dropped at {}'s feet",
+                n, leftover.getDisplayName().getString(), player.getGameProfile().name());
+        player.drop(leftover, false);
+        msg(player, Component.translatable("colonylink.terminal.dropped_on_ground", n));
     }
 }

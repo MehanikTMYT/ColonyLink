@@ -1,19 +1,17 @@
 package com.colonylink.colonylink;
 
 import net.minecraft.client.Minecraft;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
- * Handlers côté CLIENT pour les packets du Warehouse Link Terminal.
+ * CLIENT-side handlers for the Warehouse Link Terminal packets.
  *
- * Séparés dans cette classe @OnlyIn(CLIENT) pour éviter que RuntimeDistCleaner
- * ne crash le serveur dédié quand il scanne le bytecode des packets S→C.
+ * Kept in this @OnlyIn(CLIENT) class so RuntimeDistCleaner does not crash the
+ * dedicated server when it scans the bytecode of the S→C packets.
  *
- * Les méthodes handle() des packets (WarehouseTerminalSyncPacket, TerminalMeSyncPacket)
- * ne doivent PAS contenir de références directes à Screen ou ses sous-classes.
- * Elles délèguent ici via registerPayloads() côté client uniquement.
+ * The packets' handle() methods (WarehouseTerminalSyncPacket, TerminalMeSyncPacket)
+ * must NOT reference Screen or its subclasses directly; they delegate here via
+ * registerPayloads() on the client only.
  */
 public class TerminalClientPacketHandler
 {
@@ -35,7 +33,7 @@ public class TerminalClientPacketHandler
 
     public static void onDomumQueueSync(java.util.List<net.minecraft.world.item.ItemStack> queue)
     {
-        // Appelé depuis DomumQueueSyncPacket.handle() (déjà sur le thread client via enqueueWork)
+        // Called from DomumQueueSyncPacket.handle() (already on the client thread via enqueueWork)
         if (Minecraft.getInstance().screen instanceof WarehouseLinkTerminalScreen screen)
             screen.updateDomumQueue(queue);
     }

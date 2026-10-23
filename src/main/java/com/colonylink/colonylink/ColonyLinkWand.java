@@ -38,8 +38,7 @@ import java.util.Map;
 /**
  * ColonyLink Wand — v1.2.0
  *
- * Fix #2 : sneak+clic sur un Builder's Hut déjà lié affiche un message
- *          indiquant dans quelle tab il est déjà présent.
+ * Fix #2: sneak+click on an already-linked Builder's Hut reports which tab it is in.
  */
 public class ColonyLinkWand extends Item implements IAEItemPowerStorage
 {
@@ -47,7 +46,7 @@ public class ColonyLinkWand extends Item implements IAEItemPowerStorage
 
     public ColonyLinkWand(Properties properties) { super(properties); }
 
-    // ── Anti-pop ──────────────────────────────────────────────────────────────
+    // Anti-pop
 
     @Override
     public boolean shouldCauseReequipAnimation(ItemStack oldStack, ItemStack newStack, boolean slotChanged)
@@ -55,7 +54,7 @@ public class ColonyLinkWand extends Item implements IAEItemPowerStorage
         return slotChanged || !ItemStack.isSameItem(oldStack, newStack);
     }
 
-    // ── IAEItemPowerStorage ───────────────────────────────────────────────────
+    // IAEItemPowerStorage
 
     @Override
     public double injectAEPower(ItemStack stack, double amount, Actionable mode)
@@ -93,7 +92,7 @@ public class ColonyLinkWand extends Item implements IAEItemPowerStorage
     public double getChargeRate(ItemStack stack)
     { return ColonyLinkConfig.safeGet(ColonyLinkConfig.WAND_RF_TRANSFER_RATE, 2_500L) / AE_TO_RF; }
 
-    // ── Barre durabilité ──────────────────────────────────────────────────────
+    // Durability bar
 
     @Override
     public boolean isBarVisible(ItemStack stack) { return true; }
@@ -101,9 +100,9 @@ public class ColonyLinkWand extends Item implements IAEItemPowerStorage
     @Override
     public int getBarWidth(ItemStack stack)
     {
-        // Délègue au cache client (mis à jour par ColonyLinkPacket toutes les N ticks).
-        // Évite de lire le NBT à chaque render frame, ce qui provoquait un
-        // clignotement 100%→valeur réelle à chaque tick de drain passif.
+        // Delegates to the client cache (refreshed by ColonyLinkPacket every N ticks).
+        // Reading NBT every render frame caused a 100%→real-value flicker on each
+        // passive-drain tick.
         return ClientRFCache.getBarWidth(stack);
     }
 
@@ -113,7 +112,7 @@ public class ColonyLinkWand extends Item implements IAEItemPowerStorage
         return ClientRFCache.getBarColor(stack);
     }
 
-    // ── Tooltip ───────────────────────────────────────────────────────────────
+    // Tooltip
 
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context,
@@ -124,9 +123,9 @@ public class ColonyLinkWand extends Item implements IAEItemPowerStorage
 
         long stored   = WandEnergyStorage.getStoredRF(stack);
         long capacity = ColonyLinkConfig.safeGet(ColonyLinkConfig.WAND_RF_CAPACITY, 160_000L);
-        // v1.6.1 — si le cap a ete abaisse alors que le wand etait charge au-dessus, on
-        // lisse l'affichage (stored plafonne a capacity, % a 100) au lieu d'un 625% / barre
-        // qui deborde. Le surplus reel se draine a la prochaine operation d'energie.
+        // v1.6.1 — if the cap was lowered while the wand held more, clamp the display
+        // (stored capped at capacity, % at 100) instead of showing 625% / an overflowing
+        // bar. The real surplus drains on the next energy operation.
         long shown    = Math.max(0L, Math.min(stored, capacity));
         int pct       = capacity > 0 ? (int)(shown * 100L / capacity) : 0;
         int threshold = ColonyLinkConfig.safeGet(ColonyLinkConfig.LOW_POWER_THRESHOLD_PERCENT, 10);
@@ -179,7 +178,7 @@ public class ColonyLinkWand extends Item implements IAEItemPowerStorage
         return String.valueOf(rf);
     }
 
-    // ── use() — clic droit AIR ────────────────────────────────────────────────
+    // use() — right-click AIR
 
     @Override
     public InteractionResult use(Level level, Player player, InteractionHand hand)
@@ -216,7 +215,7 @@ public class ColonyLinkWand extends Item implements IAEItemPowerStorage
                 : InteractionResult.FAIL;
     }
 
-    // ── useOn() — clic droit sur BLOC ─────────────────────────────────────────
+    // useOn() — right-click on BLOCK
 
     @Override
     public net.minecraft.world.InteractionResult useOn(UseOnContext context)
@@ -243,7 +242,7 @@ public class ColonyLinkWand extends Item implements IAEItemPowerStorage
         if (!player.isShiftKeyDown())
             return net.minecraft.world.InteractionResult.PASS;
 
-        // ── Sneak + Redirector ────────────────────────────────────────────────
+        // Sneak + Redirector
         if (be instanceof ColonyLinkRedirectorBlockEntity redirector)
         {
             if (redirector.getManagedGridNode().getNode() == null)
@@ -262,7 +261,9 @@ public class ColonyLinkWand extends Item implements IAEItemPowerStorage
 
             for (BuilderEntry e : entries)
             {
-                if (e.redirectorPos().equals(pos))
+                // 1.7.0-beta.4 — same Redirector by position, or by UUID (it moved).
+                if (e.redirectorPos().equals(pos)
+                        || redirector.getRedirectorId().equals(e.redirectorId()))
                 {
                     player.sendSystemMessage(Component.translatable("colonylink.wand.msg.redirector_paired", e.builderName()));
                     return net.minecraft.world.InteractionResult.FAIL;
@@ -280,18 +281,42 @@ public class ColonyLinkWand extends Item implements IAEItemPowerStorage
                 targetIndex = Math.min(activeTab, entries.size() - 1);
 
             BuilderEntry target = entries.get(targetIndex);
+
+            // 1.7.0-beta.2 — pairing decides the Redirector's colony (ColonyResolver
+            // .forRedirector reads the Builder written here), so it requires ACCESS_HUTS
+            // on the targeted Builder's colony, checked on this player. The colony is
+            // resolved in the Redirector's level, so a Builder entry of another
+            // dimension is refused first (its colony cannot be checked from here).
+            if (target.dimension() != null && !target.dimension().equals(level.dimension()))
+            {
+                player.sendSystemMessage(Component.translatable("colonylink.handler.cross_dimension",
+                        target.dimension().identifier().getPath()));
+                return net.minecraft.world.InteractionResult.FAIL;
+            }
+            IColony targetColony = ColonyResolver.forBuilder(level, target.builderPos());
+            if (targetColony == null)
+            {
+                player.sendSystemMessage(Component.translatable("colonylink.colony.not_found"));
+                return net.minecraft.world.InteractionResult.FAIL;
+            }
+            if (!targetColony.getPermissions().hasPermission(sp, Action.ACCESS_HUTS))
+            {
+                player.sendSystemMessage(Component.translatable("colonylink.wand.msg.no_permission_colony"));
+                return net.minecraft.world.InteractionResult.FAIL;
+            }
+
             redirector.setTargetInventoryPos(target.builderPos());
             redirector.setLinkedBuilderPos(target.builderPos());
             redirector.setLinkedBuilderName(target.builderName());
             redirector.updateState();
-            entries.set(targetIndex, target.withRedirector(pos));
+            entries.set(targetIndex, target.withRedirector(pos, redirector.getRedirectorId())); // 1.7.0-beta.4 — + UUID
             ColonyLinkWandLinkableHandler.setBuilderEntries(wandStack, entries);
 
             player.sendSystemMessage(Component.translatable("colonylink.wand.msg.redirector_linked", target.builderName(), target.builderPos().toShortString()));
             return net.minecraft.world.InteractionResult.SUCCESS;
         }
 
-        // ── Sneak + Builder's Hut ─────────────────────────────────────────────
+        // Sneak + Builder's Hut
         if (!ColonyLinkWandLinkableHandler.isLinked(wandStack))
         {
             player.sendSystemMessage(Component.translatable("colonylink.wand.msg.not_linked"));
@@ -331,7 +356,7 @@ public class ColonyLinkWand extends Item implements IAEItemPowerStorage
         if (!(building instanceof AbstractBuildingStructureBuilder bb))
             return net.minecraft.world.InteractionResult.PASS;
 
-        // ── Fix #2 : vérifie si ce hut est déjà lié ──────────────────────────
+        // Fix #2: check whether this hut is already linked
         List<BuilderEntry> existingEntries = ColonyLinkWandLinkableHandler.getBuilderEntries(wandStack);
         for (int i = 0; i < existingEntries.size(); i++)
         {
@@ -342,7 +367,6 @@ public class ColonyLinkWand extends Item implements IAEItemPowerStorage
                 return net.minecraft.world.InteractionResult.FAIL;
             }
         }
-        // ─────────────────────────────────────────────────────────────────────
 
         String builderName = "Builder";
         if (!bb.getAllAssignedCitizen().isEmpty())
@@ -370,7 +394,7 @@ public class ColonyLinkWand extends Item implements IAEItemPowerStorage
         return net.minecraft.world.InteractionResult.SUCCESS;
     }
 
-    // ── openGUI ───────────────────────────────────────────────────────────────
+    // openGUI
 
     public static boolean openGUIStatic(ItemStack wandStack, ServerPlayer player, ServerLevel sl,
                                         BlockPos builderPos, int activeTabIndex)
@@ -413,6 +437,10 @@ public class ColonyLinkWand extends Item implements IAEItemPowerStorage
         ICraftingService cs = grid.getCraftingService();
         int cpus = 0; for (var cpu : cs.getCpus()) if (!cpu.isBusy()) cpus++;
 
+        // 1.7.0-beta.4 — entries paired before beta.4 learn their Redirector's UUID
+        // (loaded Redirectors still at the stored position), so they survive a move.
+        ColonyLinkWandLinkableHandler.upgradeRedirectorIds(wandStack, sl);
+
         List<BuilderEntry> allEntries = ColonyLinkWandLinkableHandler.getBuilderEntries(wandStack);
         BuilderEntry ae = allEntries.isEmpty() ? null
                 : allEntries.get(Math.min(activeTabIndex, allEntries.size() - 1));
@@ -421,7 +449,8 @@ public class ColonyLinkWand extends Item implements IAEItemPowerStorage
         String rState = "N/A"; boolean hasCard = false, whPrio = false;
         if (rPos != null)
         {
-            var rbe = sl.getBlockEntity(rPos);
+            // 1.7.0-beta.4 — by the entry's Redirector UUID first (it may have moved).
+            var rbe = RedirectorRegistry.forEntry(sl, ae);
             if (rbe instanceof ColonyLinkRedirectorBlockEntity r)
             {
                 var rn = r.getManagedGridNode().getNode();
@@ -470,7 +499,7 @@ public class ColonyLinkWand extends Item implements IAEItemPowerStorage
         return true;
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // Helpers
 
     public static List<ColonyLinkPacket.BuilderTabMeta> buildTabMetas(List<BuilderEntry> entries)
     {

@@ -9,14 +9,12 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Redirector screen — UI passe 1: full AE2-theme refonte.
+ * Redirector screen — UI pass 1: full AE2-theme overhaul.
  *
  * <p>Canonical AE2 panel (176 wide, Pattern Provider-like), light body drawn as a
  * runtime nine-slice of AE2's own background.png; 9x3 pattern grid + player
@@ -33,7 +31,7 @@ import java.util.List;
  */
 public class ColonyLinkRedirectorScreen extends AbstractContainerScreen<ColonyLinkRedirectorMenu>
 {
-    // ── Layout (UI passe 1 — 176 canon, compact) ──────────────────────────────
+    // Layout (UI pass 1 — 176 canon, compact)
     private static final int GUI_WIDTH  = 176;
     private static final int GUI_HEIGHT = 189;
 
@@ -46,10 +44,10 @@ public class ColonyLinkRedirectorScreen extends AbstractContainerScreen<ColonyLi
     // its top-left is DERIVED from the card slot so the AE2 cell's well always lands on
     // the slot. The cell's item area sits at texel (1,6) inside the box (measured — the
     // cell has no 5px left border), so box origin = slot - (ITEM_DX, ITEM_DY). See
-    // upgradeBoxX()/upgradeBoxY(). This fixes the passe-1 misalignment (the old fixed
+    // upgradeBoxX()/upgradeBoxY(). This fixes the pass-1 misalignment (the old fixed
     // anchor assumed a (6,6) item offset → the well fell 5px left of the item).
 
-    // ── AE2 asset probes (once per screen open, silent fallback) ──────────────
+    // AE2 asset probes (once per screen open, silent fallback)
     private boolean aeBackgroundPresent  = false;
     private boolean aeStatesPresent      = false;
     private boolean aeExtraPanelsPresent = false;
@@ -75,7 +73,7 @@ public class ColonyLinkRedirectorScreen extends AbstractContainerScreen<ColonyLi
         this.aeExtraPanelsPresent = AeGuiBlits.probeTexture(AeGuiBlits.AE_EXTRA_PANELS);
     }
 
-    // ── Background ────────────────────────────────────────────────────────────
+    // Background
 
     @Override
     public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick)
@@ -161,7 +159,7 @@ public class ColonyLinkRedirectorScreen extends AbstractContainerScreen<ColonyLi
         drawFallbackWell(g, bx + AeGuiBlits.UPGRADE_CELL_ITEM_DX - 1, by + AeGuiBlits.UPGRADE_CELL_ITEM_DY - 1);
     }
 
-    // ── Labels (title + compact 2-line header + inventory label) ──────────────
+    // Labels (title + compact 2-line header + inventory label)
 
     @Override
     protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY)
@@ -215,7 +213,7 @@ public class ColonyLinkRedirectorScreen extends AbstractContainerScreen<ColonyLi
         return cut + "…";
     }
 
-    // ── Slots — Domum "target block" view (kept from the previous screen) ─────
+    // Slots — Domum "target block" view (kept from the previous screen)
 
     /**
      * Override renderSlot — same behaviour as AE2 terminals: if the slot contains a
@@ -352,7 +350,7 @@ public class ColonyLinkRedirectorScreen extends AbstractContainerScreen<ColonyLi
             this.extractTooltip(graphics, mouseX, mouseY);
     }
 
-    // ── JEI integration ───────────────────────────────────────────────────────
+    // JEI integration
 
     /**
      * Screen-absolute areas covered by GUI parts that overflow the panel bounds —

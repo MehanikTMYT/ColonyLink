@@ -17,8 +17,6 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
 
 /**
  * Renders the Redirector's current craft item inside the glass cage, sliding
@@ -40,7 +38,7 @@ import net.neoforged.api.distmarker.OnlyIn;
 public class RedirectorBlockEntityRenderer
         implements BlockEntityRenderer<ColonyLinkRedirectorBlockEntity, RedirectorBlockEntityRenderer.State>
 {
-    /** Item ride height in blocks — CONSTANT (bobbing removed in passe 4): the deck
+    /** Item ride height in blocks — CONSTANT (bobbing removed in pass 4): the deck
      *  (cage floor) sits at Y=11px, the cage interior spans Y=11..15.5px; 12px keeps
      *  the item skimming the deck through the blade. */
     private static final double BASE_Y = 12.0 / 16.0;

@@ -12,13 +12,13 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 import java.util.List;
 
 /**
- * C→S : le client demande l'ouverture du GUI du Clipboard via keybind.
+ * C→S: the client requests opening the Clipboard GUI via keybind.
  *
- * Le serveur localise le wand dans l'inventaire du joueur et appelle
- * la même logique que ColonyLinkWand.use() — sans nécessiter que le
- * joueur tienne le wand en main.
+ * The server locates the wand in the player's inventory and runs the same
+ * logic as ColonyLinkWand.use() — without requiring the player to hold the
+ * wand in hand.
  *
- * Packet sans payload (aucune donnée à transmettre).
+ * Payload-less packet (nothing to transmit).
  */
 public record OpenWandGuiPacket() implements CustomPacketPayload
 {
@@ -29,7 +29,7 @@ public record OpenWandGuiPacket() implements CustomPacketPayload
 
     public static final StreamCodec<RegistryFriendlyByteBuf, OpenWandGuiPacket> STREAM_CODEC =
             StreamCodec.of(
-                    (buf, packet) -> { /* rien à écrire */ },
+                    (buf, packet) -> { /* nothing to write */ },
                     buf -> new OpenWandGuiPacket()
             );
 
@@ -45,7 +45,7 @@ public record OpenWandGuiPacket() implements CustomPacketPayload
         {
             if (!(context.player() instanceof ServerPlayer sp)) return;
 
-            // Cherche le wand dans l'inventaire (même logique que ColonyLinkServerTicker)
+            // Find the wand in the inventory (same logic as ColonyLinkServerTicker)
             ItemStack wand = ColonyLinkServerTicker.findWandInInventory(sp);
             if (wand == null)
             {
@@ -54,7 +54,7 @@ public record OpenWandGuiPacket() implements CustomPacketPayload
                 return;
             }
 
-            // Vérifications identiques à ColonyLinkWand.use()
+            // Same checks as ColonyLinkWand.use()
             if (WandEnergyStorage.getStoredRF(wand) <= 0)
             {
                 sp.sendSystemMessage(net.minecraft.network.chat.Component.translatable(
@@ -82,8 +82,8 @@ public record OpenWandGuiPacket() implements CustomPacketPayload
 
             ServerLevel sl = sp.level();
 
-            // Délègue à ColonyLinkWand.openGUIStatic() — méthode extraite pour
-            // être appelable sans instance (voir ColonyLinkWand).
+            // Delegates to ColonyLinkWand.openGUIStatic() — extracted so it can be
+            // called without an instance (see ColonyLinkWand).
             ColonyLinkWand.openGUIStatic(wand, sp, sl, active.builderPos(), activeTab);
         });
     }

@@ -3,6 +3,7 @@ package com.colonylink.colonylink;
 import com.minecolonies.api.colony.IColony;
 import com.minecolonies.api.colony.IColonyManager;
 import com.minecolonies.api.colony.buildings.IBuilding;
+import com.minecolonies.api.colony.permissions.Action;
 import com.minecolonies.core.colony.buildings.AbstractBuildingStructureBuilder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -20,15 +21,15 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 /**
  * LocateBuilderPacket — v1.4.8
  *
- * Envoyé par le client quand le joueur clique sur le bouton "Locate" du Clipboard.
- * Le serveur applique l'effet Glowing vanilla au NPC builder assigné pendant
- * LOCATE_GLOW_DURATION_SECONDS secondes (configurable, op-only).
+ * Sent by the client when the player clicks the Clipboard "Locate" button.
+ * The server applies the vanilla Glowing effect to the assigned builder NPC for
+ * LOCATE_GLOW_DURATION_SECONDS seconds (configurable, op-only).
  *
- * Design :
- * - Cherche le NPC via AbstractBuildingStructureBuilder.getAllAssignedCitizen()
- * - Parcourt les entités chargées du level pour trouver l'UUID correspondant
- * - Applique MobEffects.GLOWING sans particule (amplifier 0, showParticles false)
- * - Si le NPC est dans un chunk non chargé → message d'erreur au joueur
+ * Design:
+ * - Find the NPC via AbstractBuildingStructureBuilder.getAllAssignedCitizen()
+ * - Iterate loaded level entities to find the matching UUID
+ * - Apply MobEffects.GLOWING without particles (amplifier 0, showParticles false)
+ * - If the NPC is in an unloaded chunk → error message to the player
  */
 public record LocateBuilderPacket(BlockPos builderPos) implements CustomPacketPayload
 {
@@ -43,10 +44,10 @@ public record LocateBuilderPacket(BlockPos builderPos) implements CustomPacketPa
                     buf -> new LocateBuilderPacket(buf.readBlockPos())
             );
 
-    /** Cooldown anti-flood : UUID joueur → timestamp last use (ms). */
+    /** Anti-flood cooldown: player UUID → last-use timestamp (ms). */
     private static final java.util.Map<java.util.UUID, Long> COOLDOWNS =
             new java.util.concurrent.ConcurrentHashMap<>();
-    private static final long COOLDOWN_MS = 10_000L; // 10 secondes
+    private static final long COOLDOWN_MS = 10_000L; // 10 seconds
 
     @Override
     public CustomPacketPayload.Type<? extends CustomPacketPayload> type()
@@ -60,7 +61,7 @@ public record LocateBuilderPacket(BlockPos builderPos) implements CustomPacketPa
         {
             if (!(context.player() instanceof ServerPlayer serverPlayer)) return;
 
-            // ── Cooldown anti-flood ───────────────────────────────────────────
+            // Anti-flood cooldown
             long now = System.currentTimeMillis();
             Long last = COOLDOWNS.get(serverPlayer.getUUID());
             if (last != null && now - last < COOLDOWN_MS)
@@ -75,7 +76,26 @@ public record LocateBuilderPacket(BlockPos builderPos) implements CustomPacketPa
             ServerLevel level = serverPlayer.level();
             BlockPos builderPos = packet.builderPos();
 
-            // ── Trouve la colonie ─────────────────────────────────────────────
+            // 1.7.0 — the client is not authoritative on builderPos: it must be a
+            // builder linked to THIS player's Clipboard (same check as SendToWarehousePacket).
+            net.minecraft.world.item.ItemStack wandStack = ColonyLinkServerTicker.findWandInInventory(serverPlayer);
+            if (wandStack == null)
+            {
+                serverPlayer.sendSystemMessage(Component.translatable("colonylink.whc.clipboard_not_found"));
+                return;
+            }
+            boolean builderLinked = false;
+            for (BuilderEntry e : ColonyLinkWandLinkableHandler.getBuilderEntries(wandStack))
+            {
+                if (e.builderPos().equals(builderPos)) { builderLinked = true; break; }
+            }
+            if (!builderLinked)
+            {
+                serverPlayer.sendSystemMessage(Component.translatable("colonylink.stw.invalid_request"));
+                return;
+            }
+
+            // Find the colony
             IColony colony = IColonyManager.getInstance().getClosestColony(level, builderPos);
             if (colony == null)
             {
@@ -84,7 +104,14 @@ public record LocateBuilderPacket(BlockPos builderPos) implements CustomPacketPa
                 return;
             }
 
-            // ── Trouve le bâtiment ────────────────────────────────────────────
+            // 1.7.0 — colony permission, same action as the other Clipboard handlers.
+            if (!colony.getPermissions().hasPermission(serverPlayer, Action.ACCESS_HUTS))
+            {
+                serverPlayer.sendSystemMessage(Component.translatable("colonylink.wand.msg.no_permission"));
+                return;
+            }
+
+            // Find the building
             IBuilding building = null;
             for (IBuilding b : colony.getServerBuildingManager().getBuildings().values())
             {
@@ -102,7 +129,7 @@ public record LocateBuilderPacket(BlockPos builderPos) implements CustomPacketPa
                 return;
             }
 
-            // ── Trouve le citoyen assigné ─────────────────────────────────────
+            // Find the assigned citizen
             if (bb.getAllAssignedCitizen().isEmpty())
             {
                 serverPlayer.sendSystemMessage(
@@ -113,13 +140,11 @@ public record LocateBuilderPacket(BlockPos builderPos) implements CustomPacketPa
             var citizenData = bb.getAllAssignedCitizen().iterator().next();
             java.util.UUID citizenUUID = citizenData.getUUID();
 
-            // ── Cherche l'entité dans le level ────────────────────────────────
-            // MineColonies expose l'UUID du citoyen via ICitizenData.getId().
-            // On itère les entités chargées pour trouver le mob correspondant.
+            // Find the entity in the level
             Entity targetEntity = null;
             for (Entity entity : level.getAllEntities())
             {
-                // Les citoyens MC exposent leur UUID dans getUUID() standard
+                // MC citizens expose their UUID via the standard getUUID()
                 if (entity.getUUID().equals(citizenUUID))
                 {
                     targetEntity = entity;
@@ -134,7 +159,7 @@ public record LocateBuilderPacket(BlockPos builderPos) implements CustomPacketPa
                 return;
             }
 
-            // ── Consomme le RF ────────────────────────────────────────────────
+            // Consume RF
             long cost = ColonyLinkConfig.LOCATE_COST_RF.get();
             if (cost > 0 && !ColonyLinkServerTicker.tryConsumeRF(serverPlayer, cost))
             {
@@ -143,7 +168,7 @@ public record LocateBuilderPacket(BlockPos builderPos) implements CustomPacketPa
                 return;
             }
 
-            // ── Applique le Glowing ───────────────────────────────────────────
+            // Apply Glowing
             int durationTicks = ColonyLinkConfig.LOCATE_GLOW_DURATION_SECONDS.get() * 20;
 
             if (targetEntity instanceof net.minecraft.world.entity.LivingEntity living)
@@ -153,8 +178,8 @@ public record LocateBuilderPacket(BlockPos builderPos) implements CustomPacketPa
                         durationTicks,
                         0,       // amplifier (unused for glowing)
                         false,   // ambient
-                        false,   // showParticles — pas de particules pour être propre
-                        true     // showIcon dans l'UI du mob
+                        false,   // showParticles — none, to keep it clean
+                        true     // showIcon in the mob UI
                 ));
 
                 serverPlayer.sendSystemMessage(

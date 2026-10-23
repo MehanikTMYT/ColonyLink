@@ -10,12 +10,12 @@ import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
- * Packet client → serveur déclenché quand le joueur clique "Craft" sur un item
- * dont les composants sont disponibles en Warehouse (snapshot actif).
+ * Client -> server packet fired when the player clicks "Craft" on an item whose
+ * components are available in the Warehouse (active snapshot).
  *
- * Deux cas :
- * - isDomum = false : extrait composants warehouse → injecte dans ME → lance craft AE2
- * - isDomum = true  : extrait composants warehouse → insère dans buffer redirector (craft virtuel DO)
+ * Two cases:
+ * - isDomum = false: extract warehouse components -> inject into ME -> start AE2 craft
+ * - isDomum = true : extract warehouse components -> insert into redirector buffer (virtual DO craft)
  */
 public record WarehouseCraftPacket(
         ItemStack stack,

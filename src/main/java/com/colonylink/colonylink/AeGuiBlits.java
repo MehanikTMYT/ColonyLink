@@ -5,16 +5,14 @@ import net.minecraft.util.ARGB;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.resources.Identifier;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
 
 /**
  * AeGuiBlits — shared client-only rendering primitives for AE2-themed screens.
  *
- * <p>UI passe 1: extracted VERBATIM from {@link ColonyLinkScreen} (which now
+ * <p>UI pass 1: extracted VERBATIM from {@link ColonyLinkScreen} (which now
  * delegates through thin private facades — zero visual change to the Clipboard),
  * so a second screen (the Redirector) reuses the exact same primitives. Adds two
- * helpers new to this chantier: a generic states.png sprite blit (slot wells) and
+ * helpers new to this effort: a generic states.png sprite blit (slot wells) and
  * the AE2 upgrade-panel cell (the overflowing side box).
  *
  * <p>Legal frame (validated on the Clipboard): AE2 assets are CC BY-NC-SA and are
@@ -27,7 +25,7 @@ public final class AeGuiBlits
 {
     private AeGuiBlits() {}
 
-    // ── AE2 text palette (published values from ae2:screens/common/palette.json) ──
+    // AE2 text palette (published values from ae2:screens/common/palette.json)
     /** AE2 DEFAULT_TEXT — normal text on the light AE body. */
     public static final int AE_TEXT  = 0xFF413F54;
     /** AE2 MUTED_TEXT_COLOR — secondary / muted text. */
@@ -201,7 +199,7 @@ public final class AeGuiBlits
         g.blitSprite(RenderPipelines.GUI_TEXTURED, sprite, x, y, w, h, ARGB.white(alpha));
     }
 
-    // ── New for the Redirector chantier ───────────────────────────────────────
+    // New for the Redirector work
 
     /**
      * Generic tinted blit of a sprite region from AE2's states.png (256x256) —

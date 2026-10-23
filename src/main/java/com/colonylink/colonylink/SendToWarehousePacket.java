@@ -97,7 +97,7 @@ public record SendToWarehousePacket(ItemStack stack, BlockPos builderPos, int co
     private static void handleSendToWarehouse(ServerPlayer player, ItemStack stack,
                                               BlockPos builderPos, int count)
     {
-        // ── 1. Mode guard — server config is the only authority ─────────────
+        // 1. Mode guard — server config is the only authority
         if (ColonyLinkConfig.SEND_TARGET.get() != ColonyLinkConfig.SendTarget.WAREHOUSE)
         {
             player.sendSystemMessage(Component.translatable("colonylink.delivery.blocked_warehouse"));
@@ -117,7 +117,7 @@ public record SendToWarehousePacket(ItemStack stack, BlockPos builderPos, int co
             return;
         }
 
-        // ── 2. Wand ──────────────────────────────────────────────────────────
+        // 2. Wand
         ItemStack wandStack = findWandInInventory(player);
         if (wandStack == null)
         {
@@ -130,7 +130,7 @@ public record SendToWarehousePacket(ItemStack stack, BlockPos builderPos, int co
             return;
         }
 
-        // ── 3. The builder must be linked to THIS wand ───────────────────────
+        // 3. The builder must be linked to THIS wand
         boolean builderLinked = false;
         for (BuilderEntry e : ColonyLinkWandLinkableHandler.getBuilderEntries(wandStack))
         {
@@ -153,7 +153,7 @@ public record SendToWarehousePacket(ItemStack stack, BlockPos builderPos, int co
 
         ServerLevel level = player.level();
 
-        // ── 4. Colony, building, permission ──────────────────────────────────
+        // 4. Colony, building, permission
         IColony colony = IColonyManager.getInstance().getClosestColony(level, builderPos);
         if (colony == null)
         {
@@ -181,7 +181,7 @@ public record SendToWarehousePacket(ItemStack stack, BlockPos builderPos, int co
             return;
         }
 
-        // ── 5. The item must actually be requested by that builder ────────────
+        // 5. The item must actually be requested by that builder
         // Two legitimate sources: a missing build material (getNeededResources),
         // or an open request of the assigned citizen (tools/armor/food are
         // requests, not materials — the courier fulfills those from the
@@ -220,10 +220,10 @@ public record SendToWarehousePacket(ItemStack stack, BlockPos builderPos, int co
             return;
         }
 
-        // ── 6. Clamp the client-supplied count (MAX_VALUE safe; <=0 was rejected) ─
+        // 6. Clamp the client-supplied count (MAX_VALUE safe; <=0 was rejected)
         int toSend = Mth.clamp(count, 1, missing);
 
-        // ── 7. Duplicate-send guard — the sent-key memory IS the anti-cascade ─
+        // 7. Duplicate-send guard — the sent-key memory IS the anti-cascade
         Set<String> sentKeys = ColonyLinkWandLinkableHandler.getSentRequestKeys(wandStack);
         if (ColonyLinkWandLinkableHandler.hasBuilderSentKey(sentKeys, builderPos, stack.getItem()))
         {
@@ -231,7 +231,7 @@ public record SendToWarehousePacket(ItemStack stack, BlockPos builderPos, int co
             return;
         }
 
-        // ── 8. Warehouse racks must exist and be fully live (fail-off) ────────
+        // 8. Warehouse racks must exist and be fully live (fail-off)
         if (!ColonyLinkChunkUtil.colonyWarehousesFullyLoaded(level, colony))
         {
             player.sendSystemMessage(Component.translatable("colonylink.handler.warehouse_unloaded"));
@@ -256,7 +256,7 @@ public record SendToWarehousePacket(ItemStack stack, BlockPos builderPos, int co
             return;
         }
 
-        // ── 9. ME network and stock ───────────────────────────────────────────
+        // 9. ME network and stock
         GlobalPos linkedPos = ColonyLinkWandLinkableHandler.getLinkedPos(wandStack);
         if (linkedPos == null)
         {
@@ -295,7 +295,7 @@ public record SendToWarehousePacket(ItemStack stack, BlockPos builderPos, int co
         }
         toSend = (int) Math.min(toSend, inStock);
 
-        // ── 10. RF cost — charged only after every validation passed ──────────
+        // 10. RF cost — charged only after every validation passed
         long sendCost = ColonyLinkConfig.SEND_COST_RF.get();
         if (sendCost > 0 && !ColonyLinkServerTicker.tryConsumeRF(player, sendCost))
         {
@@ -303,7 +303,7 @@ public record SendToWarehousePacket(ItemStack stack, BlockPos builderPos, int co
             return;
         }
 
-        // ── Extract from ME, insert into racks (zero voiding) ────────────────
+        // Extract from ME, insert into racks (zero voiding)
         int remaining = toSend;
         int totalInserted = 0;
 
@@ -339,7 +339,7 @@ public record SendToWarehousePacket(ItemStack stack, BlockPos builderPos, int co
             if (remaining <= 0) break;
         }
 
-        // ── Feedback + sent-key memory ────────────────────────────────────────
+        // Feedback + sent-key memory
         if (totalInserted > 0)
         {
             // Record the send server-side. Baseline = the builder's 'available'
@@ -362,7 +362,7 @@ public record SendToWarehousePacket(ItemStack stack, BlockPos builderPos, int co
         }
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // Helpers
 
     /**
      * v1.6.0 — count requested via the builder's open requests (tools, armor,

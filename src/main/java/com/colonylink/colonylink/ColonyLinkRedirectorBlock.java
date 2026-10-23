@@ -71,29 +71,28 @@ public class ColonyLinkRedirectorBlock extends Block implements EntityBlock
     }
 
     /**
-     * getTicker : utilisé pour le premier tick de setup après chargement.
-     * Le BE notifie ses voisins après que le niveau soit complètement chargé.
+     * getTicker: used for the first setup tick after loading.
+     * The BE notifies its neighbors once the level is fully loaded.
      */
     @Override
     public @Nullable <T extends BlockEntity> BlockEntityTicker<T> getTicker(
             Level level, BlockState state, BlockEntityType<T> serverType)
     {
-        // Passe 2 (Fix 3) — no early client return anymore: createTicker() branches
+        // Pass 2 (Fix 3) — no early client return anymore: createTicker() branches
         // internally (client = sawdust particles only, server = craft pipeline +
         // display sync). Without this delegation the client ticker would be dead code.
         return ColonyLinkRedirectorBlockEntity.createTicker(level, serverType);
     }
 
     /**
-     * neighborChanged : appelé par Minecraft quand un bloc adjacent change.
+     * neighborChanged: called by Minecraft when an adjacent block changes.
      *
-     * Du côté AE2, c'est le CÂBLE qui initie la connexion :
-     * quand un câble est posé, il appelle neighborChanged sur ses voisins,
-     * puis appelle getGridNode(direction) sur les IInWorldGridNodeHost adjacents.
-     * Notre BE implémente IInWorldGridNodeHost et retourne son nœud → AE2 crée
-     * automatiquement la connexion.
+     * In AE2 the CABLE initiates the connection: when a cable is placed it calls
+     * neighborChanged on its neighbors, then getGridNode(direction) on the adjacent
+     * IInWorldGridNodeHost. Our BE implements IInWorldGridNodeHost and returns its
+     * node → AE2 creates the connection automatically.
      *
-     * Ici on met juste à jour l'état du redirector en réponse au changement de voisin.
+     * Here we just update the redirector's state in response to the neighbor change.
      */
     @Override
     protected void neighborChanged(BlockState state, Level level, BlockPos pos,
@@ -108,10 +107,25 @@ public class ColonyLinkRedirectorBlock extends Block implements EntityBlock
     }
 
     /**
-     * onPlace : quand le redirector est posé, notifie les blocs voisins.
-     * Cela permet aux câbles déjà présents de détecter le nouveau nœud
-     * et de former une connexion en appelant getGridNode() sur ce BE.
+     * onPlace: when the redirector is placed, notify neighboring blocks so that
+     * existing cables detect the new node and form a connection by calling
+     * getGridNode() on this BE.
      */
+    /**
+     * 1.7.0-beta.4 — a Redirector placed by a player gets its own UUID, even if the item
+     * carried block-entity data (creative copy): two Redirectors must never share one.
+     * Block movers (Sable, Create) do not call setPlacedBy, so a moved Redirector keeps
+     * its UUID.
+     */
+    @Override
+    public void setPlacedBy(Level level, BlockPos pos, BlockState state,
+                            @Nullable net.minecraft.world.entity.LivingEntity placer, ItemStack stack)
+    {
+        super.setPlacedBy(level, pos, state, placer, stack);
+        if (!level.isClientSide() && level.getBlockEntity(pos) instanceof ColonyLinkRedirectorBlockEntity be)
+            be.regenerateRedirectorId();
+    }
+
     @Override
     public void onPlace(BlockState state, Level level, BlockPos pos,
                         BlockState oldState, boolean movedByPiston)
@@ -134,12 +148,12 @@ public class ColonyLinkRedirectorBlock extends Block implements EntityBlock
     }
 
     /**
-     * Drop "self" défini en code, indépendant de toute loot table JSON.
-     * C'était la cause du bug : sans loot table (absente/incomplète), le chemin
-     * vanilla playerDestroy() → dropResources() → getDrops() ne renvoyait rien,
-     * donc le block item ne tombait jamais. On force ici le drop du Redirector.
-     * Couvre TOUS les cas de destruction (pioche, explosion, destroyBlock du wrench…).
-     * Le contenu du buffer + la Warehouse Link Card restent gérés par onRemove().
+     * Self-drop defined in code, independent of any JSON loot table.
+     * This was the bug: with no loot table (missing/incomplete), the vanilla path
+     * playerDestroy() → dropResources() → getDrops() returned nothing, so the block
+     * item never dropped. We force the Redirector drop here. Covers ALL destruction
+     * cases (pickaxe, explosion, wrench destroyBlock…). Buffer contents + the
+     * Warehouse Link Card stay handled by onRemove().
      */
     @Override
     public List<ItemStack> getDrops(BlockState state, LootParams.Builder params)
@@ -148,29 +162,28 @@ public class ColonyLinkRedirectorBlock extends Block implements EntityBlock
     }
 
 
-
     @Override
     public InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit)
     {
         ItemStack held = player.getMainHandItem();
 
-        // Wand → PASS côté client et serveur, useOn() de la wand gère déjà tout
+        // Wand → PASS on client and server; the wand's useOn() already handles everything
         if (held.getItem() instanceof ColonyLinkWand)
             return InteractionResult.PASS;
 
-        // Wrench (c:tools/wrench) → bloquer l'ouverture GUI des deux côtés
-        // Le check doit être AVANT isClientSide() pour que le client ne tente
-        // pas d'ouvrir le GUI de son côté
+        // Wrench (c:tools/wrench) → block GUI opening on both sides.
+        // The check must be BEFORE isClientSide() so the client doesn't try to open
+        // the GUI on its side.
         var wrenchTag = net.minecraft.tags.TagKey.create(
                 net.minecraft.core.registries.Registries.ITEM,
                 net.minecraft.resources.Identifier.fromNamespaceAndPath("c", "tools/wrench"));
         if (held.is(wrenchTag))
         {
-            // Sneak + wrench → retire le Redirector proprement.
-            // destroyBlock(pos, true) : true → dropResources → getDrops() droppe le block
-            // item, puis onRemove() droppe le contenu du buffer + la Warehouse Link Card.
-            // Côté client (isClientSide) on ne fait rien : la suppression du bloc est
-            // répliquée par le packet de mise à jour serveur habituel.
+            // Sneak + wrench → remove the Redirector cleanly.
+            // destroyBlock(pos, true): true → dropResources → getDrops() drops the block
+            // item, then onRemove() drops the buffer contents + the Warehouse Link Card.
+            // Client side (isClientSide) does nothing: the block removal is replicated by
+            // the usual server update packet.
             if (!level.isClientSide() && player.isShiftKeyDown())
                 level.destroyBlock(pos, true);
             return InteractionResult.SUCCESS;
@@ -181,7 +194,7 @@ public class ColonyLinkRedirectorBlock extends Block implements EntityBlock
         var be = level.getBlockEntity(pos);
         if (!(be instanceof ColonyLinkRedirectorBlockEntity redirector)) return InteractionResult.PASS;
 
-        // Tout autre cas → ouvre le GUI buffer
+        // Any other case → open the buffer GUI
         if (!player.isShiftKeyDown())
         {
             player.openMenu(redirector, buf -> buf.writeBlockPos(pos));

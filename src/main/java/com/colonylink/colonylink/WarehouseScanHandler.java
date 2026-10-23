@@ -8,7 +8,7 @@ import com.ldtteam.domumornamentum.block.IMateriallyTexturedBlock;
 import com.ldtteam.domumornamentum.block.IMateriallyTexturedBlockComponent;
 import com.ldtteam.domumornamentum.client.model.data.MaterialTextureData;
 import com.minecolonies.api.colony.IColony;
-import com.minecolonies.api.colony.IColonyManager;
+import com.minecolonies.api.colony.permissions.Action;
 import com.minecolonies.api.colony.IColonyManager;
 import com.minecolonies.api.colony.buildings.IBuilding;
 import com.minecolonies.core.colony.buildings.AbstractBuildingStructureBuilder;
@@ -35,19 +35,19 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Gère le scan à la demande du stock Warehouse MineColonies.
+ * Handles the on-demand scan of the MineColonies Warehouse stock.
  *
- * Flow :
- *  1. Le joueur clique "Check Warehouse" dans ColonyLinkScreen (wand GUI)
- *  2. WarehouseCheckPacket arrive ici
- *  3. On vérifie le cooldown 400 ticks (par joueur, stocké dans une map statique)
- *  4. On scanne tous les racks de la Warehouse
- *  5. Pour chaque ressource builder manquante, on calcule :
- *     - inWarehouse : quantité directement présente dans les racks
- *     - viaCraft : quantité supplémentaire accessible en résolvant récursivement
- *       les patterns AE2 dont les composants sont présents en warehouse
- *  6. La réservation est appliquée (stock warehouse partagé entre ressources)
- *  7. Le résultat est envoyé via WarehouseResultPacket
+ * Flow:
+ *  1. Player clicks "Check Warehouse" in ColonyLinkScreen (wand GUI)
+ *  2. WarehouseCheckPacket arrives here
+ *  3. Check the cooldown (per player, stored in a static map)
+ *  4. Scan all the Warehouse racks
+ *  5. For each missing builder resource, compute:
+ *     - inWarehouse: quantity directly present in the racks
+ *     - viaCraft: extra quantity reachable by recursively resolving the AE2 patterns
+ *       whose components are present in the warehouse
+ *  6. Apply the reservation (warehouse stock shared between resources)
+ *  7. Send the result via WarehouseResultPacket
  */
 public class WarehouseScanHandler
 {
@@ -59,15 +59,13 @@ public class WarehouseScanHandler
         return ColonyLinkConfig.WAREHOUSE_SNAPSHOT_VALIDITY_TICKS.get();
     }
 
-    /** Profondeur max de récursion pour la résolution des patterns AE2. */
+    /** Max recursion depth for resolving AE2 patterns. */
     private static final int MAX_RECURSION_DEPTH = 10;
 
-    /** Dernier tick de scan par UUID joueur. */
+    /** Last scan tick per player UUID. */
     private static final Map<java.util.UUID, Long> lastScanTick = new HashMap<>();
 
-    // ────────────────────────────────────────────────────────────────────────
-    // Point d'entrée
-    // ────────────────────────────────────────────────────────────────────────
+    // Entry point
 
     public static void handleWarehouseCheck(ServerPlayer player, BlockPos builderPos)
     {
@@ -93,7 +91,7 @@ public class WarehouseScanHandler
         // v1.6.0 — the cooldown is armed just before the actual scan (below),
         // so a failed validation no longer burns the full cooldown.
 
-        // Récupère la wand et le réseau AE2
+        // Get the wand and the AE2 network
         ItemStack wandStack = findWandInInventory(player);
         if (wandStack == null || !isWandLinked(wandStack))
         {
@@ -104,8 +102,8 @@ public class WarehouseScanHandler
 
         ServerLevel level = player.level();
 
-        // v1.4.9 — cross-dimension : le Clipboard ne peut pas atteindre une colonie
-        // dans une autre dimension. Refus propre (null = entrée legacy → on laisse passer).
+        // v1.4.9 — cross-dimension: the Clipboard cannot reach a colony in another
+        // dimension. Clean refusal (null = legacy entry -> let it through).
         ResourceKey<Level> builderDim =
                 ColonyLinkWandLinkableHandler.getBuilderDimension(wandStack, builderPos);
         if (builderDim != null && !level.dimension().equals(builderDim))
@@ -115,7 +113,7 @@ public class WarehouseScanHandler
             return;
         }
 
-        // Vérifie que le redirector a bien une WarehouseLinkCard
+        // Verify the redirector actually has a WarehouseLinkCard
         BlockPos redirectorPos = getActiveRedirectorPos(wandStack);
         if (redirectorPos == null)
         {
@@ -124,7 +122,8 @@ public class WarehouseScanHandler
             return;
         }
 
-        var be = level.getBlockEntity(redirectorPos);
+        // 1.7.0-beta.4 — active entry's Redirector, by UUID first (follows a moved Redirector).
+        var be = RedirectorRegistry.forEntry(level, ColonyLinkWandLinkableHandler.getActiveEntry(wandStack));
         boolean hasCard = false;
         if (be instanceof ColonyLinkRedirectorBlockEntity redirector) hasCard = redirector.hasWarehouseCard();
         if (!hasCard)
@@ -134,7 +133,7 @@ public class WarehouseScanHandler
             return;
         }
 
-        // Récupère la colonie et le builder
+        // Get the colony and the builder
         IColony colony = IColonyManager.getInstance().getClosestColony(level, builderPos);
         if (colony == null)
         {
@@ -142,6 +141,28 @@ public class WarehouseScanHandler
             sendFailure(player, currentTick);
             return;
         }
+
+        // 1.7.0 — colony permission (the scan reads the colony's Warehouse racks),
+        // same action as the other Clipboard handlers.
+        if (!colony.getPermissions().hasPermission(player, Action.ACCESS_HUTS))
+        {
+            player.sendSystemMessage(Component.translatable("colonylink.wand.msg.no_permission"));
+            sendFailure(player, currentTick);
+            return;
+        }
+
+        // 1.7.0-beta.2 — the Warehouse comes from the card, which must belong to the
+        // Redirector's Builder colony, and to the colony of the Builder being scanned.
+        CardLinks.Resolved card = CardLinks.resolveForRedirector(level, (ColonyLinkRedirectorBlockEntity) be, player);
+        if (card.ok() && card.colony().getID() != colony.getID())
+            card = new CardLinks.Resolved(CardLinks.Status.OTHER_COLONY, card.link(), null, null);
+        if (!card.ok())
+        {
+            player.sendSystemMessage(card.message());
+            sendFailure(player, currentTick);
+            return;
+        }
+        com.minecolonies.core.colony.buildings.workerbuildings.BuildingWareHouse cardWarehouse = card.warehouse();
 
         AbstractBuildingStructureBuilder builderBuilding = findBuilderBuilding(colony, builderPos);
         if (builderBuilding == null)
@@ -151,7 +172,7 @@ public class WarehouseScanHandler
             return;
         }
 
-        // Récupère le service de craft AE2
+        // Get the AE2 crafting service
         ICraftingService craftingService = null;
         {
             IWirelessAccessPoint wap = getWap(wandStack, level);
@@ -170,13 +191,13 @@ public class WarehouseScanHandler
             craftingService = grid.getCraftingService();
         }
 
-        // ── Scan des racks warehouse ─────────────────────────────────────────
-        // Stock warehouse agrégé : Item → quantité totale dans les racks
-        // On travaille en unités "item brut" pour pouvoir faire la réservation
-        // Stock standard (agrégé par Item) + stock DO finaux (par ItemStack avec NBT)
-        // v1.4.9 — fail-off strict : le warehouse doit être ENTIÈREMENT chargé.
-        // Un scan sur des racks en chunks déchargés renverrait un stock incomplet en silence.
-        if (!ColonyLinkChunkUtil.colonyWarehousesFullyLoaded(level, colony))
+        // Scan the warehouse racks
+        // Aggregated warehouse stock: Item -> total quantity in the racks.
+        // Work in "raw item" units to allow reservation.
+        // Standard stock (aggregated by Item) + final DO stock (by ItemStack with NBT).
+        // v1.4.9 — strict fail-off: the warehouse must be FULLY loaded.
+        // Scanning racks in unloaded chunks would silently return incomplete stock.
+        if (!ColonyLinkChunkUtil.warehouseFullyLoaded(level, cardWarehouse))
         {
             player.sendSystemMessage(Component.translatable("colonylink.whs.warehouse_unloaded"));
             sendFailure(player, currentTick);
@@ -188,17 +209,17 @@ public class WarehouseScanHandler
 
         Map<Item, Long> warehouseStock = new HashMap<>();
         List<ItemStack> warehouseDomumStock = new ArrayList<>();
-        scanWarehouseRacks(colony, level, warehouseStock, warehouseDomumStock);
+        scanWarehouseRacks(cardWarehouse, level, warehouseStock, warehouseDomumStock);
 
         if (warehouseStock.isEmpty() && warehouseDomumStock.isEmpty())
         {
             player.sendSystemMessage(Component.translatable("colonylink.whs.no_items"));
         }
 
-        // Stock de réservation : copie mutable sur laquelle on déduit au fur et à mesure
+        // Reservation stock: a mutable copy that is deducted as we go
         Map<Item, Long> reservedStock = new HashMap<>(warehouseStock);
 
-        // ── Calcul par ressource builder ─────────────────────────────────────
+        // Per-builder-resource computation
         Map<String, BuildingBuilderResource> neededResources = builderBuilding.getNeededResources();
         List<WarehouseResultPacket.WarehouseEntry> resultEntries = new ArrayList<>();
 
@@ -216,8 +237,8 @@ public class WarehouseScanHandler
 
                 if (DomumCraftHandler.isDomumItem(stack))
                 {
-                    // Cas Domum : vérifie d'abord si l'item final est en warehouse,
-                    // sinon résout les composants via warehouse
+                    // Domum case: check the final item in the warehouse first,
+                    // otherwise resolve the components via the warehouse
                     WarehouseEntry entry = computeDomumWarehouseEntry(
                             stack, missing, reservedStock, warehouseDomumStock, craftingService, tooltipLines);
                     resultEntries.add(new WarehouseResultPacket.WarehouseEntry(
@@ -225,7 +246,7 @@ public class WarehouseScanHandler
                 }
                 else
                 {
-                    // Cas standard
+                    // Standard case
                     WarehouseEntry entry = computeStandardWarehouseEntry(
                             stack, missing, reservedStock, craftingService, tooltipLines, 0, new HashSet<>());
                     resultEntries.add(new WarehouseResultPacket.WarehouseEntry(
@@ -240,33 +261,27 @@ public class WarehouseScanHandler
         player.sendSystemMessage(Component.translatable("colonylink.whs.scan_complete", warehouseStock.size()));
     }
 
-    // ────────────────────────────────────────────────────────────────────────
-    // Scan des racks
-    // ────────────────────────────────────────────────────────────────────────
+    // Rack scan
 
     /**
-     * Parcourt tous les racks de la Warehouse et agrège les quantités par Item.
-     * On utilise Item (pas ItemStack) comme clé pour rester simple ;
-     * les items avec NBT custom (Domum) sont gérés séparément via computeDomumWarehouseEntry.
-     */
-    /**
-     * Scanne les racks de la Warehouse et remplit deux stocks :
-     * - stock       : items standard agrégés par Item (clé simple)
-     * - domumStock  : items DO finaux conservés comme ItemStack complets
-     *                 pour permettre la comparaison par isSameItemSameComponents
+     * Scans the Warehouse racks and fills two stocks:
+     * - stock       : standard items aggregated by Item (simple key)
+     * - domumStock  : final DO items kept as full ItemStacks so they can be compared
+     *                 by isSameItemSameComponents
+     * Item (not ItemStack) is used as the key for simplicity; NBT items (Domum) are
+     * handled separately via computeDomumWarehouseEntry.
      */
     private static void scanWarehouseRacks(
-            IColony colony,
+            com.minecolonies.core.colony.buildings.workerbuildings.BuildingWareHouse warehouse,
             ServerLevel level,
             Map<Item, Long> stock,
             List<ItemStack> domumStock)
     {
-        for (IBuilding building : colony.getServerBuildingManager().getBuildings().values())
+        // 1.7.0-beta.2 — only the card's Warehouse is scanned (it used to be every
+        // building of the colony whose class name contains "WareHouse"), so the scan
+        // shows the same Warehouse that Send and Craft pull from.
+        for (IBuilding building : List.<IBuilding>of(warehouse))
         {
-            if (!building.getClass().getSimpleName().contains("WareHouse")
-                    && !building.getClass().getSimpleName().contains("Warehouse"))
-                continue;
-
             try
             {
                 var containerList = building.getContainers();
@@ -284,7 +299,7 @@ public class WarehouseScanHandler
 
                         if (DomumCraftHandler.isDomumItem(inSlot))
                         {
-                            // Item DO final : stocké entier pour comparaison NBT exacte
+                            // Final DO item: kept whole for exact NBT comparison
                             boolean merged = false;
                             for (ItemStack existing : domumStock)
                             {
@@ -312,17 +327,15 @@ public class WarehouseScanHandler
         }
     }
 
-    // ────────────────────────────────────────────────────────────────────────
-    // Calcul standard (récursif)
-    // ────────────────────────────────────────────────────────────────────────
+    // Standard computation (recursive)
 
     /**
-     * Calcule pour un item standard :
-     * - inWarehouse : quantité directement dans les racks (déduite du reservedStock)
-     * - viaCraft    : quantité supplémentaire craftable si les composants AE2
-     *                 sont eux-mêmes disponibles en warehouse (résolution récursive)
+     * For a standard item, computes:
+     * - inWarehouse : quantity directly in the racks (deducted from reservedStock)
+     * - viaCraft    : extra quantity craftable if the AE2 components are themselves
+     *                 available in the warehouse (recursive resolution)
      *
-     * @param visitedItems  cycle guard : items déjà visités dans la branche récursive courante
+     * @param visitedItems  cycle guard: items already visited in the current recursion branch
      */
     private static WarehouseEntry computeStandardWarehouseEntry(
             ItemStack stack,
@@ -336,7 +349,7 @@ public class WarehouseScanHandler
         Item item = stack.getItem();
         String itemName = stack.getDisplayName().getString();
 
-        // ── 1. Stock direct en warehouse ────────────────────────────────────
+        // 1. Direct warehouse stock
         long directStock = reservedStock.getOrDefault(item, 0L);
         long directUsed = Math.min(directStock, needed);
         if (directUsed > 0)
@@ -349,21 +362,21 @@ public class WarehouseScanHandler
         if (remainingNeeded <= 0)
             return new WarehouseEntry(directUsed, 0L);
 
-        // ── 2. Résolution récursive via patterns AE2 ────────────────────────
+        // 2. Recursive resolution via AE2 patterns
         if (depth >= MAX_RECURSION_DEPTH || visitedItems.contains(item))
             return new WarehouseEntry(directUsed, 0L);
 
         if (craftingService == null || !craftingService.isCraftable(AEItemKey.of(stack)))
             return new WarehouseEntry(directUsed, 0L);
 
-        // Récupère le pattern AE2 pour cet item
+        // Get the AE2 pattern for this item
         var patterns = craftingService.getCraftingFor(AEItemKey.of(stack));
         if (patterns == null || patterns.isEmpty())
             return new WarehouseEntry(directUsed, 0L);
 
         var pattern = patterns.iterator().next();
 
-        // Calcule le batch size (sortie du pattern)
+        // Compute the batch size (pattern output)
         long batchOutput = 1;
         for (var output : pattern.getOutputs())
         {
@@ -378,14 +391,13 @@ public class WarehouseScanHandler
         Set<Item> newVisited = new HashSet<>(visitedItems);
         newVisited.add(item);
 
-        // Pour chaque batch nécessaire, vérifie si tous les composants
-        // sont disponibles en warehouse (via récursion)
+        // For each needed batch, check whether all components are available
+        // in the warehouse (via recursion)
         long batchesNeeded = (long) Math.ceil((double) remainingNeeded / batchOutput);
         long craftableFromWarehouse = 0;
 
-        // On simule les batches un par un jusqu'à épuisement du stock warehouse
-        // On utilise une copie du stock de réservation pour pouvoir rollback
-        // si un batch n'est pas entièrement satisfait
+        // Simulate batches one by one until the warehouse stock is exhausted, using a copy
+        // of the reservation stock so a partially satisfied batch can be rolled back.
         Map<Item, Long> stockSnapshot = new HashMap<>(reservedStock);
         List<Component> craftTooltip = new ArrayList<>();
 
@@ -399,7 +411,7 @@ public class WarehouseScanHandler
             {
                 if (input == null) continue;
 
-                // Récupère le premier item du pattern input via getPossibleInputs()
+                // Get the first item of the pattern input via getPossibleInputs()
                 ItemStack inputStack = null;
                 long inputNeeded = 1;
                 for (var possible : input.getPossibleInputs())
@@ -414,25 +426,25 @@ public class WarehouseScanHandler
                 if (inputStack == null || inputStack.isEmpty()) continue;
                 Item inputItem = inputStack.getItem();
 
-                // Récupère le stock disponible pour ce composant
-                // en tenant compte des réservations déjà faites dans ce batch
+                // Available stock for this component, accounting for reservations
+                // already made in this batch
                 long alreadyReserved = batchReservations.getOrDefault(inputItem, 0L);
                 long effectiveStock = reservedStock.getOrDefault(inputItem, 0L) - alreadyReserved;
 
                 if (effectiveStock >= inputNeeded)
                 {
-                    // Disponible directement en warehouse
+                    // Available directly in the warehouse
                     batchReservations.merge(inputItem, inputNeeded, Long::sum);
                     batchTooltip.add(Component.translatable("colonylink.wh_avail.batch", inputStack.getDisplayName(), inputNeeded));
                 }
                 else
                 {
-                    // Pas assez directement → tente récursion
+                    // Not enough directly -> try recursion
                     long stillNeeded = inputNeeded - Math.max(0, effectiveStock);
                     if (effectiveStock > 0)
                         batchReservations.merge(inputItem, effectiveStock, Long::sum);
 
-                    // Récursion : est-ce que les composants de ce composant sont en warehouse ?
+                    // Recursion: are this component's components in the warehouse?
                     List<Component> subTooltip = new ArrayList<>();
                     WarehouseEntry subEntry = computeStandardWarehouseEntry(
                             inputStack.copyWithCount((int) Math.min(stillNeeded, Integer.MAX_VALUE)),
@@ -455,7 +467,7 @@ public class WarehouseScanHandler
 
             if (batchOk)
             {
-                // Applique les réservations du batch
+                // Apply the batch reservations
                 for (var entry : batchReservations.entrySet())
                     reservedStock.merge(entry.getKey(), -entry.getValue(), Long::sum);
 
@@ -464,7 +476,7 @@ public class WarehouseScanHandler
             }
             else
             {
-                // Un batch échoue → on s'arrête (stock épuisé)
+                // A batch fails -> stop (stock exhausted)
                 break;
             }
         }
@@ -478,13 +490,11 @@ public class WarehouseScanHandler
         return new WarehouseEntry(directUsed, craftableFromWarehouse);
     }
 
-    // ────────────────────────────────────────────────────────────────────────
-    // Calcul Domum Ornamentum
-    // ────────────────────────────────────────────────────────────────────────
+    // Domum Ornamentum computation
 
     /**
-     * Pour un item Domum, vérifie si les composants (matériaux textures) sont en warehouse.
-     * On résout aussi récursivement les composants craftables depuis la warehouse.
+     * For a Domum item, checks whether the components (texture materials) are in the warehouse,
+     * also resolving craftable components recursively from the warehouse.
      */
     private static WarehouseEntry computeDomumWarehouseEntry(
             ItemStack stack,
@@ -501,7 +511,7 @@ public class WarehouseScanHandler
 
         MaterialTextureData textureData = MaterialTextureData.readFromItemStack(stack);
 
-        // ── 1. Vérifie si l'item DO final est directement en warehouse ────────
+        // 1. Check whether the final DO item is directly in the warehouse
         long directDomum = 0;
         for (ItemStack domumInStock : domumStock)
         {
@@ -518,11 +528,11 @@ public class WarehouseScanHandler
             return new WarehouseEntry(Math.min(directDomum, needed), 0L);
         }
 
-        // Item DO pas (assez) en warehouse → résout les composants
+        // DO item not (sufficiently) in warehouse -> resolve the components
         tooltipLines.add(Component.translatable("colonylink.wh_avail.do_components", needed, stack.getDisplayName()));
 
         boolean allComponentsSatisfied = true;
-        long satisfiedSets = needed; // combien de sets complets on peut faire
+        long satisfiedSets = needed; // how many complete sets can be made
 
         for (IMateriallyTexturedBlockComponent component : texturedBlock.getComponents())
         {
@@ -546,7 +556,7 @@ public class WarehouseScanHandler
                     componentTooltip, 0, new HashSet<>());
 
             long totalForComponent = componentEntry.inWarehouse() + componentEntry.viaCraft();
-            long setsFromComponent = totalForComponent; // 1 composant par set Domum
+            long setsFromComponent = totalForComponent; // 1 component per Domum set
 
             if (setsFromComponent < needed)
             {
@@ -565,14 +575,12 @@ public class WarehouseScanHandler
         if (!allComponentsSatisfied && satisfiedSets == 0)
             return new WarehouseEntry(0L, 0L);
 
-        // Pour Domum, on ne peut pas "avoir" l'item directement en warehouse
-        // (c'est un craft virtuel), donc tout passe en viaCraft
+        // For Domum the item cannot be "had" directly in the warehouse (it's a virtual
+        // craft), so everything goes to viaCraft
         return new WarehouseEntry(0L, satisfiedSets);
     }
 
-    // ────────────────────────────────────────────────────────────────────────
     // Helpers
-    // ────────────────────────────────────────────────────────────────────────
 
     private static void sendFailure(ServerPlayer player, long timestamp)
     {
@@ -591,8 +599,7 @@ public class WarehouseScanHandler
     }
 
     /**
-     * Cherche d'abord la wand AE2, puis la wand RS2.
-     * Retourne la première trouvée, ou null.
+     * Looks for the AE2 wand first, then the RS2 wand. Returns the first found, or null.
      */
     private static ItemStack findWandInInventory(ServerPlayer player)
     {
@@ -621,9 +628,7 @@ public class WarehouseScanHandler
         return null;
     }
 
-    // ────────────────────────────────────────────────────────────────────────
-    // Record interne (usage uniquement dans ce fichier)
-    // ────────────────────────────────────────────────────────────────────────
+    // Internal record (used only in this file)
 
     private record WarehouseEntry(long inWarehouse, long viaCraft) {}
 }

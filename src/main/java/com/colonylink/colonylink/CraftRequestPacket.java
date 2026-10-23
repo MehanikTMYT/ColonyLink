@@ -59,9 +59,9 @@ public record CraftRequestPacket(
                     DomumCraftHandler.handleMissingCraft(
                             serverPlayer, packet.stack(), packet.realCount());
                 else
-                    // v1.4.x : un Domum craftable est produit via AE2 (le Redirector expose
-                    // le DomumPattern). Vrai job AE2 sur le bloc DO — fini l'insertion virtuelle
-                    // dans le buffer (qui provoquait « Redirector buffer is full »).
+                    // v1.4.x — a craftable Domum is produced via AE2 (the Redirector exposes
+                    // the DomumPattern). A real AE2 job on the DO block, instead of the virtual
+                    // buffer insertion that caused "Redirector buffer is full".
                     CraftHandler.handleCraftRequest(serverPlayer, packet.stack(), packet.realCount());
             }
             else

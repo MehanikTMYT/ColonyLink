@@ -37,14 +37,14 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class ColonyLinkServerTicker
 {
-    // ── Registre des WarehouseLinkTerminalPart actives ────────────────────────
-    // Les Parts s'enregistrent ici quand elles ont des viewers (GUI ouverts).
-    // Le ticker appelle Part.serverTick() périodiquement pour les syncs.
+    // Registry of active WarehouseLinkTerminalParts.
+    // Parts register here while they have viewers (open GUIs). The ticker calls
+    // Part.serverTick() periodically to sync them.
     private static final java.util.Set<WarehouseLinkTerminalPart> activeTerminalParts =
             java.util.concurrent.ConcurrentHashMap.newKeySet();
 
-    // Registre global — toutes les Parts placées dans le monde (avec ou sans viewer).
-    // Utilisé par DomumQueuePacket pour trouver un terminal même si le GUI est fermé.
+    // Global registry — every Part placed in the world (with or without a viewer).
+    // Used by DomumQueuePacket to find a terminal even when the GUI is closed.
     private static final java.util.Set<WarehouseLinkTerminalPart> allTerminalParts =
             java.util.concurrent.ConcurrentHashMap.newKeySet();
 
@@ -61,9 +61,9 @@ public class ColonyLinkServerTicker
     { allTerminalParts.remove(part); }
 
     /**
-     * v1.6.1 — Tous les WarehouseLinkTerminalPart VIVANTS d'une grille ME donnee.
-     * Utilise par la queue Domum partagee (seed / persistance NBT / broadcast). Exclut les
-     * instances fantomes (noeud null/inactif, laissees par un unload de chunk).
+     * v1.6.1 — all LIVE WarehouseLinkTerminalParts on a given ME grid. Used by the shared
+     * Domum queue (seed / NBT persistence / broadcast). Excludes ghost instances (null/
+     * inactive node, left behind by a chunk unload).
      */
     public static java.util.List<WarehouseLinkTerminalPart> findLiveTerminalsForGrid(
             net.minecraft.server.level.ServerLevel level, appeng.api.networking.IGrid grid)
@@ -105,7 +105,7 @@ public class ColonyLinkServerTicker
     private static int getTickerInterval()
     { return ColonyLinkConfig.TICKER_INTERVAL_TICKS.get(); }
 
-    // ── AE2 viewer management ─────────────────────────────────────────────────
+    // AE2 viewer management
 
     public static void addViewer(UUID playerUUID, BlockPos builderPos, int activeTabIndex)
     { activeViewers.put(playerUUID, new ViewerState(builderPos, activeTabIndex, -1)); }
@@ -113,7 +113,7 @@ public class ColonyLinkServerTicker
     public static void removeViewer(UUID playerUUID)
     { activeViewers.remove(playerUUID); }
 
-    // ── Logout ────────────────────────────────────────────────────────────────
+    // Logout
 
     @SubscribeEvent
     public static void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event)
@@ -125,11 +125,38 @@ public class ColonyLinkServerTicker
         }
     }
 
-    // ── Immediate update ──────────────────────────────────────────────────────
+    // 1.7.0-beta.3 — Citizens "Sent" memory lifecycle
+
+    /** Ticker passes between two CitizenRequestMemory.cleanupAll runs. */
+    private static final int CITIZEN_MEMORY_CLEANUP_PASSES = 20;
+    private static int citizenMemoryPass = 0;
+
+    /** The memory is static: on an integrated server it would outlive the world. */
+    @SubscribeEvent
+    public static void onServerStopping(net.neoforged.neoforge.event.server.ServerStoppingEvent event)
+    {
+        CitizenRequestMemory.clear();
+        RedirectorRegistry.clear(); // 1.7.0-beta.4
+    }
+
+    /**
+     * Players with the Clipboard open on the Citizens tab (activeTabIndex
+     * Integer.MAX_VALUE). Used to push a forced rescan to every viewer after a Send.
+     */
+    public static List<UUID> citizensTabViewers()
+    {
+        List<UUID> out = new ArrayList<>();
+        activeViewers.forEach((uuid, state) -> {
+            if (state.activeTabIndex() == Integer.MAX_VALUE) out.add(uuid);
+        });
+        return out;
+    }
+
+    // Immediate update
 
     public static void sendImmediateUpdate(ServerPlayer player, BlockPos builderPos, int activeTabIndex)
     {
-        // Invalider la signature pour forcer le renvoi immédiat
+        // Invalidate the signature to force an immediate resend.
         ViewerState vs = activeViewers.get(player.getUUID());
         if (vs != null)
             activeViewers.put(player.getUUID(),
@@ -139,7 +166,7 @@ public class ColonyLinkServerTicker
         if (wand != null) sendFullUpdate(player, builderPos, activeTabIndex, wand);
     }
 
-    // ── Signature invalidation (external callers) ─────────────────────────────
+    // Signature invalidation (external callers)
     // v1.6.6 — force an immediate GUI resend for a player whose wand GUI is open.
     // ColonyLink's content signature (computeWandSig) is NOT tied to MineColonies'
     // building.markDirty(), so an out-of-band state change (e.g. cancelling a
@@ -157,7 +184,7 @@ public class ColonyLinkServerTicker
         if (wand != null) sendFullUpdate(player, vs.builderPos(), vs.activeTabIndex(), wand);
     }
 
-    // ── Server tick ───────────────────────────────────────────────────────────
+    // Server tick
 
     @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Pre event)
@@ -165,9 +192,17 @@ public class ColonyLinkServerTicker
         if (tickCounter.incrementAndGet() < getTickerInterval()) return;
         tickCounter.set(0);
 
-        // Ticker les Parts actives (sync warehouse/ME vers les viewers)
+        // 1.7.0-beta.3 — Citizens memory: drop marks of finished requests, even while
+        // nobody has the Citizens tab open.
+        if (++citizenMemoryPass >= CITIZEN_MEMORY_CLEANUP_PASSES)
+        {
+            citizenMemoryPass = 0;
+            CitizenRequestMemory.cleanupAll(event.getServer());
+        }
+
+        // Tick active Parts (sync warehouse/ME to viewers).
         activeTerminalParts.removeIf(part -> {
-            if (part.getLevel() == null) return true; // Part déchargée
+            if (part.getLevel() == null) return true; // Part unloaded
             part.serverTick();
             return false;
         });
@@ -181,7 +216,7 @@ public class ColonyLinkServerTicker
 
             ItemStack wand = findWandInInventory(player);
 
-            // Drain RF passif
+            // Passive RF drain
             if (wand != null)
             {
                 long drain = ColonyLinkConfig.PASSIVE_DRAIN_RF.get();
@@ -194,15 +229,15 @@ public class ColonyLinkServerTicker
 
             sendFullUpdate(player, state.builderPos(), state.activeTabIndex(), wand);
             sendTabCounts(player, state.activeTabIndex(), wand);
-            // Refresh auto de la tab Citizens si elle est active (Integer.MAX_VALUE).
-            // v1.6.2 — force=false: le scan complet n'est diffusé que si le contenu a changé.
+            // Auto-refresh the Citizens tab when it is active (Integer.MAX_VALUE).
+            // v1.6.2 — force=false: the full scan is broadcast only when the content changed.
             if (state.activeTabIndex() == Integer.MAX_VALUE)
                 CitizensScanHandler.sendCitizensPacket(player, false);
         });
 
         toRemove.forEach(activeViewers::remove);
 
-        // Badge hotbar : scan joueurs GUI fermé
+        // Hotbar badge: scan players with the GUI closed.
         for (ServerPlayer player : event.getServer().getPlayerList().getPlayers())
         {
             if (activeViewers.containsKey(player.getUUID())) continue;
@@ -212,7 +247,7 @@ public class ColonyLinkServerTicker
         }
     }
 
-    // ── RF helpers ────────────────────────────────────────────────────────────
+    // RF helpers
 
     public static boolean tryConsumeRF(ServerPlayer player, long amount)
     {
@@ -222,7 +257,7 @@ public class ColonyLinkServerTicker
         return WandEnergyStorage.tryConsume(wand, amount);
     }
 
-    // ── sendFullUpdate AE2 ────────────────────────────────────────────────────
+    // sendFullUpdate AE2
 
     private static void sendFullUpdate(ServerPlayer player, BlockPos builderPos,
                                        int activeTabIndex, ItemStack wandStack)
@@ -336,6 +371,7 @@ public class ColonyLinkServerTicker
 
         String rState = "N/A"; boolean hasCard = false, whPrio = false;
         BlockPos rPos = null;
+        BuilderEntry rEntry = null; // 1.7.0-beta.4 — resolves the Redirector by UUID
         if (!allEntries.isEmpty())
         {
             // v1.6.2 — last-resort clamp (low + high): activeTabIndex is client-sourced
@@ -343,12 +379,15 @@ public class ColonyLinkServerTicker
             // GuiStatePacket sanitisation. Integer.MAX_VALUE (Citizens) collapses to size-1.
             int st = Math.max(0, Math.min(activeTabIndex, allEntries.size() - 1));
             BuilderEntry ae = allEntries.get(st);
-            if (ae.hasRedirector()) rPos = ae.redirectorPos();
+            if (ae.hasRedirector()) { rPos = ae.redirectorPos(); rEntry = ae; }
         }
 
         if (rPos != null)
         {
-            var rbe = level.getBlockEntity(rPos);
+            // 1.7.0-beta.4 — by the entry's Redirector UUID first (follows a moved
+            // Redirector). rPos stays the key sent to the client (it designates the
+            // entry in later packets).
+            var rbe = RedirectorRegistry.forEntry(level, rEntry);
             if (rbe instanceof ColonyLinkRedirectorBlockEntity r)
             {
                 r.updateState();
@@ -427,9 +466,9 @@ public class ColonyLinkServerTicker
 
                 ItemStack ms = st2.copy(); ms.setCount(Math.min(miss, 64));
 
-                // v1.4.2 — Domum items: flow AE2 standard via ICraftingProvider
-                // Le Redirector expose les DomumPatternDetails → cs.isCraftable() retourne true
-                // si un pattern correspondant est dans un Redirector connecté.
+                // v1.4.2 — Domum items use the standard AE2 flow via ICraftingProvider: the
+                // Redirector exposes the DomumPatternDetails, so cs.isCraftable() is true when
+                // a matching pattern sits in a connected Redirector.
                 if (DomumCraftHandler.isDomumItem(st2))
                 {
                     AEItemKey dk = AEItemKey.of(st2);
@@ -479,12 +518,12 @@ public class ColonyLinkServerTicker
                 buildingLevel, toolUpgrade, level, warehouseMode, sentKeys, builderPos);
         List<ColonyLinkPacket.BuilderTabMeta> tabMetas = ColonyLinkWand.buildTabMetas(allEntries);
 
-        // Throttle : ne pas renvoyer si le contenu n'a pas changé
-        // (RF exclu de la signature — change à chaque tick via drain passif)
+        // Throttle: skip the resend when the content is unchanged
+        // (RF excluded from the signature — it changes every tick via passive drain)
         long newSig = computeWandSig(entries, builderName, buildingName, workerStatus,
                 cpus, rState, hasCard, whPrio, activeTabIndex, req.cancellable());
         ViewerState vs = activeViewers.get(player.getUUID());
-        if (vs != null && vs.lastContentSig() == newSig) return; // rien de changé
+        if (vs != null && vs.lastContentSig() == newSig) return;
         if (vs != null)
             activeViewers.put(player.getUUID(),
                     new ViewerState(vs.builderPos(), vs.activeTabIndex(), vs.colonyId(), newSig));
@@ -495,9 +534,9 @@ public class ColonyLinkServerTicker
                 tabMetas, activeTabIndex, rfStored, rfMax));
     }
 
-    // ── Signature de contenu wand (throttle sendFullUpdate) ───────────────────
-    // FNV-1a fold sur le contenu visible. RF (rfStored/rfMax) volontairement exclu :
-    // il change à chaque tick via le drain passif et ferait échouer le throttle.
+    // Wand content signature (throttle sendFullUpdate)
+    // FNV-1a fold over the visible content. RF (rfStored/rfMax) is deliberately excluded:
+    // it changes every tick via passive drain and would defeat the throttle.
     private static long computeWandSig(
             List<ColonyLinkPacket.ResourceEntry> entries,
             String builderName, String buildingName, String workerStatus,
@@ -528,7 +567,7 @@ public class ColonyLinkServerTicker
         return sig;
     }
 
-    // ── fetchBuilderRequest (AE2) ─────────────────────────────────────────────
+    // fetchBuilderRequest (AE2)
 
     @SuppressWarnings("unchecked")
     private static ColonyLinkPacket.BuilderRequest fetchBuilderRequest(
@@ -536,7 +575,7 @@ public class ColonyLinkServerTicker
             IGrid grid, BlockPos rPos, int buildingLevel, boolean toolUpgrade, ServerLevel level,
             boolean warehouseMode, java.util.Set<String> sentKeys, BlockPos builderPos)
     {
-        // Passe 1 : getOpenRequests
+        // Pass 1: getOpenRequests
         if (!bb.getAllAssignedCitizen().isEmpty())
         {
             var citizen = bb.getAllAssignedCitizen().iterator().next();
@@ -619,7 +658,7 @@ public class ColonyLinkServerTicker
             catch (Exception e) { ColonyLink.LOGGER.debug("[ColonyLink] fetchBuilderRequest pass1: {}", e.getMessage()); }
         }
 
-        // Passe 2 : neededResources trié (fallback)
+        // Pass 2: sorted neededResources (fallback)
         Map<String, BuildingBuilderResource> needed = bb.getNeededResources();
         if (needed != null)
         {
@@ -700,15 +739,15 @@ public class ColonyLinkServerTicker
         return ColonyLinkPacket.BuilderRequest.NONE;
     }
 
-    // ── Worker status ─────────────────────────────────────────────────────────
+    // Worker status
 
     private static String[] computeWorkerStatus(ICitizenData citizen, AbstractBuildingStructureBuilder bb)
     {
         if (bb.getWorkOrder() == null) return new String[]{"Idle", ""};
 
-        // ── Priorité 1 : Hungry — vérifier AVANT les open requests ──────────────
-        // Un builder hungry a toujours des open requests → sans ce check prioritaire,
-        // le statut "Working" masque systématiquement le statut "Hungry".
+        // Priority 1: Hungry — check BEFORE open requests.
+        // A hungry builder always has open requests → without this priority check the
+        // "Working" status would always mask the "Hungry" status.
         try
         {
             if (citizen.getSaturation() < 3.0)
@@ -763,7 +802,7 @@ public class ColonyLinkServerTicker
         }
         catch (Exception e) { ColonyLink.LOGGER.debug("[ColonyLink] computeWorkerStatus status: {}", e.getMessage()); }
 
-        // ── Priorité 2 : Open requests ───────────────────────────────────────────
+        // Priority 2: open requests
         try
         {
             var reqs = bb.getOpenRequests(citizen.getId());
@@ -789,7 +828,7 @@ public class ColonyLinkServerTicker
         return new String[]{"Working", ""};
     }
 
-    // ── Tooltips ──────────────────────────────────────────────────────────────
+    // Tooltips
 
     private static List<Component> buildToolSubstituteTooltip(ItemStack original, ItemStack substitute,
                                                               ResourceStatus stat, int missing, long inStorage, int buildingLevel)
@@ -811,11 +850,9 @@ public class ColonyLinkServerTicker
         return lines;
     }
 
-
-
     /**
-     * Tooltip pour les lignes Domum dans le Clipboard.
-     * Affiche le statut + les matériaux bruts nécessaires.
+     * Tooltip for Domum lines in the Clipboard. Shows the status plus the raw materials
+     * needed.
      */
     private static List<Component> buildDomumTooltip(ItemStack stack, ResourceStatus status, int missing)
     {
@@ -889,7 +926,7 @@ public class ColonyLinkServerTicker
         return lines;
     }
 
-    // ── Tab counts ────────────────────────────────────────────────────────────
+    // Tab counts
 
     private static void sendTabCounts(ServerPlayer player, int activeTabIndex, ItemStack wandStack)
     {
@@ -932,7 +969,7 @@ public class ColonyLinkServerTicker
                 new TabCountsPacket(counts, activeTabIndex));
     }
 
-    // ── Builder sent-key pruning (v1.6.0) ─────────────────────────────────────
+    // Builder sent-key pruning (v1.6.0)
 
     /**
      * Reconciles the builder sent-keys ("b|x,y,z|itemId|availableAtSend")
@@ -1126,7 +1163,7 @@ public class ColonyLinkServerTicker
         return true; // colony known, no building at that position → hut gone
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // Helpers
 
     /**
      * Finds the ColonyLink Wand in the player's inventory or, if Curios is

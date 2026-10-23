@@ -1,5 +1,6 @@
 package com.colonylink.colonylink;
 
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -11,28 +12,42 @@ import net.minecraft.world.level.Level;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /**
- * Représente un couple Builder's Hut + Redirector lié à la wand.
- * Stocké en NBT dans la liste "builder_entries" de la wand.
+ * A Builder's Hut + Redirector pair linked to the wand.
+ * Stored in NBT in the wand's "builder_entries" list.
  *
- * builderPos     : position du Builder's Hut (snapshot à l'appairage)
- * redirectorPos  : position du Redirector lié (BlockPos.ZERO si pas encore lié)
- * builderName    : nom du builder PNJ (snapshot à l'appairage, "N/A" si vide)
- * buildingLabel  : nom du bâtiment MineColonies (snapshot à l'appairage)
+ * builderPos     : Builder's Hut position (snapshot at pairing)
+ * redirectorPos  : linked Redirector position (BlockPos.ZERO if not yet linked)
+ * builderName    : builder NPC name (snapshot at pairing, "N/A" if empty)
+ * buildingLabel  : MineColonies building name (snapshot at pairing)
+ * redirectorId   : 1.7.0-beta.4 — stable UUID of the linked Redirector (null for
+ *                  entries paired before beta.4). The Redirector keeps it in its block
+ *                  entity NBT, which block movers copy, so it survives a Create:
+ *                  Aeronautics ship reassembly that gives the block a new position.
+ *                  redirectorPos stays the key the client sends and the fallback.
  */
 public record BuilderEntry(
         BlockPos builderPos,
         BlockPos redirectorPos,
         String builderName,
         String buildingLabel,
-        ResourceKey<Level> dimension
+        ResourceKey<Level> dimension,
+        UUID redirectorId
 )
 {
     public static final BuilderEntry EMPTY = new BuilderEntry(
-            BlockPos.ZERO, BlockPos.ZERO, "N/A", "N/A", null);
+            BlockPos.ZERO, BlockPos.ZERO, "N/A", "N/A", null, null);
 
-    // ── Sérialisation NBT ────────────────────────────────────────────────
+    /** Pre-beta.4 shape (no Redirector UUID). */
+    public BuilderEntry(BlockPos builderPos, BlockPos redirectorPos, String builderName,
+                        String buildingLabel, ResourceKey<Level> dimension)
+    {
+        this(builderPos, redirectorPos, builderName, buildingLabel, dimension, null);
+    }
+
+    // NBT serialization
 
     public CompoundTag toNbt()
     {
@@ -45,8 +60,10 @@ public record BuilderEntry(
         tag.putInt("rz", redirectorPos.getZ());
         tag.putString("builder_name", builderName);
         tag.putString("building_label", buildingLabel);
-        // v1.4.9 — dimension du builder (figée à l'appairage). Absent = legacy/inconnu.
+        // v1.4.9 — builder dimension (frozen at pairing). Absent = legacy/unknown.
         if (dimension != null) tag.putString("dim", dimension.identifier().toString());
+        // 1.7.0-beta.4 — absent = entry paired before beta.4 (position fallback).
+        if (redirectorId != null) tag.store("redirector_id", net.minecraft.core.UUIDUtil.CODEC, redirectorId);
         return tag;
     }
 
@@ -62,28 +79,38 @@ public record BuilderEntry(
             Identifier rl = Identifier.tryParse(tag.getStringOr("dim", ""));
             if (rl != null) dim = ResourceKey.create(Registries.DIMENSION, rl);
         }
-        return new BuilderEntry(bPos, rPos, bName, label, dim);
+        UUID rId = tag.read("redirector_id", UUIDUtil.CODEC).isPresent() ? tag.read("redirector_id", UUIDUtil.CODEC).orElseThrow() : null;
+        return new BuilderEntry(bPos, rPos, bName, label, dim, rId);
     }
 
-    /** Retourne une copie avec le redirectorPos mis à jour. */
+    /**
+     * Returns a copy with redirectorPos updated. The Redirector UUID is
+     * dropped (another Redirector, or unknown): use {@link #withRedirector(BlockPos, UUID)}.
+     */
     public BuilderEntry withRedirector(BlockPos newRedirectorPos)
     {
-        return new BuilderEntry(builderPos, newRedirectorPos, builderName, buildingLabel, dimension);
+        return new BuilderEntry(builderPos, newRedirectorPos, builderName, buildingLabel, dimension, null);
     }
 
-    /** Retourne une copie avec les labels mis à jour (snapshot à l'appairage). */
+    /** 1.7.0-beta.4 — copy linked to a Redirector, with its stable UUID. */
+    public BuilderEntry withRedirector(BlockPos newRedirectorPos, UUID newRedirectorId)
+    {
+        return new BuilderEntry(builderPos, newRedirectorPos, builderName, buildingLabel, dimension, newRedirectorId);
+    }
+
+    /** Returns a copy with updated labels (snapshot at pairing). */
     public BuilderEntry withLabels(String newBuilderName, String newBuildingLabel)
     {
-        return new BuilderEntry(builderPos, redirectorPos, newBuilderName, newBuildingLabel, dimension);
+        return new BuilderEntry(builderPos, redirectorPos, newBuilderName, newBuildingLabel, dimension, redirectorId);
     }
 
-    /** true si cet entry a un redirector lié (pas ZERO). */
+    /** True if this entry has a linked redirector (not ZERO). */
     public boolean hasRedirector()
     {
         return !redirectorPos.equals(BlockPos.ZERO);
     }
 
-    // ── Sérialisation liste en NBT ───────────────────────────────────────
+    // NBT list serialization
 
     public static ListTag listToNbt(List<BuilderEntry> entries)
     {

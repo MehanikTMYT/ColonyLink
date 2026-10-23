@@ -44,7 +44,7 @@ public class ColonyLinkConfig
         WAREHOUSE
     }
 
-    // ── [energy] ──────────────────────────────────────────────────────────────
+    // [energy]
     public static final ModConfigSpec.LongValue    WAND_RF_CAPACITY;
     public static final ModConfigSpec.LongValue    WAND_RF_TRANSFER_RATE;
     public static final ModConfigSpec.LongValue    PASSIVE_DRAIN_RF;
@@ -53,50 +53,48 @@ public class ColonyLinkConfig
     public static final ModConfigSpec.BooleanValue BLOCK_ACTIONS_IF_NO_POWER;
     public static final ModConfigSpec.IntValue     LOW_POWER_THRESHOLD_PERCENT;
 
-    // ── [general] ─────────────────────────────────────────────────────────────
+    // [general]
     public static final ModConfigSpec.IntValue     MAX_BUILDERS_PER_WAND;
     public static final ModConfigSpec.IntValue     TICKER_INTERVAL_TICKS;
     public static final ModConfigSpec.BooleanValue WAND_RANGE_CHECK;
 
-    // ── [delivery] ────────────────────────────────────────────────────────────
+    // [delivery]
     public static final ModConfigSpec.EnumValue<SendTarget> SEND_TARGET;
 
-    // ── [tools] ───────────────────────────────────────────────────────────────
+    // [tools]
     public static final ModConfigSpec.BooleanValue ENABLE_TOOL_UPGRADE;
     public static final ModConfigSpec.BooleanValue TOOL_UPGRADE_SEND_AUTO;
     public static final ModConfigSpec.BooleanValue RESPECT_ENCHANT_LEVEL_CAP;
     public static final ModConfigSpec.BooleanValue TOOL_SUBSTITUTION_IN_LIST;
 
-    // ── [interface] ───────────────────────────────────────────────────────────
+    // [interface]
     public static final ModConfigSpec.BooleanValue SHOW_CRAFTING_STATUS;
     public static final ModConfigSpec.BooleanValue SHOW_NO_PATTERN_ITEMS;
     public static final ModConfigSpec.IntValue     MAX_RESOURCES_DISPLAYED;
     public static final ModConfigSpec.IntValue     WAREHOUSE_SNAPSHOT_VALIDITY_TICKS;
 
-    // -- [advanced_ae] ---------------------------------------------------------
+    // [advanced_ae]
     public static final ModConfigSpec.BooleanValue ENABLE_ADVANCED_AE_COMPAT;
     public static final ModConfigSpec.IntValue     ADVANCED_AE_CRAFT_SUBMISSION_LIMIT;
 
-    // ── [general — locate] ────────────────────────────────────────────────────
+    // [general — locate]
     public static final ModConfigSpec.IntValue LOCATE_GLOW_DURATION_SECONDS;
     public static final ModConfigSpec.LongValue LOCATE_COST_RF;
 
-    // ── [network] ─────────────────────────────────────────────────────────────
+    // [network]
     public static final ModConfigSpec.IntValue REDIRECTOR_CRAFT_QUEUE_MAX;
 
-    // ── [loot] ────────────────────────────────────────────────────────────────
+    // [loot]
     public static final ModConfigSpec.BooleanValue PACKAGE_IN_CHESTS;
     public static final ModConfigSpec.DoubleValue  PACKAGE_CHEST_CHANCE;
     public static final ModConfigSpec.BooleanValue PACKAGE_FROM_RAIDERS;
     public static final ModConfigSpec.DoubleValue  PACKAGE_RAIDER_CHANCE;
 
-    // ─────────────────────────────────────────────────────────────────────────
-
     static
     {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
 
-        // ── [energy] ──────────────────────────────────────────────────────────
+        // [energy]
         builder.comment(
                 "RF/FE Energy settings for the Colony Link Wand.",
                 "1 AE (Applied Energistics internal unit) = 2 RF by default."
@@ -143,7 +141,7 @@ public class ColonyLinkConfig
 
         builder.pop();
 
-        // ── [general] ─────────────────────────────────────────────────────────
+        // [general]
         builder.comment(
                 "General behaviour settings for the Colony Link Wand and server ticker."
         ).push("general");
@@ -181,7 +179,7 @@ public class ColonyLinkConfig
 
         builder.pop();
 
-        // ── [delivery] ────────────────────────────────────────────────────────
+        // [delivery]
         builder.comment(
                 "Delivery target settings.",
                 "This is a server/modpack setting: it applies to every player and is",
@@ -203,7 +201,7 @@ public class ColonyLinkConfig
 
         builder.pop();
 
-        // ── [tools] ───────────────────────────────────────────────────────────
+        // [tools]
         builder.comment(
                 "Tool upgrade and substitution settings.",
                 "When enabled, ColonyLink automatically sends the best tool tier available",
@@ -239,7 +237,7 @@ public class ColonyLinkConfig
 
         builder.pop();
 
-        // ── [interface] ───────────────────────────────────────────────────────
+        // [interface]
         builder.comment(
                 "GUI display settings for the Colony Link Wand interface.",
                 "Despite the section name these are applied SERVER-side: the server filters",
@@ -272,7 +270,7 @@ public class ColonyLinkConfig
 
         builder.pop();
 
-        // -- [advanced_ae] -----------------------------------------------------
+        // [advanced_ae]
         builder.comment(
                 "Optional AdvancedAE compatibility settings.",
                 "These settings only apply when the advanced_ae mod is installed."
@@ -290,7 +288,7 @@ public class ColonyLinkConfig
 
         builder.pop();
 
-        // ── [network] ─────────────────────────────────────────────────────────
+        // [network]
         builder.comment(
                 "Colony Link Redirector settings.",
                 "v1.6.2 — the item buffer is fixed at 3x9 (27 slots) to stay in sync with the",
@@ -308,7 +306,7 @@ public class ColonyLinkConfig
 
         builder.pop();
 
-        // ── [loot] ─────────────────────────────────────────────────────────────
+        // [loot]
         builder.comment(
                 "World loot for the Colony Link Package.",
                 "The Package stays craftable — this loot is a COMPLEMENT to crafting, never a",
@@ -346,7 +344,7 @@ public class ColonyLinkConfig
         SPEC = builder.build();
     }
 
-    // ── Safe accessors ────────────────────────────────────────────────────────
+    // Safe accessors
     // A SERVER-type config is only loaded while a server/world is active (and,
     // on remote clients, only after the login sync). These helpers protect the
     // few client- and capability-side call sites that could in theory execute

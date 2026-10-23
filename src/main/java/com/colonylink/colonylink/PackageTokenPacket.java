@@ -27,17 +27,17 @@ import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
- * Packet C→S : action Citizens (Send ou Craft) avec vérification et consommation
- * d'un ColonyLink Package côté serveur.
+ * Packet C→S: Citizens action (Send or Craft) with server-side validation and
+ * consumption of a ColonyLink Package.
  *
- * action = SEND  → extrait du ME et insère dans le warehouse (comme SendToWarehousePacket)
- * action = CRAFT → lance un craft AE2 (comme CraftRequestPacket isDomum=false)
+ * action = SEND  → extract from ME and insert into the warehouse (like SendToWarehousePacket)
+ * action = CRAFT → launch an AE2 craft (like CraftRequestPacket isDomum=false)
  *
- * Pré-conditions vérifiées côté serveur :
- *   1. Clipboard présent dans l'inventaire
- *   2. Au moins 1 Package stocké dans la wand (NBT "citizen_packages")
- *   3. Warehouse card dans le redirector lié
- *   Si l'une échoue → message d'erreur, aucune consommation.
+ * Server-side pre-conditions:
+ *   1. Clipboard present in the inventory
+ *   2. At least 1 Package stored in the wand (NBT "citizen_packages")
+ *   3. Warehouse card in the linked redirector
+ *   If any fails → error message, nothing consumed.
  *
  * v1.6.0 — the payload gained {@code citizenName} so the SERVER can record the
  * sent-request key ("c|name|itemId") in the wand NBT on success. Before this,
@@ -50,7 +50,7 @@ public record PackageTokenPacket(
         int count,
         BlockPos redirectorPos,
         boolean isCraft,     // false = Send, true = Craft AE2
-        String citizenName   // v1.6.0 — for the server-side sent-key
+        java.util.UUID requestId // 1.7.0-beta.3 — MineColonies request (was: citizenName)
 ) implements CustomPacketPayload
 {
     public static final Identifier ID = Identifier.fromNamespaceAndPath(
@@ -64,14 +64,15 @@ public record PackageTokenPacket(
                 buf.writeInt(p.count());
                 buf.writeBlockPos(p.redirectorPos());
                 buf.writeBoolean(p.isCraft());
-                buf.writeUtf(p.citizenName());
+                buf.writeLong(p.requestId().getMostSignificantBits());
+                buf.writeLong(p.requestId().getLeastSignificantBits());
             },
             buf -> new PackageTokenPacket(
                     ItemStack.STREAM_CODEC.decode(buf),
                     buf.readInt(),
                     buf.readBlockPos(),
                     buf.readBoolean(),
-                    buf.readUtf()
+                    new java.util.UUID(buf.readLong(), buf.readLong())
             )
     );
 
@@ -83,15 +84,15 @@ public record PackageTokenPacket(
         context.enqueueWork(() -> {
             if (!(context.player() instanceof ServerPlayer sp)) return;
             handlePackageAction(sp, packet.stack(), packet.count(), packet.redirectorPos(),
-                    packet.isCraft(), packet.citizenName());
+                    packet.isCraft(), packet.requestId());
         });
     }
 
-    // ── Logique principale ────────────────────────────────────────────────────
+    // Main logic
 
     private static void handlePackageAction(ServerPlayer player, ItemStack stack,
                                             int count, BlockPos redirectorPos, boolean isCraft,
-                                            String citizenName)
+                                            java.util.UUID requestId)
     {
         // v1.6.0 — input hardening: a non-positive count or empty stack can only
         // come from a modified client. Reject before consuming anything.
@@ -101,7 +102,7 @@ public record PackageTokenPacket(
             return;
         }
 
-        // 1. Trouver la wand
+        // 1. Find the wand
         ItemStack wand = findWandInInventory(player);
         if (wand == null)
         {
@@ -115,6 +116,8 @@ public record PackageTokenPacket(
         // Same predicate/dimension guard as CancelRequestPacket. Done at the earliest
         // point the wand is available, before anything else is checked or consumed.
         boolean redirectorLinked = false;
+        BlockPos linkedBuilderPos = null; // 1.7.0 — the colony comes from this Builder
+        BuilderEntry linkedEntry = null;  // 1.7.0-beta.4 — resolves the Redirector by UUID
         for (BuilderEntry e : ColonyLinkWandLinkableHandler.getBuilderEntries(wand))
         {
             if (e.hasRedirector() && e.redirectorPos().equals(redirectorPos))
@@ -124,6 +127,8 @@ public record PackageTokenPacket(
                 if (e.dimension() != null && !e.dimension().equals(player.level().dimension()))
                     break;
                 redirectorLinked = true;
+                linkedBuilderPos = e.builderPos();
+                linkedEntry = e;
                 break;
             }
         }
@@ -134,7 +139,7 @@ public record PackageTokenPacket(
             return;
         }
 
-        // 2. Vérifier le stock de packages
+        // 2. Check the package stock
         int stored = ColonyLinkWandLinkableHandler.getCitizenPackages(wand);
         if (stored <= 0)
         {
@@ -143,9 +148,10 @@ public record PackageTokenPacket(
             return;
         }
 
-        // 3. Vérifier le redirector et la warehouse card
+        // 3. Check the redirector and warehouse card
         ServerLevel level = player.level();
-        var be = level.getBlockEntity(redirectorPos);
+        // 1.7.0-beta.4 — by the entry's Redirector UUID first (follows a moved Redirector).
+        var be = RedirectorRegistry.forEntry(level, linkedEntry);
         if (!(be instanceof ColonyLinkRedirectorBlockEntity redirector))
         {
             resyncPackages(player, wand);
@@ -159,7 +165,7 @@ public record PackageTokenPacket(
             return;
         }
 
-        // 4. Connexion AE2
+        // 4. AE2 connection
         GlobalPos linkedPos = ColonyLinkWandLinkableHandler.getLinkedPos(wand);
         if (linkedPos == null)
         {
@@ -190,63 +196,123 @@ public record PackageTokenPacket(
 
         // A4 — colony permission (ACCESS_HUTS), non-craft path only. doCraft touches no
         // colony (it launches a craft on the player's own grid), so permission is moot
-        // there. This resolves the colony a second time (doSend resolves it again from
-        // the same redirectorPos): intentional, to avoid changing doSend's signature or
-        // body — the cost is negligible. Do NOT "deduplicate" this getClosestColony call.
-        // colony == null stays permissive: doSend already returns false in that case,
-        // which triggers the refund path.
+        // there.
+        // 1.7.0 — the colony is the one of the Builder linked to this Redirector in the
+        // player's Clipboard (never the Redirector's own position), and an unresolvable
+        // colony is refused before any Package is consumed (was permissive).
+        IColony sendColony = null;
+        BuildingWareHouse sendWarehouse = null;
         if (!isCraft)
         {
-            IColony colony = IColonyManager.getInstance().getClosestColony(level, redirectorPos);
-            if (colony != null && !colony.getPermissions().hasPermission(player, Action.ACCESS_HUTS))
+            sendColony = ColonyResolver.forBuilder(level, linkedBuilderPos);
+            if (sendColony == null)
+            {
+                resyncPackages(player, wand);
+                player.sendSystemMessage(Component.translatable("colonylink.colony.not_found"));
+                return;
+            }
+            if (!sendColony.getPermissions().hasPermission(player, Action.ACCESS_HUTS))
             {
                 resyncPackages(player, wand);
                 player.sendSystemMessage(Component.translatable("colonylink.wand.msg.no_permission"));
                 return;
             }
+            // 1.7.0-beta.2 — deliver into the card's Warehouse (was: every Warehouse
+            // of the colony, in building-map order). The card must belong to the
+            // Redirector's Builder colony and to this Clipboard entry's colony.
+            // Checked before any Package is consumed.
+            CardLinks.Resolved card = CardLinks.resolveForRedirector(level, redirector, player);
+            if (card.ok() && card.colony().getID() != sendColony.getID())
+                card = new CardLinks.Resolved(CardLinks.Status.OTHER_COLONY, card.link(), null, null);
+            if (!card.ok())
+            {
+                resyncPackages(player, wand);
+                player.sendSystemMessage(card.message());
+                return;
+            }
+            sendWarehouse = card.warehouse();
         }
 
-        // 5. Consommer 1 package AVANT l'action (point de non-retour)
+        // 1.7.0-beta.3 — the row's MineColonies request must still exist in this colony
+        // and still be the player's to provide. Send: the colony checked above. Craft:
+        // the same Builder's colony when it resolves (the craft itself touches no colony,
+        // so an unresolvable colony keeps the pre-beta.3 behaviour: craft, no mark).
+        IColony requestColony = isCraft ? ColonyResolver.forBuilder(level, linkedBuilderPos) : sendColony;
+        if (requestColony != null)
+        {
+            if (requestId == null)
+            {
+                resyncPackages(player, wand);
+                player.sendSystemMessage(Component.translatable("colonylink.citizens.msg.request_gone"));
+                return;
+            }
+            var request = requestColony.getRequestManager().getRequestForToken(CitizenRequestMemory.token(requestId));
+            if (request == null)
+            {
+                resyncPackages(player, wand);
+                player.sendSystemMessage(Component.translatable("colonylink.citizens.msg.request_gone"));
+                CitizensScanHandler.sendCitizensPacket(player, true);
+                return;
+            }
+            byte state = CitizenRequestMemory.classifyRequest(requestColony.getRequestManager(), request);
+            if (state != CitizensPacket.STATE_PLAYER && state != CitizensPacket.STATE_RETRYING)
+            {
+                resyncPackages(player, wand);
+                player.sendSystemMessage(Component.translatable("colonylink.citizens.msg.already_handled"));
+                CitizensScanHandler.sendCitizensPacket(player, true);
+                return;
+            }
+        }
+
+        // 5. Consume 1 package BEFORE the action (point of no return)
         ColonyLinkWandLinkableHandler.consumeCitizenPackage(wand);
 
-        // 6. Exécuter l'action
+        // 6. Execute the action
         boolean success;
         if (isCraft)
             success = doCraft(player, stack, count, grid, wap);
         else
-            success = doSend(player, stack, count, redirectorPos, grid, wap, level, redirector);
+            success = doSend(player, stack, count, sendWarehouse, grid, wap, level, redirector);
 
         // 7. Feedback
         String itemName = stripBrackets(stack.getDisplayName().getString());
         if (success)
         {
-            // v1.6.0 — record the sent-request key SERVER-side (authoritative
-            // stack, synced to the client, survives relogs). Only on success:
-            // the refund path below must not leave a key behind. addSentRequestKey
-            // dedupes, so the "Sent ↺" re-click (craft+send pair) stays idempotent.
-            if (citizenName != null && !citizenName.isEmpty())
-                ColonyLinkWandLinkableHandler.addSentRequestKey(wand,
-                        ColonyLinkWandLinkableHandler.citizenSentKey(citizenName, stack.getItem()));
+            // 1.7.0-beta.3 — the mark goes to the colony's shared server memory, keyed
+            // by the request UUID (no more "c|name|item" key in the Clipboard). Only on
+            // success: the refund path below must not leave a mark behind. A Craft mark
+            // needs hut access (the craft path does not require it otherwise).
+            if (requestColony != null && requestId != null
+                    && (!isCraft || requestColony.getPermissions().hasPermission(player, Action.ACCESS_HUTS)))
+            {
+                CitizenRequestMemory.mark(CitizenRequestMemory.ColonyKey.of(requestColony), requestId,
+                        new CitizenRequestMemory.Entry(
+                                isCraft ? CitizenRequestMemory.Mark.CRAFTING : CitizenRequestMemory.Mark.SENT,
+                                player.getUUID(), player.getName().getString(), level.getGameTime(),
+                                stack.getItem(), count, linkedPos, stack.copy()));
+                // Every Citizens viewer sees the new state at once (shared memory).
+                CitizensScanHandler.rescanCitizensViewers(player);
+            }
 
             String action = (isCraft ? Component.translatable("colonylink.pkg_token.action_craft").getString() : Component.translatable("colonylink.pkg_token.action_sent").getString());
             player.sendSystemMessage(Component.translatable("colonylink.pkg_token.success", action, count, itemName, (stored - 1)));
         }
         else
         {
-            // Rembourser le package si l'action a échoué
+            // Refund the package if the action failed
             ColonyLinkWandLinkableHandler.addCitizenPackages(wand, 1);
             player.sendSystemMessage(Component.translatable("colonylink.pkg_token.refunded"));
         }
 
-        // 8. Sync du nouveau count au client
+        // 8. Sync the new count to the client
         net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(player,
                 new PackageTokenSyncPacket(ColonyLinkWandLinkableHandler.getCitizenPackages(wand)));
     }
 
-    // ── Send : ME → Warehouse ─────────────────────────────────────────────────
+    // Send: ME → Warehouse
 
     private static boolean doSend(ServerPlayer player, ItemStack stack, int count,
-                                  BlockPos redirectorPos, IGrid grid, IWirelessAccessPoint wap,
+                                  BuildingWareHouse warehouse, IGrid grid, IWirelessAccessPoint wap,
                                   ServerLevel level, ColonyLinkRedirectorBlockEntity redirector)
     {
         AEItemKey aeKey = AEItemKey.of(stack);
@@ -262,17 +328,18 @@ public record PackageTokenPacket(
             return false;
         }
 
-        IColony colony = IColonyManager.getInstance().getClosestColony(level, redirectorPos);
-        if (colony == null) return false;
+        // 1.7.0 — colony resolved (and permission-checked) by the caller from the
+        // Clipboard entry's Builder, not from the Redirector's position.
+        // 1.7.0-beta.2 — the caller passes the card's Warehouse of that colony.
+        if (warehouse == null) return false;
 
         int remaining = Math.min(count, (int) inStock);
         int totalInserted = 0;
 
         outer:
-        for (IBuilding building : colony.getServerBuildingManager().getBuildings().values())
+        for (BuildingWareHouse wh : java.util.List.of(warehouse))
         {
-            if (!(building instanceof BuildingWareHouse warehouse)) continue;
-            var containers = warehouse.getContainers();
+            var containers = wh.getContainers();
             if (containers == null) continue;
             for (BlockPos rackPos : containers)
             {
@@ -307,7 +374,7 @@ public record PackageTokenPacket(
         return totalInserted > 0;
     }
 
-    // ── Craft : AE2 ──────────────────────────────────────────────────────────
+    // Craft: AE2
 
     private static boolean doCraft(ServerPlayer player, ItemStack stack, int count,
                                    IGrid grid, IWirelessAccessPoint wap)
@@ -317,12 +384,12 @@ public record PackageTokenPacket(
         AEItemKey aeKey = AEItemKey.of(stack);
         if (aeKey == null || !cs.isCraftable(aeKey)) return false;
 
-        // Délégue à CraftHandler qui gère le calcul du plan et le submit
+        // Delegates to CraftHandler, which computes the plan and submits
         CraftHandler.handleCraftRequest(player, stack, count);
         return true;
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // Helpers
 
     /**
      * Pushes the authoritative package count back to the client. The client decrements

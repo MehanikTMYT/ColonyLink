@@ -27,20 +27,20 @@ import net.neoforged.neoforge.items.IItemHandler;
 import java.util.List;
 
 /**
- * Gère le « Send to Builder » : déplace des items vers le Builder's Hut MineColonies.
+ * Handles "Send to Builder": moves items to the MineColonies Builder's Hut.
  *
- * v1.4.9 — Send unifié & zéro voiding :
- *   - L'extraction respecte la priorité du Redirector pour TOUS les items (Domum inclus) :
- *       • carte warehouse + priorité ON  → warehouse d'abord, puis ME
- *       • carte warehouse + priorité OFF → ME d'abord, puis warehouse (fallback)
- *       • pas de carte warehouse          → ME uniquement
- *     Un bloc Domum FINI présent dans la warehouse est ainsi livré directement au
- *     builder, sans passer par AE2 ni par le buffer du Redirector.
- *   - Les deux sources passent par des primitives void-safe (pullFromMe / pullFromWarehouse) :
- *     tout surplus non logé dans le builder revient à sa source (ME ou racks), puis à
- *     l'inventaire du joueur en ultime recours. Aucun item ne peut être détruit.
- *   - L'ancienne « étape buffer DO » a été retirée : le buffer du Redirector ne contient
- *     que des DomumPatternItem, jamais de blocs finis — cette étape ne faisait rien.
+ * v1.4.9 — unified send & zero voiding:
+ *   - Extraction honors the Redirector priority for ALL items (Domum included):
+ *       • warehouse card + priority ON  → warehouse first, then ME
+ *       • warehouse card + priority OFF → ME first, then warehouse (fallback)
+ *       • no warehouse card             → ME only
+ *     A FINISHED Domum block in the warehouse is thus delivered straight to the
+ *     builder, bypassing AE2 and the Redirector buffer.
+ *   - Both sources go through void-safe primitives (pullFromMe / pullFromWarehouse):
+ *     any surplus the builder cannot hold returns to its source (ME or racks), then
+ *     to the player inventory as a last resort. No item can be destroyed.
+ *   - The old "DO buffer step" was removed: the Redirector buffer holds only
+ *     DomumPatternItem, never finished blocks — that step did nothing.
  */
 public class SendToBuilderHandler
 {
@@ -70,7 +70,7 @@ public class SendToBuilderHandler
             return;
         }
 
-        // ── v1.4.9 — cross-dimension : refus propre AVANT de consommer du RF ──
+        // v1.4.9 — cross-dimension: refuse cleanly BEFORE consuming RF
         {
             ItemStack wandForDim = findWandInInventory(player);
             if (wandForDim != null)
@@ -88,11 +88,15 @@ public class SendToBuilderHandler
         // ── v1.6.0 — colony permission check, server-side, before any RF charge.
         // getClosestColony can resolve a colony the player has zero rights in;
         // ACCESS_HUTS is the same action the ticker and the wand already require.
+        // 1.7.0 — an unresolvable colony is refused (was silently permissive).
         {
-            IColony permColony = IColonyManager.getInstance()
-                    .getClosestColony(player.level(), builderPos);
-            if (permColony != null
-                    && !permColony.getPermissions().hasPermission(player, Action.ACCESS_HUTS))
+            IColony permColony = ColonyResolver.forBuilder(player.level(), builderPos);
+            if (permColony == null)
+            {
+                player.sendSystemMessage(Component.translatable("colonylink.colony.not_found"));
+                return;
+            }
+            if (!permColony.getPermissions().hasPermission(player, Action.ACCESS_HUTS))
             {
                 player.sendSystemMessage(Component.translatable("colonylink.wand.msg.no_permission"));
                 return;
@@ -136,7 +140,7 @@ public class SendToBuilderHandler
             }
         }
 
-        // ── Coût RF (après validation, comme SendToWarehousePacket) ────────────
+        // RF cost (after validation, like SendToWarehousePacket)
         long sendCost = ColonyLinkConfig.SEND_COST_RF.get();
         if (sendCost > 0 && !ColonyLinkServerTicker.tryConsumeRF(player, sendCost))
         {
@@ -144,7 +148,7 @@ public class SendToBuilderHandler
             return;
         }
 
-        // ── Substitution d'outils ─────────────────────────────────────────────
+        // Tool substitution
         // v1.6.4 — send-time substitution is gated by tool_substitution_in_list
         // (default false). Priority-line sends already carry the substituted stack
         // (fetchBuilderRequest bakes it into the displayed item), so findBestTool
@@ -202,7 +206,8 @@ public class SendToBuilderHandler
         }
 
         ColonyLinkRedirectorBlockEntity redirector = null;
-        var be = level.getBlockEntity(redirectorPos);
+        // 1.7.0-beta.4 — active entry's Redirector, by UUID first (follows a moved Redirector).
+        var be = RedirectorRegistry.forEntry(level, ColonyLinkWandLinkableHandler.getActiveEntry(wandStack));
         if (be instanceof ColonyLinkRedirectorBlockEntity r) redirector = r;
 
         if (redirector == null)
@@ -225,26 +230,36 @@ public class SendToBuilderHandler
             return;
         }
 
-        // v1.4.9 — fail-off strict côté MineColonies : tout doit être chargé.
-        // Le builder (destination d'insertion) est obligatoire ; le warehouse l'est aussi
-        // dès qu'une carte est présente (le send peut y puiser). Sinon on annule proprement.
+        // v1.4.9 — strict fail-off on the MineColonies side: everything must be loaded.
+        // The builder (insertion target) is mandatory; the warehouse is too as soon as a
+        // card is present (the send can draw from it). Otherwise cancel cleanly.
         IColony sendColony = IColonyManager.getInstance().getClosestColony(level, targetPos);
         if (!ColonyLinkChunkUtil.buildingFullyLoaded(level, sendColony, targetPos))
         {
             player.sendSystemMessage(Component.translatable("colonylink.handler.hut_unloaded"));
             return;
         }
-        if (redirector.hasWarehouseCard()
-                && !ColonyLinkChunkUtil.colonyWarehousesFullyLoaded(level, sendColony))
+        // 1.7.0-beta.2 — the Warehouse is the one written on the card, and the card must
+        // belong to the Builder's colony. A card that does not resolve (not linked,
+        // other colony, colony or Warehouse lost) is reported and the send goes on
+        // ME-only, exactly as without a card.
+        BuildingWareHouse cardWarehouse = null;
+        if (redirector.hasWarehouseCard())
+        {
+            CardLinks.Resolved card = CardLinks.resolveForRedirector(level, redirector, player);
+            if (card.ok()) cardWarehouse = card.warehouse();
+            else player.sendSystemMessage(card.message());
+        }
+        if (cardWarehouse != null && !ColonyLinkChunkUtil.warehouseFullyLoaded(level, cardWarehouse))
         {
             player.sendSystemMessage(Component.translatable("colonylink.handler.warehouse_unloaded"));
             return;
         }
 
-        // ── Fix #3 : utilise getBuildingHandlers() au lieu de getCapability direct ──
-        // Le Builder's Hut MineColonies n'expose pas d'IItemHandler via capability
-        // sur sa position de bloc. On passe par getBuildingHandlers() qui interroge
-        // IBuilding.getContainers() pour trouver les racks réels.
+        // Fix #3: use getBuildingHandlers() instead of a direct getCapability.
+        // The MineColonies Builder's Hut exposes no IItemHandler capability at its
+        // block position; getBuildingHandlers() queries IBuilding.getContainers()
+        // to find the real racks.
         List<IItemHandler> buildingHandlers = redirector.getBuildingHandlers();
         if (buildingHandlers.isEmpty())
         {
@@ -257,7 +272,6 @@ public class SendToBuilderHandler
             }
             buildingHandlers = List.of(direct);
         }
-        // ─────────────────────────────────────────────────────────────────────
 
         if (redirector.getState() == ColonyLinkRedirectorBlockEntity.RedirectorState.STANDBY)
         {
@@ -279,33 +293,33 @@ public class SendToBuilderHandler
         AEItemKey aeKey = AEItemKey.of(stack);
         int remaining = realCount;
 
-        // ── Extraction selon la priorité du Redirector (v1.4.9) ───────────────
-        // S'applique à TOUS les items, Domum inclus : un bloc Domum fini présent
-        // dans la warehouse est livré directement (sans AE2), via pullFromWarehouse.
-        boolean warehouseEnabled  = redirector.hasWarehouseCard();
+        // Extraction by Redirector priority (v1.4.9).
+        // Applies to ALL items, Domum included: a finished Domum block in the warehouse
+        // is delivered directly (no AE2) via pullFromWarehouse.
+        boolean warehouseEnabled  = cardWarehouse != null; // 1.7.0-beta.2 — a card that resolves
         boolean warehousePriority = warehouseEnabled && redirector.isWarehousePriority();
 
         if (warehouseEnabled && warehousePriority)
         {
-            // Priorité warehouse : racks d'abord, puis ME.
-            remaining = pullFromWarehouse(player, level, stack, remaining, redirector, buildingHandlers);
+            // Warehouse priority: racks first, then ME.
+            remaining = pullFromWarehouse(player, level, stack, remaining, cardWarehouse, redirector, buildingHandlers);
             remaining = pullFromMe(player, aeKey, remaining, inventory, actionSource, redirector, buildingHandlers);
         }
         else if (warehouseEnabled)
         {
-            // Carte présente sans priorité : ME d'abord, puis warehouse en fallback.
+            // Card present without priority: ME first, then warehouse as fallback.
             remaining = pullFromMe(player, aeKey, remaining, inventory, actionSource, redirector, buildingHandlers);
-            remaining = pullFromWarehouse(player, level, stack, remaining, redirector, buildingHandlers);
+            remaining = pullFromWarehouse(player, level, stack, remaining, cardWarehouse, redirector, buildingHandlers);
         }
         else
         {
-            // Pas de carte warehouse : ME uniquement.
+            // No warehouse card: ME only.
             remaining = pullFromMe(player, aeKey, remaining, inventory, actionSource, redirector, buildingHandlers);
         }
 
         long totalInserted = realCount - remaining;
 
-        // ── Feedback ──────────────────────────────────────────────────────────
+        // Feedback
         if (totalInserted > 0)
         {
             // Notify MineColonies that the builder hut inventory changed so the
@@ -320,9 +334,9 @@ public class SendToBuilderHandler
                     {
                         if (!b.getPosition().equals(builderPos)) continue;
                         b.markDirty();
-                        // v1.4.11 — crédite la ressource livrée dans le bilan du chantier
-                        // (getNeededResources) pour que la ligne disparaisse immédiatement,
-                        // même quand le builder est loin et ne recalcule pas. Voir le helper.
+                        // v1.4.11 — credit the delivered resource into the build tally
+                        // (getNeededResources) so the line clears immediately, even when
+                        // the builder is far away and does not recompute. See the helper.
                         creditDeliveredResource(b, stack, (int) totalInserted);
                         // v1.6.1 — open-request lines (Priority Request) are not covered
                         // by the credit above: guard them against the cascade.
@@ -342,7 +356,7 @@ public class SendToBuilderHandler
         }
         else
         {
-            // Si le redirector vient de passer en STANDBY, le message orange suffit — pas de doublon rouge.
+            // If the redirector just entered STANDBY, the orange message is enough — no duplicate red one.
             if (redirector.getState() == ColonyLinkRedirectorBlockEntity.RedirectorState.STANDBY)
                 player.sendSystemMessage(Component.translatable("colonylink.handler.builder_inv_full"));
             else
@@ -351,23 +365,22 @@ public class SendToBuilderHandler
     }
 
     /**
-     * v1.4.11 — Crédite immédiatement la ressource livrée dans le bilan du chantier.
+     * v1.4.11 — Immediately credits the delivered resource into the build tally.
      *
-     * La liste « Priority Request » du Clipboard vient de getNeededResources()
-     * (miss = amount - available), où `available` = ce que le builder possède dans son hut.
-     * MineColonies ne recalcule `available` que sur le TICK de travail du builder — gelé quand
-     * le joueur est loin. Résultat : on dépose bien l'item dans le rack, mais `available` reste
-     * périmé → la ligne ne disparaît pas (et on peut cascader des envois) tant qu'on n'est pas
-     * revenu près de la colonie.
+     * The Clipboard's "Priority Request" list comes from getNeededResources()
+     * (miss = amount - available), where `available` is what the builder holds in its hut.
+     * MineColonies only recomputes `available` on the builder's work TICK — frozen when the
+     * player is far away. So the item does land in the rack, but `available` stays stale →
+     * the line does not clear (and sends can cascade) until the player returns near the colony.
      *
-     * Ici, dès le dépôt, on crédite `available` de la quantité réellement insérée (plafonné au
-     * manque). getNeededResources() reflète alors le dépôt → le ticker (qui tourne même à
-     * distance, sans gating) recalcule la liste → la ligne disparaît immédiatement et uniformément.
+     * Here, on deposit, we credit `available` by the amount actually inserted (capped at the
+     * miss). getNeededResources() then reflects the deposit → the ticker (which runs even
+     * remotely, ungated) recomputes the list → the line clears immediately and uniformly.
      *
-     * Sûr : le recalcul natif du builder (au retour) fait setAvailable(0) puis ré-additionne le
-     * contenu RÉEL des inventaires (rack inclus) → notre crédit anticipé est ÉCRASÉ par la valeur
-     * exacte, jamais double-compté. La map est unmodifiable mais ses valeurs sont mutables.
-     * 100% serveur, coût ponctuel au clic (hors tick).
+     * Safe: the builder's native recompute (on return) does setAvailable(0) then re-adds the
+     * REAL inventory contents (rack included) → our early credit is OVERWRITTEN by the exact
+     * value, never double-counted. The map is unmodifiable but its values are mutable.
+     * 100% server-side, a one-off cost on click (outside the tick).
      */
     private static void creditDeliveredResource(IBuilding building, ItemStack delivered, int insertedCount)
     {
@@ -376,7 +389,7 @@ public class SendToBuilderHandler
 
         try
         {
-            var needed = bb.getNeededResources();   // map vivante : valeurs mutables
+            var needed = bb.getNeededResources();   // live map: mutable values
             if (needed == null) return;
 
             for (BuildingBuilderResource res : needed.values())
@@ -384,10 +397,10 @@ public class SendToBuilderHandler
                 if (!ItemStack.isSameItemSameComponents(res.getItemStack(), delivered)) continue;
 
                 int missing = res.getAmount() - res.getAvailable();
-                if (missing <= 0) return;            // déjà couvert, rien à créditer
+                if (missing <= 0) return;            // already covered, nothing to credit
                 res.addAvailable(Math.min(missing, insertedCount));
                 bb.markDirty();
-                return;                              // une seule ressource correspond par item
+                return;                              // only one resource matches per item
             }
         }
         catch (Exception e)
@@ -579,13 +592,13 @@ public class SendToBuilderHandler
                 && ItemStack.isSameItemSameComponents(sub.displayStack(), candidate);
     }
 
-    // ── Primitives d'extraction (void-safe) ───────────────────────────────────
+    // Extraction primitives (void-safe)
 
     /**
-     * v1.4.9 — Vide jusqu'à {@code remaining} items depuis le réseau ME vers les
-     * handlers du builder. Tout surplus non logé revient dans le ME (jamais de void).
+     * v1.4.9 — Drains up to {@code remaining} items from the ME network into the
+     * builder handlers. Any surplus that cannot be stored returns to the ME (never voided).
      *
-     * @return le nouveau remaining
+     * @return the new remaining
      */
     private static int pullFromMe(
             ServerPlayer player,
@@ -607,7 +620,7 @@ public class SendToBuilderHandler
 
             if (!leftOver.isEmpty())
             {
-                // Builder plein → on remet le surplus dans le ME (jamais de void).
+                // Builder full → return the surplus to the ME (never voided).
                 // v1.6.0 — VERIFY the re-insert (an overflow/void cell or a full
                 // network can silently discard); player inventory is the
                 // last-resort sink so nothing is ever voided.
@@ -624,29 +637,29 @@ public class SendToBuilderHandler
     }
 
     /**
-     * v1.4.9 — Vide jusqu'à {@code remaining} items (comparaison exacte des composants)
-     * depuis les racks de la Warehouse vers les handlers du builder. Tout surplus non
-     * logé revient dans les racks, puis dans l'inventaire du joueur en ultime recours.
-     * Jamais de void.
+     * v1.4.9 — Drains up to {@code remaining} items (exact component match) from the
+     * Warehouse racks into the builder handlers. Any surplus that cannot be stored returns
+     * to the racks, then to the player inventory as a last resort. Never voided.
      *
-     * @return le nouveau remaining
+     * @return the new remaining
      */
     private static int pullFromWarehouse(
             ServerPlayer player, ServerLevel level, ItemStack stack, int remaining,
+            BuildingWareHouse warehouse,
             ColonyLinkRedirectorBlockEntity redirector, List<IItemHandler> buildingHandlers)
     {
         if (remaining <= 0) return remaining;
 
-        IColony colony = IColonyManager.getInstance().getClosestColony(level, redirector.getBlockPos());
-        if (colony == null) return remaining;
+        // 1.7.0-beta.2 — the card's Warehouse, resolved by the caller (card colony ==
+        // the linked Builder's colony), instead of the first Warehouse of the building
+        // map of ColonyResolver.forRedirector's colony.
+        if (warehouse == null) return remaining;
 
-        for (IBuilding building : colony.getServerBuildingManager().getBuildings().values())
         {
-            if (!(building instanceof BuildingWareHouse warehouse)) continue;
             try
             {
                 var containerList = warehouse.getContainers();
-                if (containerList == null || containerList.isEmpty()) break;
+                if (containerList == null || containerList.isEmpty()) return remaining;
 
                 for (BlockPos rackPos : containerList)
                 {
@@ -669,7 +682,7 @@ public class SendToBuilderHandler
 
                         if (!leftOver.isEmpty())
                         {
-                            // Builder plein → surplus remis dans le rack, puis au joueur.
+                            // Builder full → surplus returned to the rack, then to the player.
                             ItemStack back = leftOver.copy();
                             for (int s2 = 0; s2 < rackHandler.getSlots() && !back.isEmpty(); s2++)
                                 back = rackHandler.insertItem(s2, back, false);
@@ -685,16 +698,15 @@ public class SendToBuilderHandler
             {
                 ColonyLink.LOGGER.debug("[ColonyLink] Warehouse extraction error: {}", e.getMessage());
             }
-            break;
         }
         return remaining;
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // Helpers
 
     /**
-     * Insère un ItemStack dans une liste de handlers (racks MineColonies).
-     * Retourne le surplus non inséré.
+     * Inserts an ItemStack into a list of handlers (MineColonies racks).
+     * Returns the surplus that was not inserted.
      */
     static ItemStack insertIntoHandlers(List<IItemHandler> handlers, ItemStack stack)
     {

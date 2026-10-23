@@ -18,25 +18,25 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Commande /colonylink — op-only (level 2).
+ * /colonylink command — op-only (level 2).
  *
- * Sous-commandes :
- *   /colonylink info                         — version, mods détectés, état général
- *   /colonylink debug <subsystem>            — toggle logs verbeux par sous-système
- *   /colonylink debug list                   — liste les sous-systèmes disponibles
- *   /colonylink config <key> <value>         — modifier des paramètres runtime
- *   /colonylink config list                  — lister les clés modifiables
- *   /colonylink reload                       — recharger la config depuis le fichier TOML
- *   /colonylink stats                        — statistiques d'utilisation en temps réel
- *   /colonylink stats reset                  — remettre les compteurs à zéro
+ * Sub-commands:
+ *   /colonylink info                         — version, detected mods, general state
+ *   /colonylink debug <subsystem>            — toggle verbose logs per subsystem
+ *   /colonylink debug list                   — list available subsystems
+ *   /colonylink config <key> <value>         — change runtime settings
+ *   /colonylink config list                  — list editable keys
+ *   /colonylink reload                       — reload config from the TOML file
+ *   /colonylink stats                        — live usage statistics
+ *   /colonylink stats reset                  — reset the counters
  *
- * Enregistrement : NeoForge.EVENT_BUS.register(ColonyLinkCommand.class)
- * dans ColonyLink constructor (côté commun — les commandes sont server-only
- * par nature et RegisterCommandsEvent ne se déclenche pas côté client pur).
+ * Registered via NeoForge.EVENT_BUS.register(ColonyLinkCommand.class) in the
+ * ColonyLink constructor (common side — commands are server-only by nature and
+ * RegisterCommandsEvent does not fire on a pure client).
  */
 public class ColonyLinkCommand
 {
-    // ── Sous-systèmes de debug ────────────────────────────────────────────────
+    // Debug subsystems
 
     public enum DebugSubsystem
     {
@@ -64,17 +64,17 @@ public class ColonyLinkCommand
         }
     }
 
-    /** Ensemble des sous-systèmes dont le debug verbose est actuellement actif. */
+    /** Subsystems whose verbose debug is currently enabled. */
     private static final Set<DebugSubsystem> enabledDebug =
             ConcurrentHashMap.newKeySet();
 
-    /** Vérifie si le debug est actif pour un sous-système donné. */
+    /** Whether debug is enabled for a given subsystem. */
     public static boolean isDebugEnabled(DebugSubsystem subsystem)
     {
         return enabledDebug.contains(subsystem);
     }
 
-    // ── Statistiques d'utilisation ────────────────────────────────────────────
+    // Usage statistics
 
     private static final AtomicLong statsCraftJobsSubmitted  = new AtomicLong(0);
     private static final AtomicLong statsSendToBuilderCalls  = new AtomicLong(0);
@@ -91,11 +91,11 @@ public class ColonyLinkCommand
     public static void recordMeToWhTransfer()     { statsMeToWhTransfers.incrementAndGet(); }
     public static void recordToolSubstitution()   { statsToolSubstitutions.incrementAndGet(); }
 
-    // ── Clés de config modifiables à chaud ───────────────────────────────────
+    // Hot-reloadable config keys
     //
-    // Seules les valeurs qui n'affectent pas la structure du monde (pas de
-    // buffer size de redirector, pas de capacité RF du wand) sont exposées ici.
-    // Les valeurs structurelles nécessitent un redémarrage et sont exclues.
+    // Only values that do not affect world structure (no redirector buffer size,
+    // no wand RF capacity) are exposed here. Structural values require a restart
+    // and are excluded.
 
     private static final Map<String, String> RUNTIME_CONFIG_KEYS = Map.ofEntries(
             Map.entry("ticker_interval_ticks",            "General — ticker interval in ticks (5–100)"),
@@ -120,12 +120,11 @@ public class ColonyLinkCommand
             Map.entry("advanced_ae_craft_submission_limit","AdvancedAE — craft submission limit (0–256)")
     );
 
-    // ── Métadonnées typées par clé (pour la tab-complétion de la valeur) ──────
+    // Per-key typed metadata (for value tab-completion)
     //
-    // Parallèle à RUNTIME_CONFIG_KEYS : mêmes clés, mais avec le type, la plage
-    // et la valeur par défaut, plus un accès à la valeur courante. Sert uniquement
-    // à proposer des candidats pertinents en autocomplétion ; la validation réelle
-    // reste faite par applyConfig().
+    // Parallel to RUNTIME_CONFIG_KEYS: same keys, with type, range and default plus
+    // access to the current value. Used only to suggest relevant completion candidates;
+    // actual validation is still done by applyConfig().
 
     private record ConfigSpec(boolean bool, long min, long max, String def,
                               java.util.function.Supplier<String> current) {}
@@ -184,9 +183,9 @@ public class ColonyLinkCommand
                             () -> String.valueOf(ColonyLinkConfig.ADVANCED_AE_CRAFT_SUBMISSION_LIMIT.get())))
     );
 
-    // ── Fournisseurs de suggestions Brigadier (tab-complétion) ────────────────
+    // Brigadier suggestion providers (tab-completion)
 
-    /** /colonylink debug <subsystem> — sous-systèmes + 'all', description en tooltip. */
+    /** /colonylink debug <subsystem> — subsystems + 'all', description as tooltip. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_DEBUG = (ctx, b) ->
     {
         String rem = b.getRemaining().toLowerCase(Locale.ROOT);
@@ -198,7 +197,7 @@ public class ColonyLinkCommand
         return b.buildFuture();
     };
 
-    /** /colonylink config <key> — clés modifiables, description en tooltip. */
+    /** /colonylink config <key> — editable keys, description as tooltip. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_CONFIG_KEY = (ctx, b) ->
     {
         String rem = b.getRemaining().toLowerCase(Locale.ROOT);
@@ -209,7 +208,7 @@ public class ColonyLinkCommand
         return b.buildFuture();
     };
 
-    /** /colonylink config <key> <value> — valeurs valides selon la clé déjà saisie. */
+    /** /colonylink config <key> <value> — valid values for the already-typed key. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_CONFIG_VALUE = (ctx, b) ->
     {
         String key;
@@ -234,7 +233,7 @@ public class ColonyLinkCommand
         String rem = b.getRemaining().toLowerCase(Locale.ROOT);
         String cur = spec.current().get();
 
-        // (valeur → tooltip), ordre conservé, sans doublon
+        // (value → tooltip), order preserved, no duplicates
         java.util.LinkedHashMap<String, String> cands = new java.util.LinkedHashMap<>();
         if (spec.bool())
         {
@@ -259,7 +258,7 @@ public class ColonyLinkCommand
     };
 
 
-    // ── Enregistrement de la commande ─────────────────────────────────────────
+    // Command registration
 
     @SubscribeEvent
     public static void onRegisterCommands(RegisterCommandsEvent event)
@@ -310,13 +309,12 @@ public class ColonyLinkCommand
         );
     }
 
-    // ── /colonylink info ──────────────────────────────────────────────────────
+    // /colonylink info
 
     private static int cmdInfo(CommandContext<CommandSourceStack> ctx)
     {
         CommandSourceStack src = ctx.getSource();
 
-        // Détection mods optionnels
         boolean hasCurios  = net.neoforged.fml.ModList.get().isLoaded("curios");
         boolean hasRS2     = net.neoforged.fml.ModList.get().isLoaded("refinedstorage")
                 || net.neoforged.fml.ModList.get().isLoaded("refinedstorageaddons");
@@ -324,7 +322,6 @@ public class ColonyLinkCommand
         boolean hasApothe  = net.neoforged.fml.ModList.get().isLoaded("apotheosis");
         boolean hasAdvancedAe = net.neoforged.fml.ModList.get().isLoaded("advanced_ae");
 
-        // Récupère la version depuis le manifest NeoForge
         String version = net.neoforged.fml.ModList.get()
                 .getModContainerById(ColonyLink.MODID)
                 .map(c -> c.getModInfo().getVersion().toString())
@@ -361,7 +358,7 @@ public class ColonyLinkCommand
         return 1;
     }
 
-    // ── /colonylink debug ─────────────────────────────────────────────────────
+    // /colonylink debug
 
     private static int cmdDebugList(CommandContext<CommandSourceStack> ctx)
     {
@@ -417,7 +414,7 @@ public class ColonyLinkCommand
         return 1;
     }
 
-    // ── /colonylink config ────────────────────────────────────────────────────
+    // /colonylink config
 
     private static int cmdConfigList(CommandContext<CommandSourceStack> ctx)
     {
@@ -472,14 +469,14 @@ public class ColonyLinkCommand
     }
 
     /**
-     * Applique une valeur de config à chaud via l'API ModConfigSpec.
-     * Retourne true si la valeur a effectivement changé.
+     * Applies a config value at runtime via the ModConfigSpec API.
+     * Returns true if the value actually changed.
      */
     private static boolean applyConfig(String key, String value) throws IllegalArgumentException
     {
         switch (key)
         {
-            // ── [energy] ──────────────────────────────────────────────────────
+            // [energy]
             case "passive_drain_rf" ->
             {
                 long v = parseLong(value, 0, Long.MAX_VALUE, key);
@@ -520,7 +517,7 @@ public class ColonyLinkCommand
                 ColonyLinkConfig.LOW_POWER_THRESHOLD_PERCENT.set(v);
                 return true;
             }
-            // ── [general] ─────────────────────────────────────────────────────
+            // [general]
             case "ticker_interval_ticks" ->
             {
                 int v = parseInt(value, 5, 100, key);
@@ -545,7 +542,7 @@ public class ColonyLinkCommand
                 ColonyLinkConfig.WAND_RANGE_CHECK.set(v);
                 return true;
             }
-            // ── [delivery] ────────────────────────────────────────────────────
+            // [delivery]
             case "send_target" ->
             {
                 ColonyLinkConfig.SendTarget v;
@@ -557,7 +554,7 @@ public class ColonyLinkCommand
                 ColonyLinkConfig.SEND_TARGET.set(v);
                 return true;
             }
-            // ── [tools] ───────────────────────────────────────────────────────
+            // [tools]
             case "enable_tool_upgrade" ->
             {
                 boolean v = parseBool(value, key);
@@ -582,7 +579,7 @@ public class ColonyLinkCommand
                 ColonyLinkConfig.RESPECT_ENCHANT_LEVEL_CAP.set(v);
                 return true;
             }
-            // ── [interface] ───────────────────────────────────────────────────
+            // [interface]
             case "show_crafting_status" ->
             {
                 boolean v = parseBool(value, key);
@@ -615,7 +612,7 @@ public class ColonyLinkCommand
                 ColonyLinkConfig.WAREHOUSE_SNAPSHOT_VALIDITY_TICKS.set(v);
                 return true;
             }
-            // -- [advanced_ae] -------------------------------------------------
+            // [advanced_ae]
             case "enable_advanced_ae_compat" ->
             {
                 boolean v = parseBool(value, key);
@@ -636,7 +633,7 @@ public class ColonyLinkCommand
         }
     }
 
-    // ── /colonylink reload ────────────────────────────────────────────────────
+    // /colonylink reload
 
     private static int cmdReload(CommandContext<CommandSourceStack> ctx)
     {
@@ -671,7 +668,7 @@ public class ColonyLinkCommand
         return 1;
     }
 
-    // ── /colonylink stats ─────────────────────────────────────────────────────
+    // /colonylink stats
 
     private static int cmdStats(CommandContext<CommandSourceStack> ctx)
     {
@@ -707,7 +704,7 @@ public class ColonyLinkCommand
         return 1;
     }
 
-    // ── Parse helpers ─────────────────────────────────────────────────────────
+    // Parse helpers
 
     private static long parseLong(String value, long min, long max, String key)
     {
@@ -738,7 +735,7 @@ public class ColonyLinkCommand
         throw new IllegalArgumentException("Expected true/false, got '" + value + "'");
     }
 
-    // ── Send helper ───────────────────────────────────────────────────────────
+    // Send helper
 
     private static void send(CommandSourceStack src, String msg)
     {

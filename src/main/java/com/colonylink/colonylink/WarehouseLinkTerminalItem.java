@@ -9,8 +9,6 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.context.UseOnContext;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
 
 import java.util.List;
 
@@ -32,7 +30,7 @@ public class WarehouseLinkTerminalItem extends Item
         super(properties.stacksTo(1));
     }
 
-    // ── IPartItem ─────────────────────────────────────────────────────────────
+    // IPartItem
 
     @Override
     public Class<WarehouseLinkTerminalPart> getPartClass()
@@ -46,7 +44,7 @@ public class WarehouseLinkTerminalItem extends Item
         return new WarehouseLinkTerminalPart(this);
     }
 
-    // ── Placement on cable bus ────────────────────────────────────────────────
+    // Placement on cable bus
 
     @Override
     public InteractionResult useOn(UseOnContext ctx)
@@ -54,7 +52,7 @@ public class WarehouseLinkTerminalItem extends Item
         return PartHelper.usePartItem(ctx);
     }
 
-    // ── Tooltip ───────────────────────────────────────────────────────────────
+    // Tooltip
 
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext ctx,

@@ -10,16 +10,16 @@ import snownee.jade.api.ITooltip;
 import snownee.jade.api.config.IPluginConfig;
 
 /**
- * Provider Jade pour le Colony Link Redirector.
+ * Jade provider for the Colony Link Redirector.
  *
- * Affiche dans le HUD :
- * - Nom du bloc avec icône colorée selon l'état
- * - État AE2 (connecté / déconnecté) avec couleur
- * - Builder lié (nom + coordonnées)
- * - Présence de la Warehouse Link Card
- * - Priorité WH/AE2 si card présente
- * - Nombre d'items dans le buffer
- * - Guide de setup si le redirector n'est pas configuré
+ * HUD display:
+ * - block name with a state-colored icon
+ * - AE2 state (connected / disconnected)
+ * - linked builder (name + coordinates)
+ * - Warehouse Link Card presence
+ * - WH/AE2 priority when a card is present
+ * - buffer item count
+ * - setup guide when the redirector is not configured
  */
 public class RedirectorJadeProvider implements
         IBlockComponentProvider,
@@ -30,7 +30,7 @@ public class RedirectorJadeProvider implements
     public static final Identifier UID = Identifier.fromNamespaceAndPath(
             ColonyLink.MODID, "redirector");
 
-    // Clés NBT pour le transfert serveur → client
+    // NBT keys for server → client transfer
     private static final String KEY_STATE        = "cl_state";
     private static final String KEY_AE2_ACTIVE   = "cl_ae2";
     private static final String KEY_HAS_CARD     = "cl_card";
@@ -43,16 +43,15 @@ public class RedirectorJadeProvider implements
     private static final String KEY_DOMUM_PATTERNS = "cl_domum";
     private static final String KEY_DOMUM_INFO     = "cl_domum_info"; // "name|variant;name|variant;..."
 
-    // ── Données serveur → client ──────────────────────────────────────────────
+    // Server → client data
 
     @Override
     public void appendServerData(CompoundTag data, BlockAccessor accessor)
     {
         if (!(accessor.getBlockEntity() instanceof ColonyLinkRedirectorBlockEntity be)) return;
 
-        // Recalcule le state à la volée pour garantir la cohérence avec isAe2Active().
-        // be.getState() peut être désynchronisé (valeur NBT ancienne) si updateState()
-        // n'a pas encore été rappelé depuis le dernier chargement du chunk.
+        // Recompute state on the fly for consistency with isAe2Active(): be.getState()
+        // can be stale (old NBT value) when updateState() has not run since chunk load.
         be.updateState();
         data.putString(KEY_STATE, be.getState().name());
         data.putBoolean(KEY_AE2_ACTIVE, be.isAe2Active());
@@ -66,12 +65,10 @@ public class RedirectorJadeProvider implements
             data.putInt(KEY_BUILDER_Z, be.getLinkedBuilderPos().getZ());
         }
 
-        // Compte les slots utilisés dans le buffer
         int used = 0;
         for (int slot = 0; slot < be.buffer.getSlots(); slot++)
             if (!be.buffer.getStackInSlot(slot).isEmpty()) used++;
 
-        // Compte les DomumPatternItems + collecte leurs infos
         int domumCount = 0;
         StringBuilder domumInfo = new StringBuilder();
         for (int slot = 0; slot < be.buffer.getSlots(); slot++)
@@ -80,12 +77,10 @@ public class RedirectorJadeProvider implements
             if (!(s.getItem() instanceof DomumPatternItem)) continue;
             domumCount++;
 
-            // Nom de l'item cible
             net.minecraft.world.item.ItemStack target =
                     DomumPatternItem.decodeTarget(s, accessor.getLevel().registryAccess());
             String name = target != null ? target.getDisplayName().getString() : "?";
 
-            // Variant
             net.minecraft.world.item.component.BlockItemStateProperties bs =
                     s.get(net.minecraft.core.component.DataComponents.BLOCK_STATE);
             String variant = "";
@@ -106,7 +101,7 @@ public class RedirectorJadeProvider implements
 
     }
 
-    // ── Affichage HUD client ──────────────────────────────────────────────────
+    // Client HUD display
 
     @Override
     public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config)
@@ -158,7 +153,7 @@ public class RedirectorJadeProvider implements
                     tooltip.add(Component.translatable("colonylink.jade.status_no_ae2"));
         }
 
-        // ── Warehouse Link Card ───────────────────────────────────────────────
+        // Warehouse Link Card
         tooltip.add(Component.literal("§8──────────────────"));
         boolean hasCard = data.getBooleanOr(KEY_HAS_CARD, false);
         if (hasCard)
@@ -184,7 +179,7 @@ public class RedirectorJadeProvider implements
         {
             tooltip.add(Component.translatable("colonylink.jade.buffer", bufUsed, bufMax, (domumCount > 0 ? Component.translatable("colonylink.jade.buffer_domum", domumCount).getString() : "")));
 
-            // Détail des DomumPatterns (nom + variant) — shift only
+            // DomumPattern detail (name + variant) — shift only
             if (domumCount > 0 && !domumInfo.isEmpty()
                     && net.minecraft.client.Minecraft.getInstance().hasShiftDown())
             {

@@ -4,19 +4,16 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
 import net.neoforged.neoforge.client.IItemDecorator;
 
 /**
  * DomumPatternDecorator — ColonyLink v1.4.2
  *
- * IItemDecorator pour DomumPatternItem.
- * Quand Shift est enfoncé : rend l'item Domum cible PAR-DESSUS le pattern
- * dans le slot, à la position exacte (x, y identiques = pas de décalage).
+ * IItemDecorator for DomumPatternItem. When Shift is held, renders the target
+ * Domum item over the pattern in the slot at the exact same (x, y).
  *
- * Enregistré via RegisterItemDecorationsEvent dans ColonyLinkClient.
- * Fonctionne dans TOUS les slots : inventaire, hotbar, AE2, WH, etc.
+ * Registered via RegisterItemDecorationsEvent in ColonyLinkClient.
+ * Works in all slots: inventory, hotbar, AE2, WH, etc.
  */
 public class DomumPatternDecorator implements IItemDecorator
 {
@@ -40,7 +37,7 @@ public class DomumPatternDecorator implements IItemDecorator
         // PORT(26.1): GUI layering follows submission order (no Z); the decorator runs after the
         // pattern item, so drawing here already covers it.
 
-        // Fond couleur slot vanilla (#8B8B8B) pour masquer le pattern
+        // Vanilla slot background (#8B8B8B) to mask the pattern
         graphics.fill(x, y, x + 16, y + 16, 0xFF8B8B8B);
 
         // Rend l'item cible au même z-level élevé

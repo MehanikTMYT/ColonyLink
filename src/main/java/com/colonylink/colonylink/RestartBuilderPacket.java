@@ -78,8 +78,8 @@ public record RestartBuilderPacket(BlockPos builderPos) implements CustomPacketP
 
             try
             {
-                // Equivalent du bouton "Restart" vanilla MineColonies :
-                // retire et remet le work order dans la file pour forcer le recalcul
+                // Equivalent to vanilla MineColonies' "Restart" button: remove and
+                // re-add the work order to the queue to force a recompute.
                 var workOrder = builderBuilding.getWorkOrder();
                 if (workOrder != null)
                 {
@@ -88,10 +88,10 @@ public record RestartBuilderPacket(BlockPos builderPos) implements CustomPacketP
                     colony.getWorkManager().addWorkOrder(workOrder, false);
                 }
 
-                // Remet a zero la liste de ressources pour forcer un recalcul complet
+                // Reset the resource list to force a full recompute.
                 builderBuilding.resetNeededResources();
 
-                // Marque le batiment comme modifie pour forcer la sync
+                // Mark the building dirty to force a sync.
                 building.markDirty();
 
                 serverPlayer.sendSystemMessage(

@@ -13,13 +13,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Packet S→C : résultat du scan warehouse.
+ * S->C packet: warehouse scan result.
  *
- * Contient une liste d'entrées enrichies : pour chaque ressource builder,
- * la quantité disponible en warehouse (brut + via craft récursif).
+ * Holds enriched entries: for each builder resource, the quantity available in the
+ * warehouse (raw + via recursive craft).
  *
- * Le client stocke ce snapshot dans ColonyLinkScreen.
- * Un timestamp (ticks serveur) permet d'invalider le snapshot après 400 ticks.
+ * The client stores this snapshot in ColonyLinkScreen; a timestamp (server ticks) lets it
+ * invalidate the snapshot after 400 ticks.
  */
 public record WarehouseResultPacket(
         List<WarehouseEntry> entries,
@@ -28,12 +28,12 @@ public record WarehouseResultPacket(
 ) implements CustomPacketPayload
 {
     /**
-     * Entrée warehouse pour un item builder.
+     * Warehouse entry for a builder item.
      *
-     * @param stack         l'item demandé par le builder
-     * @param inWarehouse   quantité directement disponible en warehouse (sans craft)
-     * @param viaCraft      quantité supplémentaire accessible via craft récursif depuis warehouse
-     * @param tooltipLines  lignes de détail pour le tooltip (composants Domum, arbre de craft, etc.)
+     * @param stack         the item requested by the builder
+     * @param inWarehouse   quantity directly available in the warehouse (no craft)
+     * @param viaCraft      extra quantity reachable via recursive craft from the warehouse
+     * @param tooltipLines  detail lines for the tooltip (Domum components, craft tree, etc.)
      */
     public record WarehouseEntry(
             ItemStack stack,

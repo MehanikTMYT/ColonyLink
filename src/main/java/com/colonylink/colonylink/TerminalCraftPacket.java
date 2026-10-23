@@ -95,18 +95,16 @@ public record TerminalCraftPacket(
     }
 
     /**
-     * Middle-click sur un item craftable dans le panel ME :
-     * ouvre le vrai écran CraftAmountMenu natif d'AE2. [Fix 8]
+     * Middle-click on a craftable item in the ME panel: opens AE2's native
+     * CraftAmountMenu screen. [Fix 8]
      *
-     * CraftAmountMenu.open() est la méthode statique AE2 qui :
-     *   1. Appelle MenuOpener.open(TYPE, player, locator)
-     *   2. Cast player.containerMenu en CraftAmountMenu
-     *   3. Appelle setWhatToCraft(aeKey, initialAmount) + broadcastChanges()
+     * CraftAmountMenu.open() is the AE2 static method that:
+     *   1. calls MenuOpener.open(TYPE, player, locator)
+     *   2. casts player.containerMenu to CraftAmountMenu
+     *   3. calls setWhatToCraft(aeKey, initialAmount) + broadcastChanges()
      *
-     *   - Direction  = la face sur laquelle notre Part est monté (part.getSide())
-     *
-     * Notre Part implémente ISubMenuHost via :
-     *   WarehouseLinkTerminalPart → AbstractTerminalPart → ITerminalHost → ISubMenuHost ✓
+     * Our Part implements ISubMenuHost via:
+     *   WarehouseLinkTerminalPart → AbstractTerminalPart → ITerminalHost → ISubMenuHost
      */
     private static void handleAutocraft(ServerPlayer player,
                                         WarehouseLinkTerminalPart part,
@@ -130,11 +128,11 @@ public record TerminalCraftPacket(
             return;
         }
 
-        // Construire le locator depuis le Part directement (1 argument dans cette version AE2)
+        // Build the locator from the Part directly (1 argument in this AE2 version)
         var locator = MenuLocators.forPart(part);
 
-        // Ouvre le CraftAmountMenu natif AE2 — l'utilisateur voit l'UI AE2
-        // standard avec le champ de quantité, le choix du CPU, etc.
+        // Open AE2's native CraftAmountMenu — the player sees the standard AE2 UI
+        // with the amount field, CPU choice, etc.
         CraftAmountMenu.open(player, locator, aeKey, 1);
     }
 }

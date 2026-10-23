@@ -13,10 +13,10 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * S→C : snapshot du ME storage vers le client (items + craftables).
+ * S→C: snapshot of the ME storage to the client (items + craftables).
  *
- * Le handler client est dans TerminalClientPacketHandler (@OnlyIn(CLIENT))
- * pour éviter que RuntimeDistCleaner ne crashe le serveur dédié.
+ * The client handler lives in TerminalClientPacketHandler (@OnlyIn(CLIENT))
+ * so RuntimeDistCleaner does not crash the dedicated server.
  */
 public record TerminalMeSyncPacket(
         List<MeEntry> entries,
@@ -59,12 +59,11 @@ public record TerminalMeSyncPacket(
     public CustomPacketPayload.Type<? extends CustomPacketPayload> type() { return TYPE; }
 
     /**
-     * Construit le snapshot ME depuis la grille AE2.
+     * Builds the ME snapshot from the AE2 grid.
      *
-     * Utilise getCachedInventory() (KeyCounter) pour itérer les items stockés,
-     * et isCraftable() pour marquer les items autocratable.
-     * Pour les items craftables non stockés : getCraftables(AEKeyFilter)
-     * avec un filtre passthrough (lambda acceptant tous les items).
+     * Uses getCachedInventory() (KeyCounter) to iterate stocked items, and
+     * isCraftable() to flag autocraftable ones. For craftable-but-not-stocked
+     * items: getCraftables(AEKeyFilter) with a pass-through filter (accepts all).
      */
     public static TerminalMeSyncPacket fromGrid(appeng.api.networking.IGrid grid, BlockPos pos)
     {
@@ -72,7 +71,7 @@ public record TerminalMeSyncPacket(
         appeng.api.networking.crafting.ICraftingService crafting = grid.getCraftingService();
         List<MeEntry> entries = new ArrayList<>();
 
-        // Items en stock — KeyCounter est Iterable<Map.Entry<AEKey, Long>>
+        // Stocked items — KeyCounter is Iterable<Map.Entry<AEKey, Long>>
         for (var entry : inv)
         {
             if (!(entry.getKey() instanceof AEItemKey aeKey)) continue;
@@ -80,7 +79,7 @@ public record TerminalMeSyncPacket(
             entries.add(new MeEntry(aeKey.toStack(1), entry.getLongValue(), craftable));
         }
 
-        // Déduplication O(1) par HashSet de clés AE2 déjà vues
+        // O(1) dedup via a HashSet of already-seen AE2 keys
         Set<AEItemKey> seen = new java.util.HashSet<>();
         for (MeEntry e : entries)
         {
@@ -88,18 +87,18 @@ public record TerminalMeSyncPacket(
             if (k != null) seen.add(k);
         }
 
-        // Items craftables non stockés — getCraftables(AEKeyFilter) en AE2 19.x
+        // Craftable but not stocked items — getCraftables(AEKeyFilter) in AE2 19.x
         try
         {
             var craftables = crafting.getCraftables(k -> true);
             for (var key : craftables)
             {
                 if (!(key instanceof AEItemKey aeKey)) continue;
-                if (seen.add(aeKey))   // add() retourne false si déjà présent
+                if (seen.add(aeKey))   // add() returns false if already present
                     entries.add(new MeEntry(aeKey.toStack(1), 0, true));
             }
         }
-        catch (Exception ignored) {} // sécurité si l'API change
+        catch (Exception ignored) {} // safety if the API changes
 
         entries.sort((a, b) -> Long.compare(b.count(), a.count()));
         return new TerminalMeSyncPacket(entries, pos);

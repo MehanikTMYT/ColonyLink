@@ -11,8 +11,6 @@ import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModContainer;
@@ -40,7 +38,7 @@ public class ColonyLink
     public static final DeferredRegister<CreativeModeTab> CREATIVE_MODE_TABS =
             DeferredRegister.create(net.minecraft.core.registries.Registries.CREATIVE_MODE_TAB, MODID);
 
-    // ── Items ─────────────────────────────────────────────────────────────────
+    // Items
 
     public static final DeferredItem<Item> COLONY_LINK_WAND = ITEMS.registerItem("colony_link_wand",
             props -> new ColonyLinkWand(props.stacksTo(1)));
@@ -51,7 +49,7 @@ public class ColonyLink
     public static final DeferredItem<Item> COLONY_LINK_PACKAGE = ITEMS.registerItem("colonylink_package",
             ColonyLinkPackage::new);
 
-    // ── Creative tab ──────────────────────────────────────────────────────────
+    // Creative tab
 
     public static final DeferredHolder<CreativeModeTab, CreativeModeTab> COLONY_LINK_TAB =
             CREATIVE_MODE_TABS.register("colony_link_tab",
@@ -65,16 +63,16 @@ public class ColonyLink
                                 output.accept(ColonyLinkRegistry.WAREHOUSE_LINK_TERMINAL_ITEM.get());
                                 output.accept(WAREHOUSE_LINK_CARD.get());
                                 output.accept(COLONY_LINK_PACKAGE.get());
-                                // v1.4.2 — DomumPatternItem dans l'onglet créatif
+                                // v1.4.2 — DomumPatternItem in the creative tab
                                 output.accept(ColonyLinkRegistry.DOMUM_PATTERN_ITEM.get());
                             }).build());
 
-    // ── AE2 linkable handler ──────────────────────────────────────────────────
+    // AE2 linkable handler
 
     public static final ColonyLinkWandLinkableHandler LINKABLE_HANDLER =
             new ColonyLinkWandLinkableHandler();
 
-    // ── Constructor ───────────────────────────────────────────────────────────
+    // Constructor
 
     public ColonyLink(IEventBus modEventBus, ModContainer modContainer)
     {
@@ -98,6 +96,7 @@ public class ColonyLink
         ColonyLinkRegistry.BLOCK_ITEMS.register(modEventBus);
         ColonyLinkRegistry.BLOCK_ENTITIES.register(modEventBus);
         ColonyLinkRegistry.MENUS.register(modEventBus);
+        ColonyLinkRegistry.DATA_COMPONENTS.register(modEventBus);
 
         ColonyLinkRecipes.RECIPE_SERIALIZERS.register(modEventBus);
 
@@ -111,6 +110,8 @@ public class ColonyLink
 
         if (net.neoforged.fml.loading.FMLEnvironment.getDist().isClient())
             NeoForge.EVENT_BUS.addListener(ColonyLinkClient::onKeyInput);
+        if (net.neoforged.fml.loading.FMLEnvironment.getDist().isClient())
+            NeoForge.EVENT_BUS.addListener(ColonyLinkClient::onRecipesUpdated);
         NeoForge.EVENT_BUS.addListener(ColonyLink::onRightClickBlock);
 
         // v1.6.0 — SERVER config: synced to clients on login, lockable by modpacks.
@@ -119,7 +120,7 @@ public class ColonyLink
         modContainer.registerConfig(ModConfig.Type.SERVER, ColonyLinkConfig.SPEC);
     }
 
-    // ── Screens ───────────────────────────────────────────────────────────────
+    // Screens
 
     private void registerScreens(RegisterMenuScreensEvent event)
     {
@@ -129,7 +130,7 @@ public class ColonyLink
                 WarehouseLinkTerminalScreen::new);
     }
 
-    // ── Common setup ──────────────────────────────────────────────────────────
+    // Common setup
 
     private void commonSetup(FMLCommonSetupEvent event)
     {
@@ -139,7 +140,7 @@ public class ColonyLink
         });
     }
 
-    // ── Events: Redirector block right-click ──────────────────────────────────
+    // Events: Redirector block right-click
 
     @SubscribeEvent
     public static void onRightClickBlock(PlayerInteractEvent.RightClickBlock event)
@@ -180,7 +181,7 @@ public class ColonyLink
                     case LINKED ->
                     {
                         player.sendSystemMessage(Component.translatable("colonylink.redir_block.operational"));
-                        // v1.4.2 — Affiche le nombre de patterns Domum chargés
+                        // v1.4.2 — show the number of loaded Domum patterns
                         int patternCount = 0;
                         for (int slot = 0; slot < redirector.buffer.getSlots(); slot++)
                             if (!redirector.buffer.getStackInSlot(slot).isEmpty()) patternCount++;
@@ -204,14 +205,16 @@ public class ColonyLink
         }
     }
 
-    // ── Payloads ──────────────────────────────────────────────────────────────
+    // Payloads
 
     private void registerPayloads(RegisterPayloadHandlersEvent event)
     {
         // v1.6.0 — bumped to "2": SendToWarehousePacket and PackageTokenPacket changed
         // shape and ResourceStatus gained an ordinal; mismatched client/server versions
         // must fail the handshake cleanly instead of corrupting codecs.
-        PayloadRegistrar registrar = event.registrar("2");
+        // 1.7.0-beta.3 — bumped to "3": CitizensPacket entries gained the request UUID,
+        // colony state, Warehouse stock and mark; PackageTokenPacket carries a request UUID.
+        PayloadRegistrar registrar = event.registrar("3");
 
         registrar.playToClient(ColonyLinkPacket.TYPE, ColonyLinkPacket.STREAM_CODEC,
                 (p, c) -> ClientPacketHandler.handleColonyLink(p, c));
@@ -272,7 +275,7 @@ public class ColonyLink
         registrar.playToServer(TerminalCraftPacket.TYPE,
                 TerminalCraftPacket.STREAM_CODEC, TerminalCraftPacket::handle);
 
-        // ── v1.4.2 — Domum Pattern encoding ──────────────────────────────────
+        // v1.4.2 — Domum Pattern encoding
         registrar.playToServer(DomumEncodePatternPacket.TYPE,
                 DomumEncodePatternPacket.STREAM_CODEC,
                 DomumEncodePatternPacket::handle);

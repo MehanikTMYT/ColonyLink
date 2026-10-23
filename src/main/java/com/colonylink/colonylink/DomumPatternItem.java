@@ -27,11 +27,11 @@ import java.util.Map;
 /**
  * DomumPatternItem — ColonyLink v1.4.2
  *
- * Item custom stockant une recette Domum Ornamentum encodée.
- * NBT via DataComponents.CUSTOM_DATA (API NeoForge 1.21.1).
+ * Custom item storing an encoded Domum Ornamentum recipe.
+ * NBT via DataComponents.CUSTOM_DATA (NeoForge 1.21.1 API).
  *
- * Seuls ces items peuvent entrer dans le buffer du Redirector.
- * Les Encoded Patterns AE2 standard sont rejetés par isItemValid().
+ * Only these items may enter the Redirector buffer; standard AE2
+ * Encoded Patterns are rejected by isItemValid().
  */
 public class DomumPatternItem extends Item
 {
@@ -43,11 +43,11 @@ public class DomumPatternItem extends Item
         super(properties.stacksTo(1));
     }
 
-    // ── Encodage / Décodage ───────────────────────────────────────────────────
+    // Encoding / Decoding
 
     /**
-     * Encode un ItemStack Domum cible dans un nouveau DomumPatternItem.
-     * L'ItemStack source n'est PAS consommé.
+     * Encodes a target Domum ItemStack into a new DomumPatternItem.
+     * The source ItemStack is NOT consumed.
      */
     public static ItemStack encode(ItemStack domumStack, HolderLookup.Provider provider)
     {
@@ -55,8 +55,8 @@ public class DomumPatternItem extends Item
     }
 
     /**
-     * Encode avec le count de la recette Domum (nb d'items produits pour 1 craft).
-     * Stocké dans NBT_COUNT pour que DomumPatternDetails retourne le bon output.
+     * Encodes with the Domum recipe count (items produced per craft).
+     * Stored in NBT_COUNT so DomumPatternDetails returns the right output.
      */
     public static ItemStack encode(ItemStack domumStack, HolderLookup.Provider provider, int outputCount)
     {
@@ -81,8 +81,8 @@ public class DomumPatternItem extends Item
     }
 
     /**
-     * Lit le count de la recette depuis un DomumPatternItem.
-     * Retourne 1 si non défini (compatibilité patterns anciens).
+     * Reads the recipe count from a DomumPatternItem.
+     * Returns 1 if unset (compatibility with old patterns).
      */
     public static int getOutputCount(ItemStack patternStack)
     {
@@ -93,14 +93,14 @@ public class DomumPatternItem extends Item
     }
 
     /**
-     * Décode l'ItemStack Domum cible depuis un DomumPatternItem.
+     * Decodes the target Domum ItemStack from a DomumPatternItem.
      */
     @Nullable
     public static ItemStack decodeTarget(ItemStack patternStack, HolderLookup.Provider provider)
     {
         if (!(patternStack.getItem() instanceof DomumPatternItem)) return ItemStack.EMPTY;
 
-        // API NeoForge 1.21.1 : stack.get(DataComponents.CUSTOM_DATA)
+        // NeoForge 1.21.1 API: stack.get(DataComponents.CUSTOM_DATA)
         CustomData customData = patternStack.get(DataComponents.CUSTOM_DATA);
         if (customData == null) return ItemStack.EMPTY;
 
@@ -115,7 +115,7 @@ public class DomumPatternItem extends Item
     }
 
     /**
-     * Vérifie si un DomumPatternItem est valide.
+     * Checks whether a DomumPatternItem is valid.
      */
     public static boolean isValid(ItemStack patternStack, HolderLookup.Provider provider)
     {
@@ -124,7 +124,7 @@ public class DomumPatternItem extends Item
     }
 
     /**
-     * Retourne les matériaux nécessaires pour crafter la cible encodée.
+     * Returns the materials needed to craft the encoded target.
      */
     public static List<MaterialEntry> getMaterials(ItemStack patternStack, HolderLookup.Provider provider)
     {
@@ -153,7 +153,7 @@ public class DomumPatternItem extends Item
         return result;
     }
 
-    // ── Tooltip ───────────────────────────────────────────────────────────────
+    // Tooltip
 
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context,
@@ -174,7 +174,7 @@ public class DomumPatternItem extends Item
             return;
         }
 
-        // Ligne principale — toujours visible
+        // Main line — always visible
         int outputCount = getOutputCount(stack);
         lines.add(Component.translatable("colonylink.redir.crafts").append(target.getDisplayName())
                 .append(Component.literal(outputCount > 1 ? " §7(×" + outputCount + ")" : "")
@@ -182,7 +182,7 @@ public class DomumPatternItem extends Item
 
         if (net.minecraft.client.Minecraft.getInstance().hasShiftDown())
         {
-            // Variant du bloc
+            // Block variant
             net.minecraft.world.item.component.BlockItemStateProperties blockState =
                     stack.get(net.minecraft.core.component.DataComponents.BLOCK_STATE);
             if (blockState != null && !blockState.properties().isEmpty())
@@ -192,7 +192,7 @@ public class DomumPatternItem extends Item
                     lines.add(Component.literal("§7  " + entry.getKey() + ": §f" + entry.getValue()));
             }
 
-            // Matériaux
+            // Materials
             List<MaterialEntry> materials = getMaterials(stack, provider);
             if (!materials.isEmpty())
             {
@@ -228,8 +228,8 @@ public class DomumPatternItem extends Item
     }
 
     /**
-     * Shift+right-click → redevient un Blank Pattern AE2.
-     * Comportement identique à AE2 EncodedPatternItem.clearPattern().
+     * Shift+right-click → reverts to an AE2 Blank Pattern.
+     * Same behaviour as AE2 EncodedPatternItem.clearPattern().
      */
     @Override
     public net.minecraft.world.InteractionResult use(
@@ -251,8 +251,8 @@ public class DomumPatternItem extends Item
     }
 
     /**
-     * Si le joueur est en mode alternatif (shift), remplace le DomumPatternItem
-     * par un Blank Pattern AE2 dans l'inventaire.
+     * If the player is sneaking (shift), replaces the DomumPatternItem with an
+     * AE2 Blank Pattern in the inventory.
      */
     private boolean clearPattern(ItemStack stack, net.minecraft.world.entity.player.Player player)
     {
@@ -260,7 +260,6 @@ public class DomumPatternItem extends Item
         if (!player.isShiftKeyDown()) return false; // server-safe: no Minecraft.getInstance().hasShiftDown()
         if (player.level().isClientSide()) return false;
 
-        // Cherche l'item ae2:blank_pattern
         net.minecraft.world.item.Item blankItem = net.minecraft.core.registries.BuiltInRegistries.ITEM
                 .getValue(net.minecraft.resources.Identifier.parse("ae2:blank_pattern"));
         if (blankItem == null || blankItem == net.minecraft.world.item.Items.AIR) return false;
@@ -279,10 +278,9 @@ public class DomumPatternItem extends Item
     }
 
     /**
-     * Helper statique : retourne l'ItemStack cible depuis un DomumPatternItem.
-     * Utilisé par le renderer du Redirector GUI pour afficher l'item cible
-     * à la place de l'icône pattern dans les slots buffer.
-     * Côté client uniquement (utilise le clientLevel).
+     * Static helper: returns the target ItemStack from a DomumPatternItem.
+     * Used by the Redirector GUI renderer to show the target item instead of the
+     * pattern icon in buffer slots. Client-side only (uses clientLevel).
      */
     public static ItemStack getTargetStackClient(ItemStack patternStack)
     {
@@ -293,7 +291,7 @@ public class DomumPatternItem extends Item
         return (target != null && !target.isEmpty()) ? target : patternStack;
     }
 
-    // ── Record helper ─────────────────────────────────────────────────────────
+    // Record helper
 
     public record MaterialEntry(
             @Nullable Block block,

@@ -10,13 +10,13 @@ import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
- * Packet C→S : le joueur clique sur le slot Package dans la tab Citizens
- * pour charger des packages depuis son inventaire dans la wand.
+ * Packet C→S: the player clicks the Package slot in the Citizens tab to load
+ * packages from their inventory into the wand.
  *
- * Comportement :
- *   - Cherche des ColonyLink Packages dans l'inventaire du joueur
- *   - Les transfère dans le compteur NBT de la wand (max 64 stockés)
- *   - Sync le nouveau count au client via PackageTokenSyncPacket
+ * Behaviour:
+ *   - Find ColonyLink Packages in the player's inventory
+ *   - Transfer them into the wand's NBT counter (max 64 stored)
+ *   - Sync the new count to the client via PackageTokenSyncPacket
  */
 public record PackageLoadPacket() implements CustomPacketPayload
 {
@@ -58,7 +58,6 @@ public record PackageLoadPacket() implements CustomPacketPayload
             return;
         }
 
-        // Chercher des packages dans l'inventaire
         int loaded = 0;
         for (ItemStack s : player.getInventory().getNonEquipmentItems())
         {

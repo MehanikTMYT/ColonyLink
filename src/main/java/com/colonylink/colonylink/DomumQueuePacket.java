@@ -16,11 +16,12 @@ import appeng.api.networking.IGridNode;
 /**
  * DomumQueuePacket — v1.4.8
  *
- * Envoyé C→S quand le joueur clique "No Pattern" sur un item Domum dans le Clipboard.
- * Le serveur ajoute l'item à la queue du WarehouseLinkTerminalPart lié au Redirector.
+ * Sent C→S when the player clicks "No Pattern" on a Domum item in the Clipboard.
+ * The server adds the item to the queue of the WarehouseLinkTerminalPart linked to
+ * the Redirector.
  *
- * redirectorPos : position du Redirector dont provient la requête Domum.
- * domumStack    : l'item Domum exact (bloc + DataComponents complets).
+ * redirectorPos: position of the Redirector the Domum request came from.
+ * domumStack:    the exact Domum item (block + full DataComponents).
  */
 public record DomumQueuePacket(
         BlockPos  redirectorPos,
@@ -82,6 +83,7 @@ public record DomumQueuePacket(
             return;
         }
         boolean redirectorLinked = false;
+        BuilderEntry linkedEntry = null; // 1.7.0-beta.4 — resolves the Redirector by UUID
         for (BuilderEntry e : ColonyLinkWandLinkableHandler.getBuilderEntries(wand))
         {
             if (e.hasRedirector() && e.redirectorPos().equals(packet.redirectorPos()))
@@ -91,6 +93,7 @@ public record DomumQueuePacket(
                 if (e.dimension() != null && !e.dimension().equals(level.dimension()))
                     break;
                 redirectorLinked = true;
+                linkedEntry = e;
                 break;
             }
         }
@@ -101,12 +104,12 @@ public record DomumQueuePacket(
             return;
         }
 
-        // v1.6.1 — Resout la GRILLE ME du Redirector (via redirectorPos) et ajoute l'item a
-        // la queue Domum PARTAGEE de cette grille (DomumQueueManager). L'item apparait alors
-        // sur TOUS les terminaux du reseau, pas seulement un. La queue partagee est la source
-        // de verite ; chaque terminal garde une copie NBT comme filet de persistance.
+        // v1.6.1 — Resolve the Redirector's ME GRID (via redirectorPos) and add the item to
+        // that grid's SHARED Domum queue (DomumQueueManager). The item then shows on ALL
+        // terminals of the network, not just one. The shared queue is the source of truth;
+        // each terminal keeps an NBT copy as a persistence net.
         IGrid redirectorGrid = null;
-        if (level.getBlockEntity(packet.redirectorPos()) instanceof ColonyLinkRedirectorBlockEntity redirector)
+        if (RedirectorRegistry.forEntry(level, linkedEntry) instanceof ColonyLinkRedirectorBlockEntity redirector)
         {
             IGridNode rnode = redirector.getActionableNode();
             if (rnode != null) redirectorGrid = rnode.getGrid();

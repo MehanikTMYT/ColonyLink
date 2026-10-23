@@ -23,30 +23,30 @@ import static com.colonylink.colonylink.WarehouseLinkTerminalMenu.*;
 /**
  * WarehouseLinkTerminalScreen — v2.0.0
  *
- * Refonte complète basée sur le fond PNG warehouse_terminalcolony.png (420×432 px).
+ * Full redesign based on the background PNG warehouse_terminalcolony.png (420×432 px).
  *
- * Textures utilisées :
- *   colonylink:textures/gui/warehouse_terminalcolony.png  — fond principal
- *   colonylink:textures/button/button_1.png               — bouton normal  (12×12)
- *   colonylink:textures/button/button_pushed.png          — bouton enfoncé (12×12)
- *   colonylink:textures/button/checkbox_wh.png            — slider WH actif (22×12)
- *   colonylink:textures/button/checkbox_ae.png            — slider AE actif (22×12)
- *   colonylink:textures/button/slider.png                 — thumb scrollbar (13×16)
+ * Textures:
+ *   colonylink:textures/gui/warehouse_terminalcolony.png  — main background
+ *   colonylink:textures/button/button_1.png               — normal button  (12×12)
+ *   colonylink:textures/button/button_pushed.png          — pushed button  (12×12)
+ *   colonylink:textures/button/checkbox_wh.png            — WH-active slider (22×12)
+ *   colonylink:textures/button/checkbox_ae.png            — AE-active slider (22×12)
+ *   colonylink:textures/button/slider.png                 — scrollbar thumb (13×16)
  *
- * Layout :
- *   Panel WH : x=8..175,  y=31..227  (9 col × 11 lignes, pitch 18px)
- *   Panel AE : x=233..400, y=31..227
- *   Slot card : x=202..217, y=2..17
- *   Grille 3×3 : x=147..200, y=273..326
- *   Output : x=253..274, y=289..310
- *   Inventaire : x=130..289, y=348..401  (3×9)
- *   Hotbar : x=130..289, y=406..423
+ * Layout:
+ *   WH panel: x=8..175,  y=31..227  (9 cols × 11 rows, 18px pitch)
+ *   AE panel: x=233..400, y=31..227
+ *   Card slot: x=202..217, y=2..17
+ *   3×3 grid: x=147..200, y=273..326
+ *   Output: x=253..274, y=289..310
+ *   Inventory: x=130..289, y=348..401  (3×9)
+ *   Hotbar: x=130..289, y=406..423
  *
- * Scrollbar verticale WH : x=176..185, thumb initial y=33, fin y=227
- * Scrollbar verticale AE : x=401..410, thumb initial y=33, fin y=227
- * Slider horizontal WH/ME : x=189..229, y=241..254 (checkbox 22×12)
- * Boutons push ×2 : (204,32) et (204,47), taille 11×11 (crop sur 12×12)
- * Boutons croix :
+ * Vertical WH scrollbar: x=176..185, thumb start y=33, end y=227
+ * Vertical AE scrollbar: x=401..410, thumb start y=33, end y=227
+ * Horizontal WH/ME slider: x=189..229, y=241..254 (checkbox 22×12)
+ * Push buttons ×2: (204,32) and (204,47), size 11×11 (cropped from 12×12)
+ * Cross buttons:
  *   7 clear→inv  : (136,273) 7×7
  *   8 result→WH  : (252,279) 7×7
  *   9 result→ME  : (268,279) 7×7
@@ -63,7 +63,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
     private static final Identifier TEX_ICO_CUTTER =
             Identifier.fromNamespaceAndPath("colonylink", "textures/button/cutter_ico.png");
 
-    // ── Couleurs texte / overlays ─────────────────────────────────────────────
+    // Text / overlay colors
     private static final int C_TEXT_WH      = 0xFF9A9FB4;
     private static final int C_TEXT_AE      = 0xFF6699FF;
     private static final int C_TEXT_MUTED   = 0xFF9A9FB4;
@@ -79,7 +79,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
     private static final int C_COUNT_SHADOW = 0xFF3F3F3F;
     private static final float COUNT_FONT_SCALE = 0.72f;
 
-    // ── État ──────────────────────────────────────────────────────────────────
+    // State
     private final List<WarehouseTerminalSyncPacket.WarehouseItemEntry> whItems    = new ArrayList<>();
     private final List<WarehouseTerminalSyncPacket.WarehouseItemEntry> whFiltered = new ArrayList<>();
     private final List<MeItemEntry> meItems = new ArrayList<>(), meFiltered = new ArrayList<>();
@@ -101,8 +101,8 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
     private final Set<Integer> meSelected = new LinkedHashSet<>();
     private boolean shiftWasDown = false;
 
-    // ── v1.4.2 — Onglets ─────────────────────────────────────────────────────
-    // Onglet 0 = Crafting Table (défaut), Onglet 1 = Cutter Domum
+    // v1.4.2 — Tabs
+    // Tab 0 = Crafting Table (default), Tab 1 = Domum Cutter
     private static final int TAB_X        = 295;
     private static final int TAB_CRAFT_Y  = 269;
     private static final int TAB_CUTTER_Y = 291;
@@ -120,7 +120,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
     private static final int PG_W = 166;
     private static final int PG_H = 68;
 
-    // Slots Domum — coords visuelles (slots réels à -2000 dans le Menu)
+    // Domum slots — visual coords (real slots at -2000 in the Menu)
     private static final int DOMUM_TARGET_RENDER_X = 139;
     private static final int DOMUM_TARGET_RENDER_Y = 283;
     private static final int MAT_START_X = 162;
@@ -141,45 +141,43 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
     private final List<ItemStack> cachedMaterials = new ArrayList<>();
     private ItemStack lastTargetForCache = ItemStack.EMPTY;
 
-    // ── Queue Domum (reçue via DomumQueueSyncPacket) ──────────────────────────
+    // Domum queue (received via DomumQueueSyncPacket)
     private final List<ItemStack> domumQueue     = new ArrayList<>();
     private int                   domumQueueScroll    = 0;
-    private int                   domumQueueSelected  = -1; // index sélectionné
+    private int                   domumQueueSelected  = -1; // selected index
 
-    // ── Cutter tab — nouvelle disposition (coordonnées relatives au panneau PG_X/PG_Y)
-    // Slot item de référence (posé manuellement) : x3 y26
+    // Cutter tab layout (coords relative to the PG_X/PG_Y panel)
+    // Reference item slot (manually placed)
     private static final int CUT_REF_X     = 3;
     private static final int CUT_REF_Y     = 26;
-    // Aperçu matériau 1 : x3 y5
+    // Material preview 1
     private static final int CUT_MAT1_X    = 3;
     private static final int CUT_MAT1_Y    = 5;
-    // Aperçu matériau 2 : x3 y46
+    // Material preview 2
     private static final int CUT_MAT2_X    = 3;
     private static final int CUT_MAT2_Y    = 46;
-    // Zone liste scrollable : x25 y3, largeur 96 (3px marge droite avant bord panneau)
+    // Scrollable list area (96 wide, 3px right margin before panel edge)
     private static final int CUT_LIST_X    = 25;
     private static final int CUT_LIST_Y    = 3;
     private static final int CUT_LIST_W    = 96;
     private static final int CUT_LIST_H    = 63;
-    // Hauteur d'une ligne de liste
     private static final int CUT_ROW_H     = 18;
-    // Nombre de lignes visibles
     private static final int CUT_ROWS_VIS  = CUT_LIST_H / CUT_ROW_H; // = 3
 
-    // État drag scrollbars
+    // Scrollbar drag state
     private boolean draggingWh = false, draggingAe = false;
     private int     dragStartY = 0, dragStartScroll = 0;
-    private int     dragStartSlotWh = -1, dragStartSlotAe = -1; // slot où le drag a commencé
+    private int     dragStartSlotWh = -1, dragStartSlotAe = -1; // slot where the drag started
 
-    // ── État animation boutons push
+    // Push-button animation state
     private boolean btn1Pushed = false, btn2Pushed = false;
-    private int[] origSlotY;   // Y d'origine des slots vanilla (capture 1x, resize-safe)
+    private int[] origSlotY;   // original Y of vanilla slots (captured once, resize-safe)
 
     private String hoveredTooltip = null;
 
-    // ── Fit-to-window scale ───────────────────────────────────────────────────
+    // Fit-to-window scale
 
-    // ── Constructeur ──────────────────────────────────────────────────────────
+    // Constructor
     public WarehouseLinkTerminalScreen(WarehouseLinkTerminalMenu menu,
                                        Inventory inv, Component title)
     {
@@ -198,19 +196,31 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
 
     @Override protected void init()
     {
+        // 1.7.0-beta.5 (audit #10) — the menu tolerates part == null on the client (host
+        // block entity not resolvable client-side when the menu opened: chunk not yet
+        // loaded). Every panel of this screen needs the Part; instead of NPE-crashing
+        // the client, tell the player and close cleanly (the server menu closes with it,
+        // the player simply reopens the terminal).
+        if (menu.getPart() == null)
+        {
+            if (minecraft != null && minecraft.player != null)
+                minecraft.player.sendSystemMessage(Component.translatable("colonylink.terminal.part_unavailable"));
+            this.onClose();
+            return;
+        }
         fluidHeight = (GUI_H - PANEL_ROWS * SLOT_PITCH) + visRows() * SLOT_PITCH; // hauteur fluide
         super.init();
         topPos = (this.height - fluidHeight) / 2; // re-centre sur la hauteur fluide
         titleLabelX = inventoryLabelX = -10000;
-        // Remonte les slots vanilla (craft + sortie + inventaire) de rowDY() px quand on
-        // retire des lignes (facon AE2). Capture des Y d'origine une seule fois (resize-safe).
+        // Shift vanilla slots (craft + output + inventory) up by rowDY() px when rows are
+        // removed (AE2 style). Capture original Y once (resize-safe).
         if (origSlotY == null)
         {
             origSlotY = new int[menu.slots.size()];
             for (int i = 0; i < menu.slots.size(); i++) origSlotY[i] = menu.slots.get(i).y;
         }
         int slotDY  = rowDY();
-        int slotCut = Y_ITEMS + PANEL_ROWS * SLOT_PITCH; // 229 — seuil du bloc bas
+        int slotCut = Y_ITEMS + PANEL_ROWS * SLOT_PITCH; // 229 — bottom-block threshold
         for (int i = 0; i < menu.slots.size(); i++)
         {
             int oy = origSlotY[i];
@@ -220,7 +230,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
         meSearch = savedMeSearch;
         rebuildWh();
         rebuildMe();
-        whScroll = clamp(whScroll, whFiltered.size()); // re-clamp apres changement de visRows (resize)
+        whScroll = clamp(whScroll, whFiltered.size()); // re-clamp after visRows change (resize)
         meScroll = clamp(meScroll, meFiltered.size());
         WarehouseLinkTerminalMenu.warehouseFirst = warehouseFirst;
         ClientPacketDistributor.sendToServer(new TerminalGuiStatePacket(true, partHostPos(), partSide()));
@@ -245,7 +255,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
         super.removed();
     }
 
-    // ── Mises à jour depuis packets ───────────────────────────────────────────
+    // Updates from packets
     public void updateWarehouseSnapshot(WarehouseTerminalSyncPacket p)
     {
         whItems.clear(); whItems.addAll(p.entries());
@@ -262,29 +272,27 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
         rebuildMe();
     }
 
-    /** Reçu via DomumQueueSyncPacket — met à jour la liste côté client. */
+    /** Received via DomumQueueSyncPacket — updates the client-side list. */
     public void updateDomumQueue(java.util.List<ItemStack> queue)
     {
         domumQueue.clear();
         domumQueue.addAll(queue);
-        // Si la sélection était sur un index maintenant hors liste, on la réinitialise
+        // Reset the selection if it pointed at an index now out of range
         if (domumQueueSelected >= domumQueue.size()) domumQueueSelected = -1;
         domumQueueScroll = Math.max(0, Math.min(domumQueueScroll,
                 Math.max(0, domumQueue.size() - CUT_ROWS_VIS)));
     }
 
-    // =========================================================================
-    // RECHERCHE — filtre partagé WH + ME (client only). Syntaxe inspirée d'AE2 :
-    //   @mod  → l'id du mod contient le terme (ex. @ae2, @minecolonies)
-    //   #tag  → un tag de l'item contient le terme (ex. #logs, #ingots)
-    //   texte → le nom affiché contient le terme
-    // Plusieurs termes = ET (tous doivent matcher), comme AE2.
-    // =========================================================================
+    // SEARCH — shared WH + ME filter (client only). AE2-inspired syntax:
+    //   @mod  → the mod id contains the term (e.g. @ae2, @minecolonies)
+    //   #tag  → an item tag contains the term (e.g. #logs, #ingots)
+    //   text  → the display name contains the term
+    // Multiple terms = AND (all must match), like AE2.
     private static boolean matchesQuery(net.minecraft.world.item.ItemStack stack, String query)
     {
         if (query.isEmpty()) return true;
         String name = stack.getDisplayName().getString().toLowerCase();
-        String modId = null; // calculé à la demande
+        String modId = null; // computed on demand
         for (String term : query.split("\\s+"))
         {
             if (term.isEmpty()) continue;
@@ -314,7 +322,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
             {
                 ok = name.contains(term);
             }
-            if (!ok) return false; // ET : chaque terme doit matcher
+            if (!ok) return false; // AND: every term must match
         }
         return true;
     }
@@ -379,19 +387,19 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
 
     @Override protected void extractLabels(GuiGraphicsExtractor g, int mx, int my) {}
 
-    // ── renderBg : fond + tous les widgets ───────────────────────────────────
-    // ── Layout fluide facon AE2 : nb de lignes visibles selon la hauteur fenetre ──
+    // renderBg: background + all widgets
+    // Fluid AE2-style layout: visible rows depend on window height
     private int visRows()
     {
-        int fixedH = GUI_H - PANEL_ROWS * SLOT_PITCH;   // hauteur hors-lignes (= 234)
+        int fixedH = GUI_H - PANEL_ROWS * SLOT_PITCH;   // height excluding rows (= 234)
         int n = (this.height - fixedH) / SLOT_PITCH;
         return Math.max(2, Math.min(PANEL_ROWS, n));
     }
     private int rowDY() { return (PANEL_ROWS - visRows()) * SLOT_PITCH; }
 
-    // Slot.x/y sont final en 1.21.1 -> on repositionne via reflection (champ Mojmap "y",
-    // valide en dev comme en prod NeoForge). Le rendu et le hit-test vanilla utilisent
-    // ensuite la position mise a jour automatiquement.
+    // Slot.x/y are final in 1.21.1 -> reposition via reflection (Mojmap field "y",
+    // valid in dev and NeoForge prod). Vanilla render and hit-test then use the
+    // updated position automatically.
     private static java.lang.reflect.Field SLOT_Y;
     private static void setSlotY(net.minecraft.world.inventory.Slot slot, int y)
     {
@@ -419,14 +427,14 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
         g.fill(0, 0, this.width, this.height, 0xD8000000);
         int x = leftPos, y = topPos;
         int dy     = rowDY();
-        int yb     = y - dy;                              // base des elements ancres en bas
-        int cutTop = Y_ITEMS + visRows() * SLOT_PITCH;    // coords locales du skin BG
+        int yb     = y - dy;                              // base for bottom-anchored elements
+        int cutTop = Y_ITEMS + visRows() * SLOT_PITCH;    // local coords of the BG skin
         int cutBot = Y_ITEMS + PANEL_ROWS * SLOT_PITCH;   // = 229
 
-        // 1. Fond principal (texture PNG complète)
+        // 1. Main background (full PNG texture)
         TerminalSkin.drawCut(g, TerminalSkin.BG, x, y, cutTop, cutBot, dy);
 
-        // 2. Labels texte WH / AE (au dessus des search bars)
+        // 2. WH / AE text labels (above the search bars)
         renderPanelLabels(g, x, y);
 
         // 3. Search bars
@@ -435,21 +443,21 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
         renderSearch(g, x + SEARCH_AE_X, y + SEARCH_Y, SEARCH_AE_W, SEARCH_H,
                 meSearch, meSearchFocused, meFiltered.size(), false);
 
-        // 4. Scrollbars verticales
+        // 4. Vertical scrollbars
         renderScrollbar(g, x + SCROLL_WH_X, y, whFiltered.size(), whScroll);
         renderScrollbar(g, x + SCROLL_AE_X, y, meFiltered.size(), meScroll);
 
-        // 5. Slider horizontal WH/ME
+        // 5. Horizontal WH/ME slider
         renderSlider(g, x, yb, mx, my);
 
-        // 6. Boutons push centre colonne — visibles dans les DEUX onglets : les
-        //    panneaux WH/ME et leurs transferts restent actifs en Craft comme en Cutter.
+        // 6. Center-column push buttons — shown in BOTH tabs: the WH/ME panels and
+        //    their transfers stay active in Craft as in Cutter.
         renderPushButton(g, mx, my, x + BTN1_X, y + BTN1_Y, btn1Pushed,
                 Component.translatable("colonylink.term.btn_transfer_wh_me").getString());
         renderPushButton(g, mx, my, x + BTN2_X, y + BTN2_Y, btn2Pushed,
                 Component.translatable("colonylink.term.btn_transfer_inv").getString());
 
-        // 7. Tooltips des croix de la grille craft (onglet Craft uniquement)
+        // 7. Craft-grid cross-button tooltips (Craft tab only)
         if (activeTab == 0)
         {
             if (over(mx, my, x + 136, yb + 273, 7, 7))
@@ -462,7 +470,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
                 hoveredTooltip = Component.translatable("colonylink.term.output_inv").getString();
         }
 
-        // 8. Sélection count sur panels
+        // 8. Selection count on panels
         if (!whSelected.isEmpty())
             GuiCompat.drawString(g, font, Component.translatable("colonylink.term.selected", whSelected.size()).getString(),
                     x + 136, y + 15, 0xFFFFDD00, false);
@@ -470,14 +478,14 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
             GuiCompat.drawString(g, font, Component.translatable("colonylink.term.selected", meSelected.size()).getString(),
                     x + 361, y + 15, 0xFFFFDD00, false);
 
-        // 9. v1.4.2 — Onglets
+        // 9. v1.4.2 — Tabs
         renderTabs(g, x, yb, mx, my);
 
-        // 10. v1.4.2 — Zone Cutter (sur-impression si onglet 1 actif)
+        // 10. v1.4.2 — Cutter zone (overlaid when tab 1 active)
         if (activeTab == 1)
             renderCutterOverlay(g, x, yb, mx, my);
 
-        // 11. Tooltip slot Warehouse Link Card (quand vide)
+        // 11. Warehouse Link Card slot tooltip (when empty)
         if (!hasWarehouseCard)
             if (over(mx, my, x + WarehouseLinkTerminalMenu.CARD_SLOT_X,
                     y + WarehouseLinkTerminalMenu.CARD_SLOT_Y, 16, 16))
@@ -509,11 +517,11 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
     {
         TerminalSkin.draw(g, TerminalSkin.PATTERN, x + PG_X, y + PG_Y);
 
-        // Origine du panneau cutter (coin haut-gauche de l'overlay PG)
+        // Cutter panel origin (top-left corner of the PG overlay)
         int ox = x + PG_X;
         int oy = y + PG_Y;
 
-        // ── Slot item de référence (x3 y26) ─────────────────────────────────
+        // Reference item slot (x3 y26)
         renderSlotOutline(g, ox + CUT_REF_X - 1, oy + CUT_REF_Y - 1);
         ItemStack target = menu.getDomumTarget();
         if (!target.isEmpty())
@@ -532,7 +540,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
             lastTargetForCache = ItemStack.EMPTY;
         }
 
-        // ── Aperçu matériau 1 (x3 y5) ───────────────────────────────────────
+        // Material preview 1 (x3 y5)
         renderSlotOutline(g, ox + CUT_MAT1_X - 1, oy + CUT_MAT1_Y - 1);
         if (cachedMaterials.size() >= 1 && !cachedMaterials.get(0).isEmpty())
         {
@@ -544,7 +552,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
         else if (over(mx, my, ox + CUT_MAT1_X, oy + CUT_MAT1_Y, 16, 16))
             hoveredTooltip = Component.translatable("colonylink.term.material_slot1").getString();
 
-        // ── Aperçu matériau 2 (x3 y46) ──────────────────────────────────────
+        // Material preview 2 (x3 y46)
         renderSlotOutline(g, ox + CUT_MAT2_X - 1, oy + CUT_MAT2_Y - 1);
         if (cachedMaterials.size() >= 2 && !cachedMaterials.get(1).isEmpty())
         {
@@ -556,7 +564,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
         else if (over(mx, my, ox + CUT_MAT2_X, oy + CUT_MAT2_Y, 16, 16))
             hoveredTooltip = Component.translatable("colonylink.term.material_slot2").getString();
 
-        // ── Blank Pattern (réutilise BLANK_RENDER_X/Y existants) ─────────────
+        // Blank Pattern (reuses existing BLANK_RENDER_X/Y)
         ItemStack blank = menu.getSlot(BLANK_PATTERN_SLOT).getItem();
         renderSlotOutline(g, x + BLANK_RENDER_X - 1, y + BLANK_RENDER_Y - 1);
         if (!blank.isEmpty())
@@ -567,7 +575,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
         if (over(mx, my, x + BLANK_RENDER_X, y + BLANK_RENDER_Y, 16, 16))
             hoveredTooltip = blank.isEmpty() ? Component.translatable("colonylink.term.insert_blank").getString() : blank.getDisplayName().getString();
 
-        // ── Slot output (réutilise OUTPUT_RENDER_X/Y existants) ──────────────
+        // Output slot (reuses existing OUTPUT_RENDER_X/Y)
         ItemStack output = menu.getDomumOutput();
         renderSlotOutline(g, x + OUTPUT_RENDER_X - 1, y + OUTPUT_RENDER_Y - 1);
         if (!output.isEmpty())
@@ -580,7 +588,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
         else if (over(mx, my, x + OUTPUT_RENDER_X, y + OUTPUT_RENDER_Y, 16, 16))
             hoveredTooltip = Component.translatable("colonylink.term.encoded_appears").getString();
 
-        // ── Bouton Encode ─────────────────────────────────────────────────────
+        // Encode button
         boolean canEncode = domumQueueSelected >= 0
                 && domumQueueSelected < domumQueue.size()
                 && !blank.isEmpty()
@@ -608,21 +616,20 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
                 hoveredTooltip = Component.translatable("colonylink.term.encode_select_first").getString();
         }
 
-        // ── Liste scrollable (x33 y3 → x124 y66) ─────────────────────────────
+        // Scrollable list (x33 y3 → x124 y66)
         renderDomumQueueList(g, ox, oy, mx, my);
     }
 
     /**
-     * Rendu de la liste scrollable des items Domum en attente d'encodage.
-     * Coordonnées relatives à l'origine du panneau cutter (ox, oy).
+     * Renders the scrollable list of Domum items awaiting encoding.
+     * Coordinates relative to the cutter panel origin (ox, oy).
      */
     private void renderDomumQueueList(GuiGraphicsExtractor g, int ox, int oy, int mx, int my)
     {
-        // Fond de la zone liste
         g.fill(ox + CUT_LIST_X, oy + CUT_LIST_Y,
                 ox + CUT_LIST_X + CUT_LIST_W, oy + CUT_LIST_Y + CUT_LIST_H, 0x88111111);
 
-        // Clip pour éviter que le texte déborde hors de la zone liste
+        // Clip so text does not spill out of the list area
         g.enableScissor(ox + CUT_LIST_X, oy + CUT_LIST_Y,
                 ox + CUT_LIST_X + CUT_LIST_W, oy + CUT_LIST_Y + CUT_LIST_H);
 
@@ -679,7 +686,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
                     for (var e : bs.properties().entrySet())
                         tip.append("\n§8").append(e.getKey()).append(": §7").append(e.getValue());
 
-                // Matériaux
+                // Materials
                 if (stack.getItem() instanceof net.minecraft.world.item.BlockItem bi
                         && bi.getBlock() instanceof com.ldtteam.domumornamentum.block.IMateriallyTexturedBlock tb)
                 {
@@ -700,7 +707,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
 
         g.disableScissor();
 
-        // Indicateur scroll hors clip (pour ne pas être coupé)
+        // Scroll indicator outside the clip (so it isn't cut off)
         if (maxScroll > 0)
         {
             String scrollInfo = (domumQueueScroll + 1) + "-"
@@ -712,7 +719,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
         }
     }
 
-    // ── Matériaux lecture seule ───────────────────────────────────────────────
+    // Read-only materials
     private void updateMaterialCache(ItemStack target)
     {
         if (ItemStack.isSameItemSameComponents(target, lastTargetForCache)) return;
@@ -768,13 +775,13 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
     // ── Labels WH / AE au dessus des search bars ──────────────────────────────
     private void renderPanelLabels(GuiGraphicsExtractor g, int x, int y)
     {
-        // Zone label WH : x=9..133, y=2..14
+        // WH label zone: x=9..133, y=2..14
         String wh = Component.translatable("colonylink.term.label_warehouse").getString();
         String whCnt = String.valueOf(whFiltered.size());
         GuiCompat.drawString(g, font, wh,    x + 9, y + 3, C_TEXT_WH, false);
         GuiCompat.drawString(g, font, whCnt, x + 9 + SEARCH_WH_W - font.width(whCnt) - 1, y + 3, C_TEXT_MUTED, false);
 
-        // Zone label AE : x=233..358, y=2..14
+        // AE label zone: x=233..358, y=2..14
         String ae = Component.translatable("colonylink.term.label_applied").getString();
         String aeCnt = String.valueOf(meFiltered.size());
         GuiCompat.drawString(g, font, ae,    x + SEARCH_AE_X, y + 3, C_TEXT_AE, false);
@@ -785,7 +792,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
     private void renderSearch(GuiGraphicsExtractor g, int x, int y, int w, int h,
                               String txt, boolean focused, int count, boolean isWh)
     {
-        // Le fond de la search bar est déjà dans le PNG ; on dessine juste le texte
+        // The search bar background is already in the PNG; we only draw the text
         if (txt.isEmpty())
             GuiCompat.drawString(g, font, Component.translatable("colonylink.term.search").getString(), x + 2, y + 1, C_SF_PH, false);
         else
@@ -794,11 +801,11 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
             GuiCompat.drawString(g, font, "|", x + 2 + font.width(txt), y + 1, C_SF_TEXT, false);
     }
 
-    // ── Scrollbar verticale ───────────────────────────────────────────────────
-    // Track dans le PNG : 10px large (x=176..185 WH, x=401..410 AE)
-    // Rail actif central : 4px (x=179..182 WH, x=404..407 AE)
-    // slider.png 13×16 : coins noirs x=0 et x=12 ; corps utile x=1..11 = 11px
-    // → blit srcX=1, w=11 ; dest trackX-1 pour centrer le thumb 11px sur la track 10px
+    // Vertical scrollbar
+    // Track in the PNG: 10px wide (x=176..185 WH, x=401..410 AE)
+    // Active center rail: 4px (x=179..182 WH, x=404..407 AE)
+    // slider.png 13×16: black corners at x=0 and x=12; usable body x=1..11 = 11px
+    // → blit srcX=1, w=11; dest trackX-1 to center the 11px thumb on the 10px track
     private static final int SCROLL_THUMB_H = 16;
 
     private void renderScrollbar(GuiGraphicsExtractor g, int trackX, int guiY,
@@ -809,12 +816,12 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
         int maxScroll = maxRows - visRows();
         if (maxScroll <= 0) return;
 
-        int trackH = (SCROLL_BOT_Y - SCROLL_TOP_Y) - rowDY(); // piste visible
+        int trackH = (SCROLL_BOT_Y - SCROLL_TOP_Y) - rowDY(); // visible track
         int thumbY = guiY + SCROLL_TOP_Y
                 + (int) ((trackH - SCROLL_THUMB_H) * (float) scroll / maxScroll);
 
-        // Corps utile du PNG = cols 1..11 = 11px
-        // On décale d'1px à gauche (trackX-1) pour centrer sur la track 10px
+        // Usable PNG body = cols 1..11 = 11px
+        // Shift 1px left (trackX-1) to center on the 10px track
         TerminalSkin.draw(g, TerminalSkin.THUMB, trackX - 1, thumbY);
     }
 
@@ -823,9 +830,9 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
     {
         int sx = x + SLIDER_X;
         int sy = y + SLIDER_Y;
-        // Un seul checkbox 22×12 centré dans la zone 40×13
+        // Single 22×12 checkbox centered in the 40×13 zone
         // WH first → checkbox_wh.png, AE first → checkbox_ae.png
-        int offsetX = (SLIDER_W - 22) / 2;  // (40-22)/2 = 9 → centré
+        int offsetX = (SLIDER_W - 22) / 2;  // (40-22)/2 = 9 → centered
         TerminalSkin.draw(g, warehouseFirst ? TerminalSkin.CHK_WH : TerminalSkin.CHK_AE, sx + offsetX, sy);
 
         if (over(mx, my, sx, sy, SLIDER_W, SLIDER_H))
@@ -846,12 +853,12 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
     // ── Items des panels ──────────────────────────────────────────────────────
     private void renderPanelItems(GuiGraphicsExtractor g, int panelX, int guiY, boolean isWh, int mx, int my)
     {
-        // Slot survolé, calculé comme les tooltips (itemSlot) → highlight toujours
-        // aligné sur le tooltip, à n'importe quel GUI Scale.
+        // Hovered slot computed like the tooltips (itemSlot) → highlight always
+        // aligned with the tooltip at any GUI Scale.
         int hovIdx = itemSlot(mx, my, panelX);
-        if (isWh && (!hasWarehouseCard || !whErrorMsg.isEmpty()))
+        if (isWh && !hasWarehouseCard)
         {
-            // Overlay "pas de card"
+            // "No card" overlay
             g.fill(panelX, guiY + Y_ITEMS,
                     panelX + PANEL_COLS * SLOT_PITCH,
                     guiY + Y_ITEMS + visRows() * SLOT_PITCH,
@@ -870,12 +877,18 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
                     panelX + PANEL_COLS * SLOT_PITCH,
                     guiY + Y_ITEMS + visRows() * SLOT_PITCH,
                     C_NOCARD_OV);
-            GuiCompat.drawCenteredString(g, font, whErrorMsg,
-                    panelX + (PANEL_COLS * SLOT_PITCH) / 2,
-                    guiY + Y_ITEMS + (visRows() * SLOT_PITCH) / 2, 0xFF8888BB);
+            // 1.7.0-beta.2 — the server sends a translation key (card status); wrapped
+            // to the panel width. A plain string is shown as-is (translatable falls back
+            // to the key itself).
+            java.util.List<net.minecraft.util.FormattedCharSequence> lines = font.split(
+                    Component.translatable(whErrorMsg), PANEL_COLS * SLOT_PITCH - 8);
+            int cx = panelX + (PANEL_COLS * SLOT_PITCH) / 2;
+            int cy = guiY + Y_ITEMS + (visRows() * SLOT_PITCH) / 2 - lines.size() * 5;
+            for (int i = 0; i < lines.size(); i++)
+                GuiCompat.drawCenteredString(g, font, lines.get(i), cx, cy + i * 10, 0xFF8888BB);
             return;
         }
-        if (!isWh && !menu.getPart().isAe2Active())
+        if (!isWh && !ae2Active())
         {
             g.fill(panelX, guiY + Y_ITEMS,
                     panelX + PANEL_COLS * SLOT_PITCH,
@@ -946,24 +959,22 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
         pose.popMatrix();
     }
 
-    // ── Hit-test panneau (source unique de vérité) ────────────────────────────
-    // v1.6.6 — un seul endroit résout curseur→item pour les panneaux WH/ME, en
-    // COORDONNÉES ÉCRAN brutes (aucune transfo d'échelle : mx = rawMx dans render()).
-    // Consommé par renderTooltipForPanel, getPanelStackAt ET getPanelSlotArea
-    // (intégration JEI). WH d'abord puis ME (les panneaux ne se chevauchent pas).
-    // Mêmes gardes que l'affichage : carte warehouse présente + pas d'erreur pour
-    // le WH, AE2 actif pour le ME.
+    // Panel hit-test (single source of truth)
+    // v1.6.6 — one place resolves cursor→item for the WH/ME panels, in RAW SCREEN
+    // COORDINATES (no scale transform: mx = rawMx in render()). Consumed by
+    // renderTooltipForPanel, getPanelStackAt AND getPanelSlotArea (JEI integration).
+    // WH first, then ME (the panels don't overlap). Same guards as display: warehouse
+    // card present + no error for WH, AE2 active for ME.
 
     /**
-     * Item sous le curseur dans un panneau, avec ses infos d'affichage et la
-     * géométrie ÉCRAN du slot survolé ({@code slotX}/{@code slotY} = coin
-     * haut-gauche de l'icône 16×16). stack et area sortent du même hit → jamais
-     * de divergence.
+     * Item under the cursor in a panel, with its display info and the SCREEN
+     * geometry of the hovered slot ({@code slotX}/{@code slotY} = top-left corner
+     * of the 16×16 icon). stack and area come from the same hit → never diverge.
      */
     private record PanelHit(boolean isWh, ItemStack stack, long count, boolean craftable,
                             int slotX, int slotY) {}
 
-    /** Hit-test WH puis ME en coords ÉCRAN. {@code null} si rien sous le curseur. */
+    /** Hit-test WH then ME in SCREEN coords. {@code null} if nothing under the cursor. */
     private PanelHit panelHitAt(int mx, int my)
     {
         // WH
@@ -983,7 +994,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
         // ME
         panelX = leftPos + X_ITEMS_AE;
         s = itemSlot(mx, my, panelX);
-        if (s >= 0 && menu.getPart().isAe2Active())
+        if (s >= 0 && ae2Active())
         {
             int i = meScroll * PANEL_COLS + s;
             if (i < meFiltered.size())
@@ -998,9 +1009,9 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
     }
 
     /**
-     * ItemStack du panneau (WH ou ME) sous le curseur, ou {@link ItemStack#EMPTY}.
-     * Coordonnées ÉCRAN (comme reçues de Minecraft, sans transfo d'échelle).
-     * Point d'entrée public pour l'intégration JEI (survol → show recipe/uses).
+     * Panel ItemStack (WH or ME) under the cursor, or {@link ItemStack#EMPTY}.
+     * SCREEN coordinates (as received from Minecraft, no scale transform).
+     * Public entry point for JEI integration (hover → show recipe/uses).
      */
     public ItemStack getPanelStackAt(double mouseX, double mouseY)
     {
@@ -1009,10 +1020,10 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
     }
 
     /**
-     * Zone ÉCRAN (16×16, {@code SLOT_SZ}) du slot de panneau sous le curseur, pour
-     * ancrer le surlignage JEI sur l'icône. {@code null} si aucun slot survolé.
-     * Délègue au même {@link #panelHitAt} que {@link #getPanelStackAt} → stack et
-     * area toujours cohérents (une seule source de hit-test).
+     * SCREEN area (16×16, {@code SLOT_SZ}) of the panel slot under the cursor, to
+     * anchor the JEI highlight on the icon. {@code null} if no slot is hovered.
+     * Delegates to the same {@link #panelHitAt} as {@link #getPanelStackAt} → stack
+     * and area always consistent (one hit-test source).
      */
     public Rect2i getPanelSlotArea(double mouseX, double mouseY)
     {
@@ -1049,7 +1060,6 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
         }
     }
 
-    // =========================================================================
     // INPUT
     // =========================================================================
     @Override public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event, boolean doubleClick)
@@ -1060,7 +1070,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
         boolean shift = this.minecraft.hasShiftDown();
         int yb = topPos - rowDY();   // base des elements ancres en bas
 
-        // ── v1.4.2 — Clic onglet Crafting ────────────────────────────────────
+        // v1.4.2 — Crafting tab click
         if (over(mx, my, leftPos + TAB_X, yb + TAB_CRAFT_Y, TAB_W, TAB_H))
         {
             activeTab = 0;
@@ -1068,7 +1078,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
             return true;
         }
 
-        // ── v1.4.2 — Clic onglet Cutter ──────────────────────────────────────
+        // v1.4.2 — Cutter tab click
         if (over(mx, my, leftPos + TAB_X, yb + TAB_CUTTER_Y, TAB_W, TAB_H))
         {
             activeTab = 1;
@@ -1076,14 +1086,14 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
             return true;
         }
 
-        // ── v1.4.8 — Cutter : bouton Encode depuis la queue ───────────────────
+        // v1.4.8 — Cutter: Encode button from the queue
         if (activeTab == 1 && over(mx, my, leftPos + ENCODE_BTN_X, yb + ENCODE_BTN_Y,
                 ENCODE_BTN_W, ENCODE_BTN_H))
         {
             ItemStack blank = menu.getSlot(BLANK_PATTERN_SLOT).getItem();
             boolean outputFree = menu.getDomumOutput().isEmpty();
 
-            // Chemin 1 : sélection dans la queue
+            // Path 1: selection in the queue
             if (domumQueueSelected >= 0 && domumQueueSelected < domumQueue.size()
                     && !blank.isEmpty() && outputFree)
             {
@@ -1092,7 +1102,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
                 net.neoforged.neoforge.client.network.ClientPacketDistributor.sendToServer(
                         new DomumEncodePatternPacket(menu.getHostPos(), menu.getHostSide(), selectedStack));
             }
-            // Chemin 2 : ancien chemin via domumTargetSlot (item posé manuellement)
+            // Path 2: legacy path via domumTargetSlot (manually placed item)
             else if (menu.canEncode())
             {
                 encodePushed = true;
@@ -1101,13 +1111,13 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
             return true;
         }
 
-        // ── v1.4.8 — Cutter : clic sur la liste queue ────────────────────────
+        // v1.4.8 — Cutter: queue list click
         if (activeTab == 1)
         {
             int ox = leftPos + PG_X;
             int oy = topPos - rowDY() + PG_Y;
 
-            // Clic dans la zone liste
+            // Click in the list area
             if (over(mx, my, ox + CUT_LIST_X, oy + CUT_LIST_Y, CUT_LIST_W, CUT_LIST_H))
             {
                 int relY = (int) my - (oy + CUT_LIST_Y);
@@ -1116,14 +1126,14 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
                 if (idx >= 0 && idx < domumQueue.size())
                 {
                     domumQueueSelected = (domumQueueSelected == idx) ? -1 : idx; // toggle
-                    // Aperçu matériaux depuis l'item sélectionné
+                    // Material preview from the selected item
                     if (domumQueueSelected >= 0)
                         updateMaterialCache(domumQueue.get(domumQueueSelected));
                 }
                 return true;
             }
 
-            // Slot Blank Pattern
+            // Blank Pattern slot
             if (over(mx, my, leftPos + BLANK_RENDER_X, yb + BLANK_RENDER_Y, 16, 16))
             {
                 this.slotClicked(menu.getSlot(BLANK_PATTERN_SLOT), BLANK_PATTERN_SLOT, btn,
@@ -1131,7 +1141,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
                 return true;
             }
 
-            // Slot output — récupérer le pattern encodé
+            // Output slot — retrieve the encoded pattern
             if (over(mx, my, leftPos + OUTPUT_RENDER_X, yb + OUTPUT_RENDER_Y, 16, 16))
             {
                 if (!menu.getDomumOutput().isEmpty())
@@ -1143,7 +1153,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
                 return true;
             }
 
-            // Slot item de référence (pour les matériaux preview)
+            // Reference item slot (for the material preview)
             if (over(mx, my, ox + CUT_REF_X, oy + CUT_REF_Y, 16, 16))
             {
                 this.slotClicked(menu.getSlot(DOMUM_TARGET_SLOT), DOMUM_TARGET_SLOT, btn,
@@ -1157,7 +1167,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
                 && mx >= leftPos + INV_X && mx < leftPos + INV_X + 9 * SLOT_PITCH)
         {
             boolean canSendToWh = hasWarehouseCard && whErrorMsg.isEmpty();
-            boolean canSendToMe = menu.getPart().isAe2Active();
+            boolean canSendToMe = ae2Active();
             boolean canSend     = warehouseFirst ? canSendToWh : canSendToMe;
 
             if (canSend)
@@ -1192,8 +1202,8 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
             if (my >= yb + INV_Y && my < yb + HOTBAR_Y + SLOT_PITCH) return true;
         }
 
-        // ── Drag scrollbar WH ─────────────────────────────────────────────────
-        // Hitbox alignée sur le thumb rendu : trackX-1, width=11
+        // Scrollbar drag WH
+        // Hitbox aligned with the rendered thumb: trackX-1, width=11
         if (over(mx, my, leftPos + SCROLL_WH_X - 1, topPos + SCROLL_TOP_Y,
                 11, (SCROLL_BOT_Y - SCROLL_TOP_Y) - rowDY()))
         {
@@ -1203,7 +1213,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
             return true;
         }
 
-        // ── Drag scrollbar AE ─────────────────────────────────────────────────
+        // Scrollbar drag AE
         if (over(mx, my, leftPos + SCROLL_AE_X - 1, topPos + SCROLL_TOP_Y,
                 11, (SCROLL_BOT_Y - SCROLL_TOP_Y) - rowDY()))
         {
@@ -1213,7 +1223,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
             return true;
         }
 
-        // ── Search bars ───────────────────────────────────────────────────────
+        // Search bars
         if (my >= topPos + SEARCH_Y && my < topPos + SEARCH_Y + SEARCH_H)
         {
             if (mx >= leftPos + SEARCH_WH_X && mx < leftPos + SEARCH_WH_X + SEARCH_WH_W)
@@ -1223,7 +1233,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
         }
         whSearchFocused = meSearchFocused = false;
 
-        // ── Slider WH/ME ──────────────────────────────────────────────────────
+        // WH/ME slider
         if (over(mx, my, leftPos + SLIDER_X, yb + SLIDER_Y, SLIDER_W, SLIDER_H))
         {
             warehouseFirst = !warehouseFirst;
@@ -1231,7 +1241,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
             return true;
         }
 
-        // ── Bouton B1 : transférer sélection WH↔ME ───────────────────────────
+        // Button B1: transfer selection WH↔ME
         if (over(mx, my, leftPos + BTN1_X, topPos + BTN1_Y, BTN_SZ, BTN_SZ))
         {
             btn1Pushed = true;
@@ -1252,7 +1262,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
             return true;
         }
 
-        // ── Bouton B2 : transférer sélection → inventaire ────────────────────
+        // Button B2: transfer selection → inventory
         if (over(mx, my, leftPos + BTN2_X, topPos + BTN2_Y, BTN_SZ, BTN_SZ))
         {
             btn2Pushed = true;
@@ -1273,15 +1283,15 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
             return true;
         }
 
-        // ── Bouton 7 : clear grille → inventaire (hitbox invisible sur fond PNG) ───
+        // Button 7: clear grid → inventory (invisible hitbox on PNG background)
         if (over(mx, my, leftPos + 136, yb + 273, 7, 7))
         {
             clearGridToInventory(shift);
             return true;
         }
 
-        // ── Bouton 8 : result → WH (hitbox invisible sur fond PNG) ──────────────
-        // count=1 → 1 craft ; count>1 (shift) → boucle max côté serveur
+        // Button 8: result → WH (invisible hitbox on PNG background)
+        // count=1 → 1 craft; count>1 (shift) → max loop server-side
         if (over(mx, my, leftPos + 252, yb + 279, 7, 7))
         {
             ItemStack r = menu.getCraftResult().getItem(0);
@@ -1291,7 +1301,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
             return true;
         }
 
-        // ── Bouton 9 : result → ME (hitbox invisible sur fond PNG) ──────────────
+        // Button 9: result → ME (invisible hitbox on PNG background)
         if (over(mx, my, leftPos + 268, yb + 279, 8, 7))
         {
             ItemStack r = menu.getCraftResult().getItem(0);
@@ -1301,7 +1311,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
             return true;
         }
 
-        // ── Bouton 10 : result → inventaire (hitbox invisible sur fond PNG) ──────
+        // Button 10: result → inventory (invisible hitbox on PNG background)
         if (over(mx, my, leftPos + 260, yb + 313, 7, 7))
         {
             ItemStack r = menu.getCraftResult().getItem(0);
@@ -1311,7 +1321,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
             return true;
         }
 
-        // ── Panel WH — pick / set-down / select ──────────────────────────────
+        // Panel WH — pick / set-down / select
         int ws = itemSlot((int) mx, (int) my, leftPos + X_ITEMS_WH);
         if (ws >= 0 && hasWarehouseCard && whErrorMsg.isEmpty())
         {
@@ -1328,12 +1338,12 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
                 var e = whFiltered.get(idx);
                 if (shift)
                 {
-                    // Shift+clic simple → transfert 1 stack vers inventaire
-                    // (si drag démarre, dragStartSlotWh permettra de distinguer)
+                    // Simple shift+click → transfer 1 stack to inventory
+                    // (if a drag starts, dragStartSlotWh tells them apart)
                     dragStartSlotWh = idx;
                     dragStartSlotAe = -1;
-                    // On ne transfère pas encore — on attend mouseReleased
-                    // pour savoir si c'était un clic (1 slot) ou un drag (2+ slots)
+                    // Don't transfer yet — wait for mouseReleased to tell a click
+                    // (1 slot) from a drag (2+ slots)
                     meSelected.clear();
                 }
                 else
@@ -1348,9 +1358,9 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
             return true;
         }
 
-        // ── Panel AE — pick / set-down / select / autocraft ──────────────────
+        // Panel AE — pick / set-down / select / autocraft
         int ms = itemSlot((int) mx, (int) my, leftPos + X_ITEMS_AE);
-        if (ms >= 0 && menu.getPart().isAe2Active())
+        if (ms >= 0 && ae2Active())
         {
             int idx = meScroll * PANEL_COLS + ms;
             ItemStack carried = minecraft.player.containerMenu.getCarried();
@@ -1373,8 +1383,8 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
                 }
                 if (shift)
                 {
-                    // Shift+clic simple → transfert 1 stack vers inventaire
-                    // On attend mouseReleased pour distinguer clic (1 slot) vs drag (2+ slots)
+                    // Simple shift+click → transfer 1 stack to inventory
+                    // Wait for mouseReleased to tell a click (1 slot) from a drag (2+ slots)
                     dragStartSlotAe = idx;
                     dragStartSlotWh = -1;
                     whSelected.clear();
@@ -1413,7 +1423,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
         btn1Pushed = btn2Pushed = false;
         encodePushed = false;
 
-        // Shift+clic simple (pas de drag vers un autre slot) → transfert 1 stack → inventaire
+        // Simple shift+click (no drag to another slot) → transfer 1 stack → inventory
         if (dragStartSlotWh >= 0 && dragStartSlotWh < whFiltered.size())
         {
             var e = whFiltered.get(dragStartSlotWh);
@@ -1440,10 +1450,10 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
         final double mx = event.x(), my = event.y(); final int btn = event.button(); // PORT(26.1): input events
 
 
-        // ── Drag scrollbar ────────────────────────────────────────────────────
+        // Scrollbar drag
         if (draggingWh || draggingAe)
         {
-            int trackH    = (SCROLL_BOT_Y - SCROLL_TOP_Y) - rowDY(); // piste visible
+            int trackH    = (SCROLL_BOT_Y - SCROLL_TOP_Y) - rowDY(); // visible track
             int deltaPx   = (int) my - dragStartY;
             List<?> list  = draggingWh ? whFiltered : meFiltered;
             int maxRows   = (int) Math.ceil(list.size() / (double) PANEL_COLS);
@@ -1464,16 +1474,16 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
                 int idx = whScroll * PANEL_COLS + ws;
                 if (idx < whFiltered.size() && idx != dragStartSlotWh)
                 {
-                    // On est sur un slot différent du départ → mode sélection activé
-                    if (dragStartSlotWh >= 0) whSelected.add(dragStartSlotWh); // ajouter le slot de départ
+                    // On a slot different from the start → selection mode activated
+                    if (dragStartSlotWh >= 0) whSelected.add(dragStartSlotWh); // add the start slot
                     whSelected.add(idx);
                     meSelected.clear();
-                    dragStartSlotWh = -1; // neutralise le transfert au release
+                    dragStartSlotWh = -1; // cancels the transfer on release
                     return true;
                 }
             }
             int ms = itemSlot((int) mx, (int) my, leftPos + X_ITEMS_AE);
-            if (ms >= 0 && menu.getPart().isAe2Active())
+            if (ms >= 0 && ae2Active())
             {
                 int idx = meScroll * PANEL_COLS + ms;
                 if (idx < meFiltered.size() && idx != dragStartSlotAe)
@@ -1492,7 +1502,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
     @Override public boolean mouseScrolled(double mx, double my, double dx, double dy)
     {
 
-        // Scroll liste Domum (onglet Cutter actif)
+        // Scroll Domum list (Cutter tab active)
         if (activeTab == 1)
         {
             int ox = leftPos + PG_X;
@@ -1509,13 +1519,13 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
         int rT = topPos + Y_ITEMS;
         int rB = rT + visRows() * SLOT_PITCH;
 
-        // Scroll WH : souris sur le panel WH uniquement (pas sur la track scrollbar)
+        // Scroll WH: mouse over the WH panel only (not the scrollbar track)
         if (my >= rT && my < rB
                 && mx >= leftPos + X_ITEMS_WH
                 && mx < leftPos + X_ITEMS_WH + PANEL_COLS * SLOT_PITCH)
         { whScroll = clamp(whScroll - (int) Math.signum(dy), whFiltered.size()); return true; }
 
-        // Scroll AE : souris sur le panel AE uniquement (pas sur la track scrollbar)
+        // Scroll AE: mouse over the AE panel only (not the scrollbar track)
         if (my >= rT && my < rB
                 && mx >= leftPos + X_ITEMS_AE
                 && mx < leftPos + X_ITEMS_AE + PANEL_COLS * SLOT_PITCH)
@@ -1552,9 +1562,7 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
         return super.charTyped(event);
     }
 
-    // =========================================================================
-    // ACTIONS BOUTONS CRAFT
-    // =========================================================================
+    // CRAFT BUTTON ACTIONS
     private void clearGridToInventory(boolean shift)
     {
         ClientPacketDistributor.sendToServer(new TerminalTransferPacket(
@@ -1570,16 +1578,14 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
         }
     }
 
-    // =========================================================================
     // HELPERS
-    // =========================================================================
     private void sendPickup(ItemStack template, int count, TerminalTransferPacket.Direction dir)
     { ClientPacketDistributor.sendToServer(new TerminalTransferPacket(template.copyWithCount(1), count, dir, partHostPos(), partSide())); }
 
     private void sendTx(ItemStack s, int n, TerminalTransferPacket.Direction d)
     { ClientPacketDistributor.sendToServer(new TerminalTransferPacket(s.copyWithCount(n), n, d, partHostPos(), partSide())); }
 
-    /** Retourne l'index linéaire (row*PANEL_COLS+col) du slot survolé dans un panel, ou -1. */
+    /** Returns the linear index (row*PANEL_COLS+col) of the hovered slot in a panel, or -1. */
     private int itemSlot(int mx, int my, int panelX)
     {
         int rT = topPos + Y_ITEMS;
@@ -1616,11 +1622,30 @@ public class WarehouseLinkTerminalScreen extends AbstractContainerScreen<Warehou
     private static String fmtDecimal(long n, long divisor)
     { return (n / divisor) + "." + ((n * 10 / divisor) % 10); }
 
+    // 1.7.0-beta.5 (audit #10) — the three helpers below are the ONLY places this screen
+    // touches menu.getPart(); all tolerate a null Part (see init()).
+
     private net.minecraft.core.BlockPos partHostPos()
-    { var be = menu.getPart().getHostBlockEntity(); return be != null ? be.getBlockPos() : net.minecraft.core.BlockPos.ZERO; }
+    {
+        var part = menu.getPart();
+        if (part == null) return net.minecraft.core.BlockPos.ZERO;
+        var be = part.getHostBlockEntity();
+        return be != null ? be.getBlockPos() : net.minecraft.core.BlockPos.ZERO;
+    }
 
     private int partSide()
-    { var s = menu.getPart().getSide(); return s != null ? s.ordinal() : 0; }
+    {
+        var part = menu.getPart();
+        if (part == null) return 0;
+        var s = part.getSide();
+        return s != null ? s.ordinal() : 0;
+    }
+
+    private boolean ae2Active()
+    {
+        var part = menu.getPart();
+        return part != null && part.isAe2Active();
+    }
 
     public record MeItemEntry(ItemStack stack, long count, boolean craftable) {}
 }

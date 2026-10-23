@@ -14,24 +14,22 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Logique de substitution d'outils pour ColonyLink — neutre AE2/RS2.
+ * Tool substitution logic for ColonyLink — AE2/RS2 neutral.
  *
- * v1.1.4 : Refactor pour supporter AE2 et RS2 sans dépendance directe sur
- * les types AE2 (KeyCounter, ICraftingService, AEItemKey) dans la signature
- * publique de findBestTool().
+ * v1.1.4: refactored to support AE2 and RS2 without a direct dependency on the
+ * AE2 types (KeyCounter, ICraftingService, AEItemKey) in findBestTool()'s public
+ * signature.
  *
- * Deux interfaces neutres remplacent les types AE2 :
- *   ToolInventoryView   → abstrait KeyCounter (AE2) et StorageNetworkComponent (RS2)
- *   ToolCraftingView    → abstrait ICraftingService (AE2) et AutocraftingNetworkComponent (RS2)
+ * Two neutral interfaces replace the AE2 types:
+ *   ToolInventoryView   → abstracts KeyCounter (AE2) and StorageNetworkComponent (RS2)
+ *   ToolCraftingView    → abstracts ICraftingService (AE2) and AutocraftingNetworkComponent (RS2)
  *
- * SubstituteResult retourne maintenant un ItemStack (displayStack) et non plus
- * un AEItemKey — suffisant pour tous les callers.
+ * SubstituteResult now returns an ItemStack (displayStack) rather than an
+ * AEItemKey — enough for every caller.
  *
- * Wrappers statiques fournis pour construire ces interfaces depuis AE2 ou RS2
- * sans que les callers aient à le faire eux-mêmes.
+ * Static wrappers build these interfaces from AE2 or RS2 so callers do not have to.
  *
- * Tableau (niveau max enchant individuel autorisé) :
- * ─────────────────────────────────────────────────
+ * Table (max allowed individual enchant level):
  * Tool Tier  │ Hut 0 │ Hut 1 │ Hut 2 │ Hut 3 │ Hut 4 │ Hut 5
  * Wood/Gold  │   0   │   1   │   2   │   3   │   4   │  any
  * Stone      │   -   │   0   │   1   │   2   │   3   │  any
@@ -103,19 +101,18 @@ public class BuilderToolHelper
     // ── Interfaces neutres ────────────────────────────────────────────────────
 
     /**
-     * Vue abstraite du stock d'items dans un réseau (AE2 ou RS2).
-     * Remplace KeyCounter (AE2) dans la signature de findBestTool().
+     * Abstract view of a network's item stock (AE2 or RS2).
+     * Replaces KeyCounter (AE2) in findBestTool()'s signature.
      */
     public interface ToolInventoryView
     {
-        /** Retourne la quantité de cet item disponible dans le réseau. */
+        /** Returns how much of this item is available in the network. */
         long get(ItemStack stack);
 
         /**
-         * Itère sur le stock et retourne tous les ItemStack dont l'item
-         * est une instance de toolClass, avec le tier estimé donné.
-         * Utilisé pour trouver les items moddés (Apotheosis, etc.) qui ont du NBT.
-         * Implémentation par défaut : retourne liste vide (fallback sans NBT).
+         * Iterates the stock and returns every ItemStack whose item is an instance
+         * of toolClass, at the given estimated tier. Used to find modded items
+         * (Apotheosis, etc.) that carry NBT. Default: empty list (NBT-free fallback).
          */
         default List<ItemStack> findByToolClass(ToolKind toolClass, Tiers estimatedTier)
         {
@@ -124,20 +121,20 @@ public class BuilderToolHelper
     }
 
     /**
-     * Vue abstraite du service de craft d'un réseau (AE2 ou RS2).
-     * Remplace ICraftingService (AE2) dans la signature de findBestTool().
+     * Abstract view of a network's crafting service (AE2 or RS2).
+     * Replaces ICraftingService (AE2) in findBestTool()'s signature.
      */
     public interface ToolCraftingView
     {
-        /** Retourne true si un pattern existe pour crafter cet item. */
+        /** Returns true if a pattern exists to craft this item. */
         boolean isCraftable(ItemStack stack);
     }
 
-    // ── Wrappers AE2 ─────────────────────────────────────────────────────────
+    // AE2 wrappers
 
     /**
-     * Construit un ToolInventoryView depuis un KeyCounter AE2.
-     * Appelé par ColonyLinkServerTicker et SendToBuilderHandler (AE2).
+     * Builds a ToolInventoryView from an AE2 KeyCounter.
+     * Called by ColonyLinkServerTicker and SendToBuilderHandler (AE2).
      */
     public static ToolInventoryView fromAE2Inventory(appeng.api.stacks.KeyCounter counter)
     {
@@ -169,8 +166,8 @@ public class BuilderToolHelper
     }
 
     /**
-     * Construit un ToolCraftingView depuis un ICraftingService AE2.
-     * Appelé par ColonyLinkServerTicker et SendToBuilderHandler (AE2).
+     * Builds a ToolCraftingView from an AE2 ICraftingService.
+     * Called by ColonyLinkServerTicker and SendToBuilderHandler (AE2).
      */
     public static ToolCraftingView fromAE2CraftingService(
             appeng.api.networking.crafting.ICraftingService cs)
@@ -181,26 +178,26 @@ public class BuilderToolHelper
         };
     }
 
-    // ── Tiers ordonnés ───────────────────────────────────────────────────────
+    // Ordered tiers
 
     private static final Tiers[] TIER_ORDER = {
             Tiers.NETHERITE, Tiers.DIAMOND, Tiers.IRON, Tiers.STONE, Tiers.WOOD
     };
 
-    // ── Armure : matériaux vanilla ordonnés du meilleur au moins bon ──────────
-    // Utilisé pour la substitution d'armures (gardes, knights, etc.)
-    // Durabilités de référence (multiplicateur de base 13 * duraMult) :
+    // Armor: vanilla materials ordered best to worst
+    // Used for armor substitution (guards, knights, etc.)
+    // Reference durabilities (base multiplier 13 * duraMult):
     //   Leather=5, Gold=7, Chainmail=15, Iron=15, Diamond=33, Netherite=37
-    // On se base sur le defense value du chestplate pour l'ordre
+    // Ordered by the chestplate's defense value
     private static final int ARMOR_TIER_NETHERITE = 4;
     private static final int ARMOR_TIER_DIAMOND    = 3;
     private static final int ARMOR_TIER_IRON       = 2;
     private static final int ARMOR_TIER_GOLD       = 1;
     private static final int ARMOR_TIER_LEATHER    = 0;
 
-    /** Tableau max armor tier par niveau de bâtiment (0-5), identique aux outils. */
+    /** Max armor tier per building level (0-5), same as tools. */
     private static final int[] MAX_ARMOR_TIER_FOR_LEVEL = {
-            ARMOR_TIER_LEATHER,   // level 0 → cuir max
+            ARMOR_TIER_LEATHER,   // level 0 → leather max
             ARMOR_TIER_GOLD,      // level 1 → gold/chain max
             ARMOR_TIER_IRON,      // level 2 → iron max
             ARMOR_TIER_DIAMOND,   // level 3 → diamond max
@@ -226,17 +223,17 @@ public class BuilderToolHelper
             { -1,   -1,   -1,   -1,    0,    Integer.MAX_VALUE }, // Netherite
     };
 
-    // ── Résultat ──────────────────────────────────────────────────────────────
+    // Result
 
     public enum SubstituteAction { SEND, CRAFT, NONE }
 
     /**
-     * Résultat de la substitution.
+     * Substitution result.
      *
-     * displayStack : l'item à envoyer ou crafter (count = 1).
-     *   Côté AE2 : le caller extrait via AEItemKey.of(displayStack).
-     *   Côté RS2 : le caller extrait via ItemResource.ofItemStack(displayStack).
-     *   Les deux peuvent reconstruire leur clé réseau depuis un ItemStack.
+     * displayStack: the item to send or craft (count = 1).
+     *   AE2 side: the caller extracts via AEItemKey.of(displayStack).
+     *   RS2 side: the caller extracts via ItemResource.ofItemStack(displayStack).
+     *   Both can rebuild their network key from an ItemStack.
      */
     public record SubstituteResult(
             SubstituteAction action,
@@ -247,16 +244,16 @@ public class BuilderToolHelper
                 new SubstituteResult(SubstituteAction.NONE, ItemStack.EMPTY);
     }
 
-    // ── API principale ────────────────────────────────────────────────────────
+    // Main API
 
     /**
-     * Tente de trouver un substitut pour l'outil demandé.
-     * Neutre AE2/RS2 — utilise les interfaces ToolInventoryView et ToolCraftingView.
+     * Tries to find a substitute for the requested tool.
+     * AE2/RS2 neutral — uses the ToolInventoryView and ToolCraftingView interfaces.
      *
-     * @param requested     item demandé par le builder
-     * @param buildingLevel niveau du Work Hut (0-5)
-     * @param inventory     vue du stock réseau (AE2 ou RS2)
-     * @param crafting      vue du craft réseau (AE2 ou RS2)
+     * @param requested     item requested by the builder
+     * @param buildingLevel Work Hut level (0-5)
+     * @param inventory     network stock view (AE2 or RS2)
+     * @param crafting      network crafting view (AE2 or RS2)
      */
     public static SubstituteResult findBestTool(
             ItemStack requested,
@@ -270,7 +267,7 @@ public class BuilderToolHelper
         Tiers maxTier = MAX_TIER_FOR_LEVEL[level];
         int maxTierIndex = getTierIndex(maxTier);
 
-        // Passe 1 : meilleur tier en stock
+        // Pass 1: best tier in stock
         ItemStack bestInStock = null;
         int bestInStockTierIndex = -1;
 
@@ -290,7 +287,7 @@ public class BuilderToolHelper
             }
         }
 
-        // Passe 2 : meilleur tier craftable
+        // Pass 2: best craftable tier
         ItemStack bestCraftable = null;
         int bestCraftableTierIndex = -1;
 
@@ -314,11 +311,11 @@ public class BuilderToolHelper
             if (bestCraftable != null) break;
         }
 
-        // Décision — le stock est toujours prioritaire sur le craft.
-        // On ne propose de crafter que si rien n'est disponible en réseau.
-        // Raison : les tiers custom (Apotheosis, etc.) sont mal estimés via getUses(),
-        // et proposer de crafter alors qu'un outil acceptable est déjà en stock est
-        // une mauvaise expérience.
+        // Decision — stock always wins over crafting.
+        // Only offer to craft when nothing is available in the network.
+        // Why: custom tiers (Apotheosis, etc.) are poorly estimated via getUses(),
+        // and offering to craft when an acceptable tool is already in stock is a
+        // bad experience.
         if (bestInStock != null)
             return new SubstituteResult(SubstituteAction.SEND, bestInStock);
         else if (bestCraftable != null)
@@ -327,14 +324,14 @@ public class BuilderToolHelper
         return SubstituteResult.NONE;
     }
 
-    // ── Surcharges de compatibilité AE2 (non-breaking pour le code existant) ──
+    // AE2 compatibility overloads (non-breaking for existing code)
 
     /**
-     * Surcharge AE2 legacy — convertit KeyCounter + ICraftingService en interfaces neutres.
-     * Permet au code AE2 existant (ServerTicker, SendToBuilderHandler) de continuer
-     * à appeler findBestTool sans modification.
+     * Legacy AE2 overload — converts KeyCounter + ICraftingService into the neutral
+     * interfaces. Lets existing AE2 code (ServerTicker, SendToBuilderHandler) keep
+     * calling findBestTool unchanged.
      *
-     * @deprecated Préférer la version neutre avec ToolInventoryView/ToolCraftingView.
+     * @deprecated Prefer the neutral version with ToolInventoryView/ToolCraftingView.
      */
     public static SubstituteResult findBestTool(
             ItemStack requested,
@@ -349,12 +346,11 @@ public class BuilderToolHelper
                 fromAE2CraftingService(craftingService));
     }
 
-    // ── Recherche dans l'inventaire ───────────────────────────────────────────
+    // Inventory search
 
     /**
-     * Cherche dans l'inventaire réseau un item du type demandé,
-     * du tier donné, avec enchants valides.
-     * Retourne le premier ItemStack trouvé (count=1), ou null.
+     * Looks in the network inventory for an item of the requested type, the given
+     * tier, with valid enchants. Returns the first ItemStack found (count=1), or null.
      */
     private static ItemStack findInInventory(ItemStack requested, Tiers tier,
                                              int maxEnchantLevel, ToolInventoryView inventory)
@@ -362,7 +358,7 @@ public class BuilderToolHelper
         List<Item> candidates = getCandidateItems(requested, tier);
         if (candidates.isEmpty()) return null;
 
-        // Passe A : items vanilla / sans NBT — lookup direct par clé
+        // Pass A: vanilla / NBT-free items — direct key lookup
         for (Item candidate : candidates)
         {
             ItemStack probe = new ItemStack(candidate);
@@ -388,7 +384,7 @@ public class BuilderToolHelper
         return null;
     }
 
-    // ── Validation enchants ───────────────────────────────────────────────────
+    // Enchant validation
 
     public static boolean isEnchantValid(ItemStack stack, int maxLevel)
     {
@@ -409,9 +405,9 @@ public class BuilderToolHelper
         return MAX_ENCHANT_LEVEL[tierIndex][level];
     }
 
-    // ── Détection d'outil ─────────────────────────────────────────────────────
+    // Tool detection
 
-    // ── Tool type tags (c:tools/*) — NeoForge convention ────────────────────
+    // Tool type tags (c:tools/*) — NeoForge convention
     // Used to detect modded tools for GUI display (not substitution).
     // MineColonies only accepts TieredItem subclasses for actual tool requests.
     private static final net.minecraft.tags.TagKey<Item> TAG_PICKAXES =
@@ -444,7 +440,7 @@ public class BuilderToolHelper
                 || stack.is(TAG_SWORDS);
     }
 
-    // ── Détection et substitution d'armure ───────────────────────────────────
+    // Armor detection and substitution
 
     public static boolean isArmor(ItemStack stack)
     {
@@ -452,14 +448,14 @@ public class BuilderToolHelper
     }
 
     /**
-     * Trouve le meilleur substitut vanilla pour une pièce d'armure demandée.
-     * Respecte le niveau du bâtiment (même table que les outils) et les enchants.
-     * Priorité : stock > craftable, vanilla prioritaire sur moddé.
+     * Finds the best vanilla substitute for a requested armor piece.
+     * Respects the building level (same table as tools) and enchants.
+     * Priority: stock > craftable, vanilla over modded.
      *
-     * @param requested    pièce d'armure demandée (peut être Mekanism, Apotheosis, etc.)
-     * @param buildingLevel niveau du bâtiment (0-5)
-     * @param inventory    vue du stock réseau
-     * @param crafting     vue du craft réseau
+     * @param requested    requested armor piece (may be Mekanism, Apotheosis, etc.)
+     * @param buildingLevel building level (0-5)
+     * @param inventory    network stock view
+     * @param crafting     network crafting view
      */
     public static SubstituteResult findBestArmor(
             ItemStack requested,
@@ -474,11 +470,11 @@ public class BuilderToolHelper
         int maxTier   = MAX_ARMOR_TIER_FOR_LEVEL[level];
         int maxEnchant = MAX_ENCHANT_LEVEL[Math.min(maxTier, 4)][level];
 
-        // Ordre : Netherite → Diamond → Iron → Gold → Leather (meilleur en premier)
+        // Order: Netherite → Diamond → Iron → Gold → Leather (best first)
         int[] tierOrder = { ARMOR_TIER_NETHERITE, ARMOR_TIER_DIAMOND, ARMOR_TIER_IRON,
                 ARMOR_TIER_GOLD, ARMOR_TIER_LEATHER };
 
-        // Passe 1 : meilleur en stock
+        // Pass 1: best in stock
         for (int tier : tierOrder)
         {
             if (tier > maxTier) continue;
@@ -490,7 +486,7 @@ public class BuilderToolHelper
                 return new SubstituteResult(SubstituteAction.SEND, probe);
         }
 
-        // Passe 2 : meilleur craftable
+        // Pass 2: best craftable
         for (int tier : tierOrder)
         {
             if (tier > maxTier) continue;
@@ -526,7 +522,7 @@ public class BuilderToolHelper
         return result == net.minecraft.world.item.Items.AIR ? null : result;
     }
 
-    // ── Correspondance tier ───────────────────────────────────────────────────
+    // Tier mapping
 
     private static int getTierIndex(Tiers tier)
     {
@@ -563,7 +559,7 @@ public class BuilderToolHelper
         return result;
     }
 
-    // ── Cache candidats ───────────────────────────────────────────────────────
+    // Candidate cache
 
     private static final java.util.concurrent.ConcurrentHashMap<String, List<Item>> CANDIDATE_CACHE
             = new java.util.concurrent.ConcurrentHashMap<>();
@@ -603,14 +599,14 @@ public class BuilderToolHelper
     }
 
     /**
-     * #11 — Mappe un Tier quelconque (vanilla ou custom) sur le Tiers vanilla
-     * le plus proche, en se basant sur getUses() (durabilité).
+     * #11 — Maps any Tier (vanilla or custom) onto the closest vanilla Tiers,
+     * based on getUses() (durability).
      *
-     * Niveaux vanilla de référence :
+     * Reference vanilla levels:
      *   WOOD/GOLD = 0, STONE = 1, IRON = 2, DIAMOND = 3, NETHERITE = 4
      *
-     * Les tiers custom de mods (Apotheosis, etc.) — on estime via getUses() :
-     * indiquer leur puissance relative — on les mappe sur le palier le plus proche.
+     * Custom mod tiers (Apotheosis, etc.) are estimated via getUses() and mapped
+     * onto the closest step.
      */
     static Tiers estimateVanillaTier(ItemStack stack)
     {

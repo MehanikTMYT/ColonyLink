@@ -6,8 +6,6 @@ import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.client.event.ModelEvent;
@@ -74,7 +72,7 @@ public final class ColonyLinkClient
                 RedirectorBlockEntityRenderer::new);
     }
 
-    // ── Item color registration ───────────────────────────────────────────────
+    // Item color registration
 
     /**
      * Registers ItemColor handlers for ColonyLink items.
@@ -98,7 +96,7 @@ public final class ColonyLinkClient
         event.register(KEY_OPEN_CLIPBOARD);
     }
 
-    // ── Keybinding input handler ──────────────────────────────────────────────
+    // Keybinding input handler
 
     /**
      * Fires on every key press/release. Checked on the NeoForge event bus
@@ -112,17 +110,22 @@ public final class ColonyLinkClient
      */
     public static void onKeyInput(InputEvent.Key event)
     {
-        // Only on press, not hold or release
         if (event.getAction() != org.lwjgl.glfw.GLFW.GLFW_PRESS) return;
 
-        // Don't intercept when a screen is open
         if (Minecraft.getInstance().screen != null) return;
 
-        // Check if our keybind was the one pressed
         if (!KEY_OPEN_CLIPBOARD.isDown()) return;
 
-        // Consume the key and send the packet to the server
         KEY_OPEN_CLIPBOARD.consumeClick();
         ClientPacketDistributor.sendToServer(new OpenWandGuiPacket());
+    }
+
+    /**
+     * Upstream 1.7.0: drop the Domum cutter-recipe cache when the client receives new recipes.
+     * PORT(26.1): RecipesUpdatedEvent -> RecipesReceivedEvent.
+     */
+    public static void onRecipesUpdated(net.neoforged.neoforge.client.event.RecipesReceivedEvent event)
+    {
+        DomumRecipeHelper.invalidate();
     }
 }
